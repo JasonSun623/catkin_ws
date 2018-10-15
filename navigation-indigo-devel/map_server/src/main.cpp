@@ -39,7 +39,7 @@
 #include <stdlib.h>
 #include <libgen.h>
 #include <fstream>
-
+#include "map_server/AbstractMap/SimpleGridMap.h"
 #include "ros/ros.h"
 #include "ros/console.h"
 #include "map_server/image_loader.h"
@@ -59,6 +59,28 @@ void operator >> (const YAML::Node& node, T& i)
 class MapServer
 {
   public:
+  int  SplitString(const string &input,const char delimiter,std::vector<string> &results) {
+      string text = input;
+      results.clear();
+      while (1) {
+        int pos = (int) text.find(delimiter);
+
+        if (pos == 0) {
+          text = text.substr(1);
+          continue;
+        }
+        if (pos < 0) {
+          results.push_back(text);
+          break;
+        }
+
+        string word = text.substr(0, pos);
+
+        text = text.substr(pos + 1);
+        results.push_back(word);
+      }
+      return 0;
+    }
     /** Trivial constructor */
     MapServer(const std::string& fname, double res)
     { 
@@ -70,102 +92,131 @@ class MapServer
       std::string frame_id;
       ros::NodeHandle private_nh("~");
       private_nh.param("frame_id", frame_id, std::string("map"));
-      deprecated = (res != 0);
-      if (!deprecated) {
-        //mapfname = fname + ".pgm";
-        //std::ifstream fin((fname + ".yaml").c_str());
-        std::ifstream fin(fname.c_str());
-        if (fin.fail()) {
-          ROS_ERROR("Map_server could not open %s.", fname.c_str());
-          exit(-1);
-        }
-#ifdef HAVE_NEW_YAMLCPP
-        // The document loading process changed in yaml-cpp 0.5.
-        YAML::Node doc = YAML::Load(fin);
-#else
-        YAML::Parser parser(fin);
-        YAML::Node doc;
-        parser.GetNextDocument(doc);
-#endif
-        try { 
-          doc["resolution"] >> res; 
-        } catch (YAML::InvalidScalar) { 
-          ROS_ERROR("The map does not contain a resolution tag or it is invalid.");
-          exit(-1);
-        }
-        try { 
-          doc["negate"] >> negate; 
-        } catch (YAML::InvalidScalar) { 
-          ROS_ERROR("The map does not contain a negate tag or it is invalid.");
-          exit(-1);
-        }
-        try { 
-          doc["occupied_thresh"] >> occ_th; 
-        } catch (YAML::InvalidScalar) { 
-          ROS_ERROR("The map does not contain an occupied_thresh tag or it is invalid.");
-          exit(-1);
-        }
-        try { 
-          doc["free_thresh"] >> free_th; 
-        } catch (YAML::InvalidScalar) { 
-          ROS_ERROR("The map does not contain a free_thresh tag or it is invalid.");
-          exit(-1);
-        }
-        try { 
-          std::string modeS = "";
-          doc["mode"] >> modeS;
+      std::vector<std::string> sep_tmp;
+      SplitString(fname,'.',sep_tmp);
+      if(sep_tmp.size() < 2){
+        ROS_ERROR("Map_server File Format Error!file name: %s.", fname.c_str());
+        exit(-1);
+      }
+      else{
+        //read .map map
+        //default conf
+        negate = 0;
+        res = 0.05;
+        occ_th = 0.65;
+        free_th = 0.196;
 
-          if(modeS=="trinary")
-            mode = TRINARY;
-          else if(modeS=="scale")
-            mode = SCALE;
-          else if(modeS=="raw")
-            mode = RAW;
-          else{
-            ROS_ERROR("Invalid mode tag \"%s\".", modeS.c_str());
-            exit(-1);
-          }
-        } catch (YAML::Exception) { 
-          ROS_DEBUG("The map does not contain a mode tag or it is invalid... assuming Trinary");
-          mode = TRINARY;
+        if(sep_tmp[sep_tmp.size()-1] == "map"){
+
+          SimpleGridMap map;
+          map.LoadFromFile(fname,&map_resp_,res);
         }
-        try { 
-          doc["origin"][0] >> origin[0]; 
-          doc["origin"][1] >> origin[1]; 
-          doc["origin"][2] >> origin[2]; 
-        } catch (YAML::InvalidScalar) { 
-          ROS_ERROR("The map does not contain an origin tag or it is invalid.");
-          exit(-1);
-        }
-        try { 
-          doc["image"] >> mapfname; 
-          // TODO: make this path-handling more robust
-          if(mapfname.size() == 0)
-          {
-            ROS_ERROR("The image tag cannot be an empty string.");
-            exit(-1);
+        //read image map
+        else{
+          deprecated = (res != 0);
+          //method 1 read map info from yaml file
+          if (!deprecated) {
+            //mapfname = fname + ".pgm";
+            //std::ifstream fin((fname + ".yaml").c_str());
+            std::ifstream fin(fname.c_str());
+            if (fin.fail()) {
+              ROS_ERROR("Map_server could not open %s.", fname.c_str());
+              exit(-1);
+            }
+          #ifdef HAVE_NEW_YAMLCPP
+            // The document loading process changed in yaml-cpp 0.5.
+            YAML::Node doc = YAML::Load(fin);
+          #else
+            YAML::Parser parser(fin);
+            YAML::Node doc;
+            parser.GetNextDocument(doc);
+          #endif
+            try {
+              doc["resolution"] >> res;
+            } catch (YAML::InvalidScalar) {
+              ROS_ERROR("The map does not contain a resolution tag or it is invalid.");
+              exit(-1);
+            }
+            try {
+              doc["negate"] >> negate;
+            } catch (YAML::InvalidScalar) {
+              ROS_ERROR("The map does not contain a negate tag or it is invalid.");
+              exit(-1);
+            }
+            try {
+              doc["occupied_thresh"] >> occ_th;
+            } catch (YAML::InvalidScalar) {
+              ROS_ERROR("The map does not contain an occupied_thresh tag or it is invalid.");
+              exit(-1);
+            }
+            try {
+              doc["free_thresh"] >> free_th;
+            } catch (YAML::InvalidScalar) {
+              ROS_ERROR("The map does not contain a free_thresh tag or it is invalid.");
+              exit(-1);
+            }
+            try {
+              std::string modeS = "";
+              doc["mode"] >> modeS;
+
+              if(modeS=="trinary")
+                mode = TRINARY;
+              else if(modeS=="scale")
+                mode = SCALE;
+              else if(modeS=="raw")
+                mode = RAW;
+              else{
+                ROS_ERROR("Invalid mode tag \"%s\".", modeS.c_str());
+                exit(-1);
+              }
+            } catch (YAML::Exception) {
+              ROS_DEBUG("The map does not contain a mode tag or it is invalid... assuming Trinary");
+              mode = TRINARY;
+            }
+            try {
+              doc["origin"][0] >> origin[0];
+              doc["origin"][1] >> origin[1];
+              doc["origin"][2] >> origin[2];
+            } catch (YAML::InvalidScalar) {
+              ROS_ERROR("The map does not contain an origin tag or it is invalid.");
+              exit(-1);
+            }
+            try {
+              doc["image"] >> mapfname;
+              // TODO: make this path-handling more robust
+              if(mapfname.size() == 0)
+              {
+                ROS_ERROR("The image tag cannot be an empty string.");
+                exit(-1);
+              }
+              if(mapfname[0] != '/')
+              {
+                // dirname can modify what you pass it
+                char* fname_copy = strdup(fname.c_str());
+                mapfname = std::string(dirname(fname_copy)) + '/' + mapfname;
+                free(fname_copy);
+              }
+            } catch (YAML::InvalidScalar) {
+              ROS_ERROR("The map does not contain an image tag or it is invalid.");
+              exit(-1);
+            }
           }
-          if(mapfname[0] != '/')
-          {
-            // dirname can modify what you pass it
-            char* fname_copy = strdup(fname.c_str());
-            mapfname = std::string(dirname(fname_copy)) + '/' + mapfname;
-            free(fname_copy);
+          //method 2 read map info from launched configure param
+          else {
+            private_nh.param("negate", negate, 0);//whether the white/black free/occupied semantics should be reversed (interpretation of thresholds is unaffected)
+            private_nh.param("occupied_thresh", occ_th, 0.65);//big than this is considered as occupied
+            private_nh.param("free_thresh", free_th, 0.196);//low than this is considered as free
+            mapfname = fname;
+            origin[0] = origin[1] = origin[2] = 0.0;// The 2-D pose of the lower-left pixel in the map, as (x, y, yaw), with yaw as counterclockwise rotation (yaw=0 means no rotation). Many parts of the system currently ignore yaw.
           }
-        } catch (YAML::InvalidScalar) { 
-          ROS_ERROR("The map does not contain an image tag or it is invalid.");
-          exit(-1);
+
+          ROS_INFO("Loading map from image \"%s\"", mapfname.c_str());
+          map_server::loadMapFromFile(&map_resp_,mapfname.c_str(),res,negate,occ_th,free_th, origin, mode);
+
         }
-      } else {
-        private_nh.param("negate", negate, 0);//whether the white/black free/occupied semantics should be reversed (interpretation of thresholds is unaffected)
-        private_nh.param("occupied_thresh", occ_th, 0.65);//big than this is considered as occupied
-        private_nh.param("free_thresh", free_th, 0.196);//low than this is considered as free
-        mapfname = fname;
-        origin[0] = origin[1] = origin[2] = 0.0;// The 2-D pose of the lower-left pixel in the map, as (x, y, yaw), with yaw as counterclockwise rotation (yaw=0 means no rotation). Many parts of the system currently ignore yaw.
       }
 
-      ROS_INFO("Loading map from image \"%s\"", mapfname.c_str());
-      map_server::loadMapFromFile(&map_resp_,mapfname.c_str(),res,negate,occ_th,free_th, origin, mode);
+
       map_resp_.map.info.map_load_time = ros::Time::now();
       map_resp_.map.header.frame_id = frame_id;
       map_resp_.map.header.stamp = ros::Time::now();

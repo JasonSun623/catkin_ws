@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(map_server)
+#add for debug
+#第一句保证了CXXFLAGS被加上了-g
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
+#第二局保证了具体的Make语句被显示出来，我们可以实际检查编译选项是否正常。
+#set(CMAKE_VERBOSE_MAKEFILE ON)
 
 find_package(catkin REQUIRED
         COMPONENTS
@@ -29,6 +34,12 @@ catkin_package(
 
 include_directories( include ${catkin_INCLUDE_DIRS} ${Boost_INCLUDE_DIRS} )
 add_library(image_loader src/image_loader.cpp)
+add_library(simplegridmap_loader
+  src/AbstractMap/AbstractMap.cpp
+  src/AbstractMap/GridMapConstants.cpp
+  src/AbstractMap/Geometry.cpp
+  src/AbstractMap/SimpleGridMap.cpp
+  )
 add_dependencies(image_loader ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(image_loader SDL SDL_image ${Boost_LIBRARIES})
 
@@ -37,6 +48,7 @@ add_dependencies(map_server ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTE
 target_link_libraries(map_server
     image_loader
     yaml-cpp
+    simplegridmap_loader
     ${catkin_LIBRARIES}
 )
 

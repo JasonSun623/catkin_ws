@@ -67,7 +67,6 @@ class MapGenerator
         ROS_ERROR("Couldn't save map file to %s", mapdatafile.c_str());
         return;
       }
-
       fprintf(out, "P5\n# CREATOR: Map_generator.cpp %.3f m/pix\n%d %d\n255\n",
               map->info.resolution, map->info.width, map->info.height);
       for(unsigned int y = 0; y < map->info.height; y++) {
