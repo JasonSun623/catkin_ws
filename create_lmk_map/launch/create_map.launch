@@ -1,0 +1,16 @@
+<launch>
+  <!-- Map Arguments -->
+  <arg name="map_file" default="$(find create_lmk_map)/maps/lmk.yaml"/>
+  
+  <node pkg="create_lmk_map" type="create_lmk_map_node" name="create_lmk_map_node" output="screen" >
+    <!-- LMK File Name-->
+    <param name="map_name" value="/home/it-robot/catkin_ws/src/create_lmk_map/maps/Layout180807.lmk" />
+    <!-- map grid size .unit mm -->
+    <param name="map_grid_size" value="10" /> 
+    <!-- lmk erode size-->
+    <param name="erode_rf_size" value="2" />
+   </node>
+   <!--load map server -->
+   <node name="map_server" type="map_server" pkg="map_server" args="$(arg map_file)" />
+ <node pkg="rviz" type="rviz" name="rviz" args="-d $(find sicknav350)/launch/nav350_intensity.rviz" />
+</launch>
