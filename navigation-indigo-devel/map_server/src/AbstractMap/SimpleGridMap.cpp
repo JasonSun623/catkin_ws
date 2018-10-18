@@ -11,6 +11,41 @@ using namespace std;
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
+FreeRegion1::FreeRegion1(std::vector<VecPosition> &vp) {
+  plist_ = vp;
+  // 对于矩形而言
+  num_ = plist_.size();
+  assert(4 == num_);
+}
+
+
+bool FreeRegion1::IsInside(VecPosition &pos) {
+  /// 先做左后一条射线和第一条射线的叉积
+   /* add by chq for -s */
+   //avoid the forbidden area is a point(that is mean start point is equal to end point )
+   //(if in this situation, the previous source code would return true ,that is a BUG)
+
+  bool same = (plist_[0] == plist_[1]) && (plist_[1] == plist_[2]) && (plist_[2] == plist_[3]) ;
+  if( same  && pos == plist_[0] )return true;
+  if( same )return false;
+
+    /* add by chq for -s */
+  VecPosition v1 = plist_[num_ - 1] - pos;
+  VecPosition vnxt = plist_[0] - pos;
+  double cross_res = v1.getX() * vnxt.getY() - vnxt.getX() * v1.getY();
+  int change_sign = 0;
+  for( int i = 1; i < num_; ++i) {
+       v1 = vnxt;
+       vnxt = plist_[i] - pos;
+       double res = v1.getX() * vnxt.getY() - vnxt.getX() * v1.getY();
+       if ( res * cross_res < 0.0 ) {
+            ++change_sign;
+       }
+       cross_res = res;
+  }
+  return (0 == change_sign ? true : false);
+}
+
 
 SimpleGridMap::SimpleGridMap(int grid_size):grid_size_(grid_size)
 {
@@ -40,7 +75,24 @@ SimpleGridMap::SimpleGridMap(const SimpleGridMap &other)
   map_name_ = other.map_name_;
 
 }
+ void SimpleGridMap::operator = (const SimpleGridMap &other){
+  grid_num_width_ = other.grid_num_width_;
+  grid_num_height_ = other.grid_num_height_;
 
+  anchor_grid_x_ = other.anchor_grid_x_;
+  anchor_grid_y_ = other.anchor_grid_y_;
+  anchor_world_x_ = other.anchor_world_x_;
+  anchor_world_y_ = other.anchor_world_y_;
+
+  grid_size_ = other.grid_size_;
+  b_empty_ = other.b_empty_;
+
+  grid_data_ = boost::shared_array<char>(new char[grid_num_width_ * grid_num_height_]);
+  memcpy(grid_data_.get() , other.grid_data_.get() , sizeof(char) * grid_num_width_ * grid_num_height_);
+
+  map_name_ = other.map_name_;
+
+ }
 SimpleGridMap::~SimpleGridMap()
 {
 
@@ -50,16 +102,25 @@ void SimpleGridMap::LoadFromFile(std::string file_name,nav_msgs::GetMap::Respons
 {
   std::ifstream ifs(file_name.c_str());
   if (ifs.fail()) {
-     ROS_ERROR("Map_server could not open .map file: %s.", file_name.c_str());
+     ROS_ERROR("Map_server could not open .map file: %s", file_name.c_str());
      exit(-1);
   }
   grid_size_ =res * 1000;//
-  std::cout << "Load Simple Gird Map.input grid size: " << grid_size_ <<std::endl;
+  std::cout << "Load Simple Gird Map.set grid size by input para: " << grid_size_ <<std::endl;
   std::string str;
   std::vector<std::string> sep_tmp;
   bool findData = false;
   bool findUnKnownData = false;//存储非占用或自由的坐标数据（适配图片地图）
-
+  //first to get resolution
+  while(std::getline(ifs, str)){
+    SplitString(str,' ',sep_tmp);
+    if ( sep_tmp[0] == "Resolution:" ) {
+      res = atof( sep_tmp[1].c_str() ) / 1000.0;//unit m to mm
+      grid_size_ = res * 1000;///!!!!!!!!!!!!!!!!!!!!!!!!!
+      std::cout << "Load Simple Gird Map.changing resolution to file conf(mm): " << grid_size_ <<std::endl;
+      break;
+   }
+  }
   while ( std::getline(ifs, str) ){
           SplitString(str,' ',sep_tmp);
           if( findUnKnownData ) {
@@ -82,11 +143,6 @@ void SimpleGridMap::LoadFromFile(std::string file_name,nav_msgs::GetMap::Respons
              findUnKnownData = true;
              }
           }else
-          if ( sep_tmp[0] == "Resolution:" ) {
-            res = atof( sep_tmp[1].c_str() ) / 1000.0;//unit m to mm
-            grid_size_ = res * 1000.0;///!!!!!!!!!!!!!!!!!!!!!!!!!
-            std::cout << "Load Simple Gird Map.reading file grid size: " << grid_size_<<std::endl;
-         }else
           if (str == "UNKNOWN DATA")
           {
             std::cout << "LoadSimpleGridMap. find unknown data!" <<std::endl;
@@ -100,9 +156,133 @@ void SimpleGridMap::LoadFromFile(std::string file_name,nav_msgs::GetMap::Respons
             findData = true;
             findUnKnownData = false;
             continue;
-          }
+          }else
+          if ( sep_tmp[0] == "Cairn:" ) {
+            // the last 4 element is the rect's corners
+            size_t k(0);
+            while ( string::npos == sep_tmp[k].find("ICON")) {
+                    ++k;
+            }
+            //  assert(k + 5 == sep_tmp.size() - 1);
+            double px[4];
+            size_t j = 0;
+            for( size_t i = k + 2; i < sep_tmp.size(); ++i) {
+                 istringstream s(sep_tmp[i]);
+                 s >> px[j];
+                 ++j;
+               }
+            // --------------------now navi do not use forbiddenarea 20170715--------S-------
+            if( sep_tmp[1] == "ForbiddenArea" ) {
+              // 根据角度把坐标转换回去
+              double rect_a = 0.0; // rad
+              std::vector<VecPosition> p_list;
+              {
+                istringstream s(sep_tmp[4]);
+                s >> rect_a;
+                rect_a = Deg2Rad(VecPosition::normalizeAngle(rect_a));
+                // 对角点1
+                double xx = px[0];
+                double yy = px[1];
+                double tx = cos(rect_a) * xx - sin(rect_a) * yy;
+                double ty = sin(rect_a) * xx + cos(rect_a) * yy;
+                p_list.push_back(VecPosition(tx/1000.0, ty/1000.0));
+                // 逆时针点1
+                xx = px[0];
+                yy = px[3];
+                tx = cos(rect_a) * xx - sin(rect_a) * yy;
+                ty = sin(rect_a) * xx + cos(rect_a) * yy;
+                p_list.push_back(VecPosition(tx/1000.0, ty/1000.0));
+                // 对角点2
+                xx = px[2];
+                yy = px[3];
+                tx = cos(rect_a) * xx - sin(rect_a) * yy;
+                ty = sin(rect_a) * xx + cos(rect_a) * yy;
+                p_list.push_back(VecPosition(tx/1000.0, ty/1000.0));
+                // 逆时针点
+                xx = px[2];
+                yy = px[1];
+                tx = cos(rect_a) * xx - sin(rect_a) * yy;
+                ty = sin(rect_a) * xx + cos(rect_a) * yy;
+                p_list.push_back(VecPosition(tx/1000.0, ty/1000.0));
+             }
+              //Rect rect(VecPosition(px[0], px[1]), VecPosition(px[2], px[3]));
+              FreeRegion1 rect(p_list);
+               
+              double init_x(0.0), init_y(0.0), init_angle(0.0);
+              istringstream sx(sep_tmp[2]);
+              istringstream sy(sep_tmp[3]);
+              istringstream sa(sep_tmp[4]);
+              sx >> init_x;
+              sy >> init_y;
+              sa >> init_angle;
+              OrientPos cen_pos(init_x/1000.0,init_y/1000.0,init_angle);
+              OrientPos cor_pos(px[0]/1000.0,px[1]/1000.0,0);
+              OrientPos opp_pos(px[2]/1000.0,px[3]/1000.0,0);
+              shape_item item(cen_pos,AREA_ITEM,sep_tmp[7],cor_pos,opp_pos,rect);
+              forbidden_area_.push_back(item);
+             }else
+            if( sep_tmp[1] == "ForbiddenLine" ){
+                 double init_angle(0.0);
+                 istringstream sa(sep_tmp[4]);
+                 sa >> init_angle;
+
+                 string name = sep_tmp[7];
+                 OrientPos start(px[0]/1000.0, px[1]/1000.0, 0.0, name);
+                 OrientPos end(px[2]/1000.0, px[3]/1000.0, 0.0, name);
+                 OrientPos cen_pos(px[0]/1000.0,px[1]/1000.0,init_angle);
+                 FreeRegion1 rect;//do nothing
+                 shape_item item(cen_pos,AREA_ITEM,name,start,end,rect);
+                 forbidden_line_.push_back(item);
+            }else
+            if( sep_tmp[1] == "Goal" ){
+              double init_x(0.0), init_y(0.0), init_angle(0.0);
+
+              istringstream sx(sep_tmp[2]);
+              istringstream sy(sep_tmp[3]);
+              istringstream sa(sep_tmp[4]);
+              sx >> init_x;
+              sy >> init_y;
+              sa >> init_angle;
+              string name = sep_tmp[7];
+              OrientPos pose_(init_x/1000.0, init_y/1000.0, init_angle);
+
+              ROS_INFO_STREAM( "simlpe grid map."<< "push back goal pos( " << pose_.x() << "," << pose_.y()<< ")" );
+              shape_item item(pose_,POINT_ITEM,name);
+              goals_.push_back(item);
+
+            }else
+            if( sep_tmp[1] == "RobotHome" ){
+              double init_x(0.0), init_y(0.0), init_angle(0.0);
+
+              istringstream sx(sep_tmp[2]);
+              istringstream sy(sep_tmp[3]);
+              istringstream sa(sep_tmp[4]);
+              sx >> init_x;
+              sy >> init_y;
+              sa >> init_angle;
+              string name = sep_tmp[7];
+              OrientPos pose_(init_x/1000.0, init_y/1000.0, init_angle,name);
+               shape_item item(pose_,POINT_ITEM,name);
+              robot_homes_.push_back(item);
+            }else
+            if( sep_tmp[1] == "Dock" ){
+              double init_x(0.0), init_y(0.0), init_angle(0.0);
+
+              istringstream sx(sep_tmp[2]);
+              istringstream sy(sep_tmp[3]);
+              istringstream sa(sep_tmp[4]);
+              sx >> init_x;
+              sy >> init_y;
+              sa >> init_angle;
+              string name = sep_tmp[7];
+              OrientPos pose_(init_x/1000.0, init_y/1000.0, init_angle,name);
+               shape_item item(pose_,POINT_ITEM,name);
+              dock_points_.push_back(item);
+            }
+    }
   }
   ifs.close();
+
   int grid_size = GetGridSize();
   int grid_width = GetWidthByGrid();
   int grid_height = GetHeightByGrid();
@@ -110,17 +290,17 @@ void SimpleGridMap::LoadFromFile(std::string file_name,nav_msgs::GetMap::Respons
 
  ///!!!获得左下角世界坐标数据 用于map_server 显示
  ///!!! 栅格坐标与世界坐标方向对应　即00 对应小ｘ小ｙ　左下角　width -1 height -1 对应右上角
-  WorldPos pos_leftdown = Grid2World(    GridPos(0,0)  );
-  WorldPos pos_rightdown = Grid2World(    GridPos(grid_width-1,0)  );
-  WorldPos pos_leftup =Grid2World(    GridPos(0,grid_height-1)  );
-  WorldPos pos_rightup = Grid2World(    GridPos(grid_width-1,grid_height-1)  );
+  WorldPos pos_leftdown = Grid2World( GridPos(0,0)  );
+  WorldPos pos_rightdown = Grid2World( GridPos(grid_width-1,0)  );
+  WorldPos pos_leftup =Grid2World( GridPos(0,grid_height-1)  );
+  WorldPos pos_rightup = Grid2World(GridPos(grid_width-1,grid_height-1)  );
   WorldPos pos_center = Grid2World( GridPos(grid_width/2,grid_height/2)  );
 
- printf("left up world pos (mm,mm)(x,y) :(%.4lf,%.4lf)\.accuracy:[%dmm] \n",pos_leftup.first, pos_leftup.second, grid_size);
- printf("right up world pos (mm,mm)(x,y) :(%.4lf,%.4lf)\.accuracy:[%dmm] \n",pos_rightup.first, pos_rightup.second, grid_size);
- printf("left down world pos(mm,mm)(x,y) :(%.4lf,%.4lf)\.accuracy:[%dmm] \n",pos_leftdown.first, pos_leftdown.second, grid_size);
- printf("right down world pos(mm,mm)(x,y) :(%.4lf,%.4lf)\.accuracy:[%dmm] \n",pos_rightdown.first, pos_rightdown.second, grid_size);
- printf("center grid world pos (mm,mm)(x,y) :(%.4lf,%.4lf)\.accuracy:[%dmm] \n",pos_center.first, pos_center.second, grid_size);
+ printf("left up world pos (mm,mm)(x,y) :(%.4lf,%.4lf).accuracy:[%dmm] \n",pos_leftup.first, pos_leftup.second, grid_size);
+ printf("right up world pos (mm,mm)(x,y) :(%.4lf,%.4lf).accuracy:[%dmm] \n",pos_rightup.first, pos_rightup.second, grid_size);
+ printf("left down world pos(mm,mm)(x,y) :(%.4lf,%.4lf).accuracy:[%dmm] \n",pos_leftdown.first, pos_leftdown.second, grid_size);
+ printf("right down world pos(mm,mm)(x,y) :(%.4lf,%.4lf).accuracy:[%dmm] \n",pos_rightdown.first, pos_rightdown.second, grid_size);
+ printf("center grid world pos (mm,mm)(x,y) :(%.4lf,%.4lf).accuracy:[%dmm] \n",pos_center.first, pos_center.second, grid_size);
   std::cout << "LoadSimpleGridMap. close file. gird with,height:("
             <<grid_num_width_ << " " << grid_num_height_ <<")"
             <<"origin(mm) : " <<  pos_leftdown.first << " " << pos_leftdown.second << " "

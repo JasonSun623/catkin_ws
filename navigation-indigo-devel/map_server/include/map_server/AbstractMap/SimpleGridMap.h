@@ -11,6 +11,71 @@
 typedef std::pair<int, int> GridPos;
 typedef std::pair<double, double> WorldPos;
 
+class FreeRegion1 {
+public:
+  FreeRegion1(){}
+  FreeRegion1(std::vector<VecPosition> &vp);
+  ~FreeRegion1() {}
+  bool IsInside(VecPosition &pos);
+  std::vector<VecPosition> list(){return plist_;}
+private:
+  // void MakeRect();
+private:
+    // 四个角点按逆时针顺序
+  std::vector<VecPosition> plist_;
+  int num_;
+};
+class OrientPos{
+public:
+  OrientPos(){_x=0.0;_y=0.0;_angle_deg=0.0;}
+  OrientPos(double dx,double dy,double a = 0.0,std::string name = ""):_x(dx),_y(dy),_angle_deg(a),_icon(name){
+  }
+  double x(){return _x;}
+  double y(){return _y;}
+  double angle(){return _angle_deg;}
+  std::string name(){return _icon;}
+private:
+  double _x;
+  double _y;
+  double _angle_deg;
+  std::string _icon;
+};
+
+enum item_type{POINT_ITEM,AREA_ITEM};
+
+class shape_item{
+  public:
+  shape_item(){
+    ;
+  }
+  shape_item(OrientPos cen_pos,item_type tp, std::string nm=""):
+  center_pos(cen_pos),_type(tp), icon(nm)
+  {
+    
+  }
+  shape_item(OrientPos cen_pos, item_type tp, std::string nm, OrientPos cor_pos, OrientPos opp_pos, FreeRegion1 reg):
+  center_pos(cen_pos),icon(nm),_type(tp),corner_pos(cor_pos),oppsite_pos(opp_pos),_reg(reg)
+  {
+    
+  }
+  OrientPos pos(){return center_pos;}
+  void getPairPos(OrientPos & cor,OrientPos &opp){
+     cor = corner_pos;
+     opp = oppsite_pos;
+    }
+  std::string name(){return icon;}
+  item_type type(){return _type;}
+  FreeRegion1 regin(){return _reg;}
+  private:
+  OrientPos center_pos;
+  OrientPos corner_pos;
+  OrientPos oppsite_pos;
+  std::string icon;
+  item_type _type; 
+  FreeRegion1 _reg;
+
+};
+typedef std::pair<OrientPos,OrientPos> LineNode;
 //////////////////////////////////////////////////////////////////////////
 //栅格地图：每个栅格存储一个char代表该栅格是否是障碍
 //重要函数：
@@ -41,6 +106,7 @@ public:
 public:
   SimpleGridMap(int grid_size = 100);
   SimpleGridMap(const SimpleGridMap &other);
+   void operator = (const SimpleGridMap &other);
   ~SimpleGridMap();
   void LoadFromFile(std::string file_name,nav_msgs::GetMap::Response* resp,double &res);
   void WriteFile();
@@ -126,7 +192,11 @@ public://modify by chq for use astarfornavigation 2016 1213
   int anchor_grid_y_;
   double anchor_world_x_;
   double anchor_world_y_;
-
+  std::vector<shape_item> forbidden_area_;
+  std::vector<shape_item> forbidden_line_;
+  std::vector<shape_item> robot_homes_;
+  std::vector<shape_item> goals_;
+  std::vector<shape_item> dock_points_;
   boost::shared_array<char> grid_data_; //网格数据
   bool b_empty_; //初始时地图为空，加入第一个点以后即不为空
 
