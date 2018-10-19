@@ -8,6 +8,8 @@ Panels:
         - /Status1
         - /Grid1
         - /Map1
+        - /MarkerArray1
+        - /MarkerArray1/Namespaces1
       Splitter Ratio: 0.5
     Tree Height: 595
   - Class: rviz/Selection
@@ -59,51 +61,16 @@ Visualization Manager:
       Topic: /map
       Unreliable: false
       Value: true
-    - Class: rviz/Marker
+    - Class: rviz/MarkerArray
       Enabled: true
-      Marker Topic: /visualization_dock_marker
-      Name: Dock Marker
+      Marker Topic: /visualization_items_array_marker
+      Name: MarkerArray
       Namespaces:
         map_dock_space: true
-      Queue Size: 100
-      Value: true
-    - Class: rviz/Marker
-      Enabled: true
-      Marker Topic: /visualization_goal_marker
-      Name: Goal Marker
-      Namespaces:
-        map_goal1_space: true
-      Queue Size: 100
-      Value: true
-    - Class: rviz/Marker
-      Enabled: true
-      Marker Topic: /visualization_robothome_marker
-      Name: Rob Home Marker
-      Namespaces:
-        map_robothome_space: true
-      Queue Size: 100
-      Value: true
-    - Class: rviz/Marker
-      Enabled: true
-      Marker Topic: /visualization_forbiddenline_marker
-      Name: Forb Line Marker
-      Namespaces:
         map_forbidden_line_space: true
-      Queue Size: 100
-      Value: true
-    - Class: rviz/MarkerArray
-      Enabled: true
-      Marker Topic: /forbiddenarea_MarkerArray
-      Name: Forb AreaMarkerArray
-      Namespaces:
         map_forbiddenarea_space: true
-      Queue Size: 100
-      Value: true
-    - Class: rviz/MarkerArray
-      Enabled: true
-      Marker Topic: /text_MarkerArray
-      Name: TextMarkerArray
-      Namespaces:
+        map_goal1_space: true
+        map_robothome_space: true
         text_space: true
       Queue Size: 100
       Value: true
@@ -130,7 +97,7 @@ Visualization Manager:
   Value: true
   Views:
     Current:
-      Angle: 0.655001
+      Angle: 0.690001
       Class: rviz/TopDownOrtho
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.06
@@ -139,11 +106,11 @@ Visualization Manager:
         Value: false
       Name: Current View
       Near Clip Distance: 0.01
-      Scale: 29.6992
+      Scale: 17.7133
       Target Frame: <Fixed Frame>
       Value: TopDownOrtho (rviz)
-      X: 1.9705
-      Y: -9.8318
+      X: -95.5352
+      Y: -70.3297
     Saved: ~
 Window Geometry:
   Displays:
