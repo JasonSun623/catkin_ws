@@ -1,0 +1,9 @@
+image: exp20180806png.png
+resolution: 0.01
+#origin: [-0.807, -0.717, 0]
+#origin: [0, 0, 0]
+origin: [-0.78, -0.72, 0]
+negate: 0
+occupied_thresh: 0.65
+free_thresh: 0.196
+

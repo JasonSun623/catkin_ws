@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+
+<robot name="houdar_ai_robot" xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:include filename="$(find sicknav350)/urdf/chassiss.xacro" />
+    <!-- call body macros -->
+    <xacro:ai_robot_body parent_link="base_link_frame" laser_link="laser_link_frame">
+    </xacro:ai_robot_body>
+
+</robot>

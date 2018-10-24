@@ -1,0 +1,36 @@
+<launch>
+   <arg name="base_link" default="base_link" />
+   <arg name="laser_scan" default="front_laser_frame" />
+   <!-- the nav350 pos in defined abs cord when start mapping -->
+   <arg name="cord_x" default="1.78" />
+   <arg name="cord_y" default="1.68" />
+   <arg name="cord_theta" default="0.0" />
+   <!-- mapping mode-->
+   <arg name="NClosestRFCnt" default="0" />
+   <!-- 0 replace 1 append -->
+   <arg name="ReplaceORAppendFirst" default="0" />
+   <arg name="mappinglayout" default="0" /> 
+   <!-- waitting to map interval (second)-->
+   <arg name="wait_mapping_interval" default="60" />
+   <node pkg="sicknav350" type="sicknav350_mapping_node" name="sicknav350_mapping_node" output="screen" >
+     <param name="publish_tf" value="false" />
+     <param name="publish_odom_" value="false" /> 
+     <param name="publish_scan" value="true" />
+     <!--added by chq -->
+     <param name="ipaddress" value="172.16.41.121" />
+     <param name="port" value="2111" />
+     <param name="fixed_frame_id" value="$(arg base_link)" />
+     <param name="frame_id" value="$(arg laser_scan)" />
+     
+     <param name="cord_x" value="$(arg cord_x)" />
+     <param name="cord_y" value="$(arg cord_y)" />
+     <param name="cord_theta" value="$(arg cord_theta)" />
+     
+     <param name="NClosestRFCnt" value="$(arg NClosestRFCnt)" />
+     <param name="ReplaceORAppendFirst" value="$(arg ReplaceORAppendFirst)" />
+     <param name="mappinglayout" value="$(arg mappinglayout)" />
+     <param name="wait_mapping_interval" value="$(arg wait_mapping_interval)" />
+   </node>
+   <node pkg="tf" type="static_transform_publisher" name="static_transform_publisher" args="0.1 0 0.75 0 0 0 $(arg base_link) $(arg laser_scan) 100" />
+   <!--node pkg="rviz" type="rviz" name="rviz" args="-d $(find sicknav350)/launch/nav350_intensity.rviz" /-->
+</launch>
