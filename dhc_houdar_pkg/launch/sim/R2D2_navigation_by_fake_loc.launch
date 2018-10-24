@@ -1,0 +1,41 @@
+<launch>
+<!-- Arguments -->
+ <arg name="map_file" default="$(find dhc_houdar_pkg)/maps/R2D2_accute_map_png.yaml"/>
+ <!--Map Server -->
+ <node name="map_server" type="map_server" pkg="map_server" args="$(arg map_file)" />
+ <!-- launch R2D2 base  -->
+ <include file="$(find dhc_houdar_pkg)/launch/sim/R2D2_base.launch" />
+
+
+ <!-- fire up move_base-->
+ <node pkg="move_base" type="move_base" name="houdar_move_base" respawn="true" output="screen" clear_params="true">
+
+   <rosparam file="$(find dhc_houdar_pkg)/config/costmap_common_params.yaml" command="load" ns="global_costmap" />
+   <rosparam file="$(find dhc_houdar_pkg)/config/costmap_common_params.yaml" command="load" ns="local_costmap" />
+   <rosparam file="$(find dhc_houdar_pkg)/config/global_costmap_params.yaml" command="load"  />
+   <rosparam file="$(find dhc_houdar_pkg)/config/local_costmap_params.yaml" command="load"  />
+
+   <!--rosparam file="$(find dhc_houdar_pkg)/config/robotino_local_planner_params.yaml" command="load"  /-->
+   <!--param name="base_local_planner" value="robotino_local_planner/RobotinoLocalPlanner" /-->
+   
+   <!--rosparam file="$(find dhc_houdar_pkg)/config/dwa_local_planner_params.yaml" command="load"  /-->
+   <!--param name="base_local_planner" value="dwa_local_planner/DWAPlannerROS" /-->
+   
+   <rosparam file="$(find dhc_houdar_pkg)/config/trajectory_local_planner_params.yaml" command="load"  />
+
+   
+   <!--param name="eband_local_planner" value="eband_local_planner/EBandPlannerROS" /-->
+   <!--param name="teb_local_planner" value="teb_local_planner/TebLocalPlannerROS" /-->
+  
+
+  <!-- the controller pub wheel_diff_controller/odom and rec wheel_diff_controller/cmd_vel so we have to fit to it  -->
+   <remap from="cmd_vel" to="wheel_diff_controller/cmd_vel" />
+   <remap from="odom" to="wheel_diff_controller/odom" />
+ </node>
+ <!--fire up virtual amcl -->
+ <node pkg="fake_localization" type="fake_localization" name="fake_loc" output="screen" />
+
+ <!-- the virtual amcl need a transform from map to odom-->
+ <node pkg="tf" type="static_transform_publisher" name="tf_map_to_odom" args="0 0 0 0 0 0 /map /odom 10" />
+ <node pkg="rviz" type="rviz" name="navigation_fakeloc_rviz" args="-d $(find dhc_houdar_pkg)/rviz/R2D2_navigation.rviz" />
+</launch>

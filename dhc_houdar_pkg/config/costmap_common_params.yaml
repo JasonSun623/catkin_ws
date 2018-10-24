@@ -1,0 +1,49 @@
+#The navigation stack uses costmaps to store information about obstacles in the world
+#maximum range sensor putting into cost map 
+#map_type: voxel
+
+#If you run the costmap without the plugins parameter, 
+#it will assume a pre-hydro style of parameter configuration
+footprint: [[-0.6, -0.6], [-0.6, 0.6], [0.6, 0.6], [0.6, -0.6]]
+#The publish_frequency is 1.0Hz for debugging purposes
+publish_frequency: 1.0
+#footprint: [ [1, 1], [1, -1], [-1, -1],[-1, 1] ]
+#robot_radius: 0.8
+planner_frequency: 1
+controller_frequency: 3.0
+
+shutdown_costmaps: false
+recovery_behavior_enabled: true
+clearing_rotation_allowed: true
+#Some tutorials (and books) still refer to pre-Hydro parameters
+#So pay close attention. To be safe, be sure to provide a plugins parameter.
+static_layer:
+  map_topic:            map 
+  #Only subscribe to the first message on the map topic, ignoring all subsequent messages
+  first_map_only:       true
+  #If true, unknown values in the map messages are translated directly to the layer. 
+  #Otherwise, unknown values in the map message are translated as FREE_SPACE in the layer.
+  track_unknown_space:  false  
+obstacle_layer:
+  obstacle_range:       4
+  #raytrace freespace 
+  raytrace_range:       0.01
+  #If false, each pixel has one of 2 states: lethal obstacle or free.
+  #If true, each pixel has one of 3 states: lethal obstacle, free, or unknown.
+  track_unknown_space: false 
+#robot_radius: 1
+# The maximum height of any obstacle to be inserted into the costmap in meters 
+  max_obstacle_height:  0.6
+  min_obstacle_height:  0.0
+  publish_voxel_map: false
+  #If true, the robot footprint will clear (mark as free) the space in which it travels.
+  footprint_clearing_enabled: true 
+#point the costmaps at the sensor topics they should listen to for updates
+  observation_sources: hokuyo_scan
+  #expected_update_rate :How often to expect a reading from a sensor in seconds
+  #clearing:Whether or not this observation should be used to clear out freespace.
+  hokuyo_scan: { topic: /hokuyo/scan, sensor_frame: hokuyo_link, data_type: LaserScan, marking: true ,clearing: true, expected_update_rate: 1 } 
+#cost_scaling_factor and inflation_radius were now moved to the inflation_layer ns
+inflation_layer:
+  cost_scaling_factor:  5.0  # exponential rate at which the obstacle cost drops off (default: 10)
+  inflation_radius:     0.5  # max. distance from an obstacle at which costs are incurred for planning paths.

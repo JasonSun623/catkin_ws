@@ -1,0 +1,53 @@
+
+DWAPlannerROS:
+# Robot Configuration Parameters
+
+  acc_lim_x: 0.1
+  acc_lim_th: 0.2
+ 
+  max_vel_x: 0.5
+  min_vel_x: 0.1
+
+  max_rot_vel : 0.3
+  min_rot_vel : 0.1
+ 
+# Goal Tolerance Parameters
+  yaw_goal_tolerance: 0.25
+  xy_goal_tolerance: 0.10
+  #when reached the goal ,it simple rotate to the goal dir 
+  latch_xy_goal_tolerance: true
+# Forward Simulation Parameters
+  sim_time: 3.0
+  sim_granularity: 0.025 
+  vx_samples: 6
+  vtheta_samples: 20
+
+# Trajectory Scoring Parameters
+  #轨迹端点到路径的距离
+  path_distance_bias : 0.6
+  #轨迹端点到局部目标点的距离
+  goal_distance_bias : 0.8
+  #he weighting for how much the controller should attempt to avoid obstacles
+  occdist_scale : 0.05
+  #The distance from the center point of the robot to place an additional scoring point
+  forward_point_distance : 0.325
+  #The amount of time that the robot must stop before a collision
+  stop_time_buffer: 0.1
+  #The absolute value of the velocity at which to start scaling the robot's footprint
+  scaling_speed: 0.25
+  #The maximum factor to scale the robot's footprint by
+  max_scaling_factor: 0.2 
+  #Whether or not to publish the cost grid that the planner will use when planning. When true, a sensor_msgs/PointCloud2 will be available on the ~<name>/cost_cloud topic
+  publish_cost_grid: true 
+  
+# Oscillation Prevention Parameters
+#How far the robot must travel in meters before oscillation flags are reset
+  oscillation_reset_dist: 0.05
+
+# Debugging
+  publish_traj_pc : true
+  publish_cost_grid_pc: true
+  global_frame_id: map
+
+# escape_vel: -0.1
+   

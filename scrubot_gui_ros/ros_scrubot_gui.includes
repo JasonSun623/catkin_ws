@@ -1,0 +1,3 @@
+include/scrubot_gui_ros
+include/scrubot_gui_ros/qroundprocess
+include/scrubot_gui_ros/temperature

@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>urdf_vehicle_kinematic</name>
+  <version>0.2.2</version>
+  <description>Extract kinematic value of a vehicle from urdf</description>
+
+  <maintainer email="vincent.rousseau@irstea.fr">Vincent Rousseau</maintainer>
+
+  <license>GPLv3</license>
+
+  <author email="vincent.rousseau@irstea.fr">Vincent Rousseau</author>
+
+  <url type="website">http://ros.org/wiki/urdf_vehicle_kinematic</url>
+  <url type="repository">https://github.com/romea/romea_controllers.git</url>
+  <url type="bugtracker">https://github.com/romea/romea_controllers/issues</url>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <depend>roscpp</depend>
+  <depend>urdf</depend>
+
+</package>

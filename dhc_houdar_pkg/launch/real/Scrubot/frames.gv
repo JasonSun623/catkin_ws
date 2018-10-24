@@ -1,0 +1,18 @@
+digraph G {
+"odom" -> "base_footprint"[label="Broadcaster: /rf2o_laser_odometry\nAverage rate: 6.456 Hz\nMost recent transform: 1537078118.630 ( 3.052 sec old)\nBuffer length: 2.169 sec\n"];
+"map" -> "odom"[label="Broadcaster: /amcl\nAverage rate: 25.397 Hz\nMost recent transform: 1537078119.601 ( 2.081 sec old)\nBuffer length: 2.284 sec\n"];
+"base_footprint" -> "base_link"[label="Broadcaster: /robot_state_publisher\nAverage rate: 5.454 Hz\nMost recent transform: 1537078119.134 ( 2.549 sec old)\nBuffer length: 2.200 sec\n"];
+"base_link" -> "caster_back_link"[label="Broadcaster: /robot_state_publisher\nAverage rate: 5.454 Hz\nMost recent transform: 1537078119.134 ( 2.549 sec old)\nBuffer length: 2.200 sec\n"];
+"base_link" -> "caster_front_link"[label="Broadcaster: /robot_state_publisher\nAverage rate: 5.454 Hz\nMost recent transform: 1537078119.134 ( 2.549 sec old)\nBuffer length: 2.200 sec\n"];
+"base_link" -> "cliff_sensor_front_link"[label="Broadcaster: /robot_state_publisher\nAverage rate: 5.454 Hz\nMost recent transform: 1537078119.134 ( 2.549 sec old)\nBuffer length: 2.200 sec\n"];
+"base_link" -> "cliff_sensor_left_link"[label="Broadcaster: /robot_state_publisher\nAverage rate: 5.454 Hz\nMost recent transform: 1537078119.134 ( 2.549 sec old)\nBuffer length: 2.200 sec\n"];
+"base_link" -> "cliff_sensor_right_link"[label="Broadcaster: /robot_state_publisher\nAverage rate: 5.454 Hz\nMost recent transform: 1537078119.134 ( 2.549 sec old)\nBuffer length: 2.200 sec\n"];
+"base_link" -> "gyro_link"[label="Broadcaster: /robot_state_publisher\nAverage rate: 5.454 Hz\nMost recent transform: 1537078119.134 ( 2.549 sec old)\nBuffer length: 2.200 sec\n"];
+"base_link" -> "wheel_left_link"[label="Broadcaster: /robot_state_publisher\nAverage rate: 5.263 Hz\nMost recent transform: 1537078118.477 ( 3.206 sec old)\nBuffer length: 1.900 sec\n"];
+"base_link" -> "wheel_right_link"[label="Broadcaster: /robot_state_publisher\nAverage rate: 5.263 Hz\nMost recent transform: 1537078118.477 ( 3.206 sec old)\nBuffer length: 1.900 sec\n"];
+"base_link" -> "sick_lms111_laser"[label="Broadcaster: /base_link_to_sick_lms_laser\nAverage rate: 25.424 Hz\nMost recent transform: 1537078118.528 ( 3.155 sec old)\nBuffer length: 2.045 sec\n"];
+edge [style=invis];
+ subgraph cluster_legend { style=bold; color=black; label ="view_frames Result";
+"Recorded at time: 1537078121.683"[ shape=plaintext ] ;
+ }->"map";
+}

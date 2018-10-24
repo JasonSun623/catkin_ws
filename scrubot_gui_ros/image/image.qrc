@@ -1,0 +1,41 @@
+<RCC>
+    <qresource prefix="/">
+        <file>company/comp_name.png</file>
+        <file>company/widget_bk.png</file>
+        <file>company/bk.jpg</file>
+        <file>company/bk.png</file>
+        <file>company/company.png</file>
+        <file>process/task.png</file>
+        <file>process/water.png</file>
+        <file>process/sewage.png</file>
+        <file>process/power.png</file>
+        <file>process/temperature.png</file>
+        <file>process/humidity.png</file>
+        <file>control_img/company.png</file>
+        <file>control_img/down_normal.png</file>
+        <file>control_img/down_pressed.png</file>
+        <file>control_img/left_normal.png</file>
+        <file>control_img/left_pressed.png</file>
+        <file>control_img/right_normal.png</file>
+        <file>control_img/right_pressed.png</file>
+        <file>control_img/up_normal.png</file>
+        <file>control_img/up_pressed.png</file>
+        <file>control_img/stop_normal.png</file>
+        <file>control_img/stop_pressed.png</file>
+        <file>control_img/add_normal.png</file>
+        <file>control_img/add_pressed.png</file>
+        <file>control_img/reduce_normal.png</file>
+        <file>control_img/reduce_pressed.png</file>
+        <file>visualization_widget/add.png</file>
+        <file>visualization_widget/setting.png</file>
+        <file>visualization_widget/start.png</file>
+        <file>visualization_widget/stop.png</file>
+        <file>visualization_widget/Toggle_Off.png</file>
+        <file>visualization_widget/Toggle_On.png</file>
+        <file>util/add_item.png</file>
+        <file>util/delete_item.png</file>
+        <file>util/edit_item.png</file>
+        <file>util/elp_gray.png</file>
+        <file>util/elp_green.png</file>
+    </qresource>
+</RCC>

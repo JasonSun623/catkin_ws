@@ -1,0 +1,49 @@
+#The maximum height of any obstacle to be inserted into the costmap in meters. 
+#This parameter should be set to be slightly higher than the height of your robot.
+max_obstacle_height: 5  # assume something like an arm is mounted on top of the robot
+#The default maximum distance from the robot at which an obstacle will be inserted into the cost map in meters.
+obstacle_range: 4
+raytrace_range: 3 #raytrace_range”参数用于机器人移动过程中实时清除范围中障碍物以获得自由移动空间
+# Obstacle Cost Shaping (http://wiki.ros.org/costmap_2d/hydro/inflation)
+#robot_radius: 0.6  # distance a circular robot should be clear of the obstacle (kobuki: 0.18)
+footprint: [[-0.6, -0.6], [-0.6, 0.6], [0.6, 0.6], [0.6, -0.6]]
+
+obstacle_layer:
+  enabled:              true
+  #The maximum height in meters of a sensor reading considered valid.This is usually set to be slightly higher than the height of the robot
+  max_obstacle_height:  5
+  min_obstacle_height:  0
+  #The number of unknown cells allowed in a column considered to be "known"
+  unknown_threshold:    15
+  #The maximum number of marked cells allowed in a column considered to be "free".
+  mark_threshold:       0
+  combination_method:   1
+  track_unknown_space:  true    #true needed for disabling global path planning through unknown space
+  obstacle_range: 5
+  #The default range in meters at which to raytrace out obstacles from <<the map>> using sensor data. 
+  raytrace_range: 3.0
+  #If true, the robot footprint will clear (mark as free) the space in which it travels.
+  footprint_clearing_enabled: true
+  observation_sources:  hokuyo_link
+  hokuyo_link:
+    data_type: LaserScan
+    sensor_frame: hokuyo_link
+    topic: filter_scan
+    marking: true
+    clearing: true
+    min_obstacle_height: 0.01
+    max_obstacle_height: 2.0
+
+  # for debugging only, let's you see the entire voxel grid
+
+#cost_scaling_factor and inflation_radius were now moved to the inflation_layer ns
+inflation_layer:
+  enabled:              true
+  cost_scaling_factor:  5.0  # exponential rate at which the obstacle cost drops off (default: 10)
+  #如果对于圆形车，车宽一半是0.5 显然这个至少为0.5
+  inflation_radius:     0.7  # max. distance from an obstacle at which costs are incurred for planning paths.
+
+static_layer:
+  enabled:              true
+  
+

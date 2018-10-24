@@ -1,0 +1,55 @@
+<?xml version="1.0"?>
+<launch>
+
+  <!-- these are the arguments you can pass this launch file, for example paused:=true -->
+  <param name="use_sim_time" value="true"/>
+  <arg name="paused" default="true"/>
+  <arg name="use_sim_time" default="true"/>
+  <arg name="gui" default="true"/>
+  <arg name="headless" default="false"/>
+  <arg name="debug" default="false"/>
+  <!-- nofootprint.xacro remove the base_footprint link -->
+  <arg name="model" default="$(find dhc_houdar_pkg)/urdf/R2D2_base.xacro" />
+   <include file="$(find gazebo_ros)/launch/empty_world.launch"> 
+    <!--arg name="world_name" value="$(find rosbook_arm_gazebo)/worlds/empty.world"/-->
+    <!-- !!!!
+         load the wrold and robot (if saved in it )into gazebo.
+         if we use the spawn_model node in gazebo_ros pkg(such as following),we need send the
+         arg -model, if it have already excited in this world ,the spawn_model will load failed
+         so here load a world without a robot (unless we do it on purpose)
+    !!! -->
+    <arg name="world_name" value="$(find dhc_houdar_pkg)/worlds/norobot.world"/>
+    <arg name="debug" value="$(arg debug)" />
+    <arg name="gui" value="$(arg gui)" />
+    <arg name="paused" value="$(arg paused)"/>
+    <arg name="use_sim_time" value="$(arg use_sim_time)"/>
+    <arg name="headless" value="$(arg headless)"/>
+  </include>
+
+  <!-- Load the URDF into the ROS Parameter Server -->
+  <param name="robot_description" command="$(find xacro)/xacro --inorder '$(arg model)'" />
+  <!-- joint controller in rviz -->
+  <param name="use_gui" value="$(arg gui)"/>
+  <!-- robot controller conf file in gazebo  -->
+  <rosparam command="load" file="$(find dhc_houdar_pkg)/urdf/R2D2conf_base.yaml"/>
+  <node name="R2D2Controller" pkg="controller_manager" type="spawner" output="screen" args="wheel_diff_controller --shutdown-timeout 3" />
+ 
+  <!-- robot link / joint  TF publisher  -->
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" >
+    <param name="publish_frequency" value="50"/>
+  </node>
+
+  <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" >
+    <param name="rate" value="50" />
+  </node>
+
+
+  <!-- Run a python script to the send a service call to gazebo_ros to spawn a URDF robot -->
+   <node name="urdf_spawner" pkg="gazebo_ros" type="spawn_model" respawn="false" output="screen"
+	   args="-urdf -model R2D2 -param robot_description -z 0.05"/> 
+   <!-- diff wheel controller in gazebo -->
+   <node name="rqt_robot_steering" pkg="rqt_robot_steering" type="rqt_robot_steering">
+    <param name="default_topic" value="wheel_diff_controller/cmd_vel" />
+   </node>
+   <node name="rviz" pkg="rviz" type="rviz" args="-d $(find dhc_houdar_pkg)/rviz/R2D2_base_amcl.rviz" />
+</launch>

@@ -1,0 +1,27 @@
+<launch>
+ <!-- fire up amcl -->
+ <include file="$(find dhc_houdar_pkg)/launch/sim/R2D2_amcl.launch" />
+ <!-- fire up move_base-->
+ <node pkg="move_base" type="move_base" name="houdar_move_base" respawn="false" output="screen" clear_params="true">
+   <param name="shutdown_costmaps" value="false" />
+   <rosparam file="$(find dhc_houdar_pkg)/config/costmap_common_params.yaml" command="load" ns="global_costmap" />
+   <rosparam file="$(find dhc_houdar_pkg)/config/costmap_common_params.yaml" command="load" ns="local_costmap" />
+
+   <rosparam file="$(find dhc_houdar_pkg)/config/global_costmap_params.yaml" command="load"  />
+   <rosparam file="$(find dhc_houdar_pkg)/config/local_costmap_params.yaml" command="load"  />
+   
+   <!--rosparam file="$(find dhc_houdar_pkg)/config/robotino_local_planner_params.yaml" command="load"  /-->
+   <!--param name="base_local_planner" value="robotino_local_planner/RobotinoLocalPlanner" /-->
+   
+   <rosparam file="$(find dhc_houdar_pkg)/config/dwa_local_planner_params.yaml" command="load"  />
+   <param name="base_local_planner" value="dwa_local_planner/DWAPlannerROS" />
+   
+   
+   <!--param name="eband_local_planner" value="eband_local_planner/EBandPlannerROS" /-->
+   <!--param name="teb_local_planner" value="teb_local_planner/TebLocalPlannerROS" /-->
+   <!-- the controller pub wheel_diff_controller/odom and rec wheel_diff_controller/cmd_vel so we have to fit to it  -->
+   <remap from="cmd_vel" to="wheel_diff_controller/cmd_vel" />
+   <remap from="odom" to="wheel_diff_controller/odom" />
+ </node>
+ <node name="rviz" pkg="rviz" type="rviz" args="-d $(find dhc_houdar_pkg)/rviz/R2D2_navigation.rviz" />
+</launch>

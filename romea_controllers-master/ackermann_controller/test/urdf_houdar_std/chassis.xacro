@@ -1,0 +1,79 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="chassis">
+  <!-- Base Properties -->
+  <!--xacro:property name="mass_base" value="340" /-->
+ <xacro:property name="mass_base" value="10" />
+ <!--box length chq -->
+  <xacro:property name="base_x_size" value="1.66000" />
+  <xacro:property name="base_y_size" value="0.60000" />
+  <!--box self height chq -->
+  <xacro:property name="base_z_size" value="1.200" />
+  <!-- dist bet box bottom to base_footprint chq -->
+  <xacro:property name="box_z_size" value="0.2000" />
+  <!-- dist bet front and rear |wheel| chq -->
+  <xacro:property name="wheelbase" value="1.22" />
+  <!-- dist bet left and right |wheel| chq -->
+  <xacro:property name="track" value="1.23" />
+
+
+ <!-- add by chq for fit gazebo -start-->
+ <xacro:macro name="default_inertial" params="mass">
+    <inertial>
+      <mass value="${mass}" />
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0" />
+    </inertial>
+  </xacro:macro>
+
+<!-- add by chq for fit gazebo -end-->
+  <xacro:macro name="chassis">
+    <!-- Base footprint is on the ground under the robot -->
+    <link name="base_footprint"/>
+    
+
+    <!-- Base link is the center of the robot's bottom plate -->
+    <link name="base_link">
+       
+      <inertial>
+        
+        <mass value="340" />
+        <origin xyz="${wheelbase/2} 0 0" rpy="0 0 0" />
+        <inertia ixx="${mass_base/12.0 * (base_y_size*base_y_size + box_z_size*box_z_size)}" ixy="0" ixz="0"
+                 iyy="${mass_base/12.0 * (base_x_size*base_x_size + box_z_size*box_z_size)}" iyz="0"
+                 izz="${mass_base/12.0 * (base_y_size*base_y_size + base_x_size*base_x_size)}" />
+      </inertial>
+      
+       <visual>
+        <geometry>
+          <box size="${base_x_size} ${base_y_size} ${box_z_size}"/>
+        </geometry>
+        <material name="grey">
+          <color rgba="0.6 0.6 0.6 1"/>
+        </material>
+        <origin xyz="${wheelbase/2} 0 0" rpy="0 0 0" />
+      </visual>
+      
+
+      <collision>
+        <geometry>
+          <box size="${base_x_size} ${base_y_size} ${box_z_size}"/>
+        </geometry>
+        <origin xyz="${base_x_size/2} 0 0" rpy="0 0 0" />
+      </collision>
+
+    </link>
+
+
+
+    <joint name="base_footprint_joint" type="fixed">
+      <origin xyz="0 0 ${ground_clearance + base_z_size/2}" rpy="0 0 0" />
+      <child link="base_link" />
+      <parent link="base_footprint" />
+    </joint>
+
+
+    <gazebo reference="base_link">
+      <material>Gazebo/Grey</material>
+    </gazebo>
+
+  </xacro:macro>
+</robot>

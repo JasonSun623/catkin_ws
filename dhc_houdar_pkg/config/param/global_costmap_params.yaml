@@ -1,0 +1,12 @@
+global_costmap:
+   global_frame: /map
+   robot_base_frame: /base_link
+   update_frequency: 1 #Hz map update frequency
+   publish_frequency: 1 #Hz 
+   static_map: true
+   transform_tolerance: 0.5
+   plugins:
+     - {name: static_layer,            type: "costmap_2d::StaticLayer"}
+     - {name: inflation_layer,         type: "costmap_2d::InflationLayer"}
+     - {name: obstacle_layer,          type: "costmap_2d::ObstacleLayer"}    #多次规划时 这个插件起到考虑动态障碍物而调整全局路径的作用
+

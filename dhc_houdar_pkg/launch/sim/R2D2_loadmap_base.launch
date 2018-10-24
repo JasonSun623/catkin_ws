@@ -1,0 +1,8 @@
+<launch>
+<!-- Arguments -->
+ <arg name="map_file" default="$(find dhc_houdar_pkg)/maps/R2D2_map.yaml"/>
+ <!--Map Server -->
+ <node name="map_server" type="map_server" pkg="map_server" args="$(arg map_file)" />
+ <!-- launch R2D2 base  -->
+ <include file="$(find dhc_houdar_pkg)/launch/sim/R2D2_base.launch" />
+</launch>

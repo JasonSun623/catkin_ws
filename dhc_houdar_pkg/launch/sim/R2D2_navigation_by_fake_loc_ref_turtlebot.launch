@@ -1,0 +1,45 @@
+<launch>
+<!-- Arguments -->
+ <arg name="map_file" default="$(find dhc_houdar_pkg)/maps/R2D2_accute_map_png.yaml"/>
+ <arg name="filter_scan_name" default="filter_scan"/>
+ <!--Map Server -->
+ <node name="map_server" type="map_server" pkg="map_server" args="$(arg map_file)" />
+ <!-- launch R2D2 base  -->
+ <include file="$(find dhc_houdar_pkg)/launch/sim/R2D2_base.launch" />
+ <arg name="custom_param_file" default="$(find dhc_houdar_pkg)/config/param/dummy.yaml"/>
+
+ <!-- fire up move_base-->
+ <node pkg="move_base" type="move_base" name="houdar_move_base" respawn="true" output="screen" clear_params="true">
+
+    <rosparam file="$(find dhc_houdar_pkg)/config/param/costmap_common_params.yaml" command="load" ns="global_costmap" />
+    <rosparam file="$(find dhc_houdar_pkg)/config/param/costmap_common_params.yaml" command="load" ns="local_costmap" />   
+    <rosparam file="$(find dhc_houdar_pkg)/config/param/local_costmap_params.yaml" command="load" />   
+    <rosparam file="$(find dhc_houdar_pkg)/config/param/global_costmap_params.yaml" command="load" />
+    <rosparam file="$(find dhc_houdar_pkg)/config/param/trajectory_local_planner_params.yaml" command="load" />
+    <rosparam file="$(find dhc_houdar_pkg)/config/param/move_base_params.yaml" command="load" />
+    <rosparam file="$(find dhc_houdar_pkg)/config/param/global_planner_params.yaml" command="load" />
+    <rosparam file="$(find dhc_houdar_pkg)/config/param/navfn_global_planner_params.yaml" command="load" />
+    <!-- external params file that could be loaded into the move_base namespace -->
+    <rosparam file="$(arg custom_param_file)" command="load" />
+   
+   
+
+   
+  <!-- the controller pub wheel_diff_controller/odom and rec wheel_diff_controller/cmd_vel so we have to fit to it  -->
+   <remap from="cmd_vel" to="wheel_diff_controller/cmd_vel" />
+   <remap from="odom" to="wheel_diff_controller/odom" />
+ </node>
+ <!--fire up virtual amcl -->
+ <node pkg="fake_localization" type="fake_localization" name="fake_loc" output="screen" />
+<!--fire up scan filter -->
+
+<node pkg="filter_scan" type="filter_scan_node" name="filter_scan" output="screen" >
+  <param name="pre_scan_topic" value="scan" />
+  <param name="new_scan_topic" value="$(arg filter_scan_name)" />
+  <param name="max_beam_dist" value="50.0" />
+</node>
+
+ <!-- the virtual amcl need a transform from map to odom-->
+ <node pkg="tf" type="static_transform_publisher" name="tf_map_to_odom" args="0 0 0 0 0 0 /map /odom 10" />
+ <!--node pkg="rviz" type="rviz" name="navigation_fakelocby_turllebot_rviz" args="-d $(find dhc_houdar_pkg)/rviz/R2D2_navigation.rviz" /-->
+</launch>
