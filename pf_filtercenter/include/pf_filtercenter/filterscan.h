@@ -8,7 +8,7 @@
 #include "Geometry.h"
 #include <ros/ros.h>
 #include <sensor_msgs/LaserScan.h>
-#include<stdio.h>
+#include <stdio.h>
 using namespace std;
 //scan data struct
 struct scanCluster{
@@ -35,7 +35,38 @@ public:
 private:
 double _angle;
 };
+///ga---------------------------
+// ga objective class example
+#if 0
+template <typename T>
+class MyObj
+{
+public:
+ static T _rf_radius_static;
+ static std::list<VecPositionDir>  _rf_list_pointclounds;
+ static std::vector<T> MyObjFun(const std::vector<T>& x)
+ {
+      T obj;
+      double var_r = _rf_radius_static*_rf_radius_static;
+      std::list<VecPositionDir>::iterator it = _rf_list_pointclounds.begin();
+      for(;it!=_rf_list_pointclounds.end();it++){
+        obj = -fabs( pow( (it->getX() - x[0]),2) - var_r);
+        obj += -fabs( pow( (it->getY() - x[1]),2) - var_r);//we want the min value
+        obj /= _rf_list_pointclounds.size();
+      }
+       return {obj};
+  }
+ static std::vector<T> MyConstraint(const std::vector<T>& x)
+ {
+   //x-r<0;x+r>0;y-r<0;y+r>0
+    return {x[0]-_rf_radius_static,-x[0]-_rf_radius_static,x[1]-_rf_radius_static,-x[1]-_rf_radius_static};
+ }
 
+};
+  // NB: GALGO maximize by default so we will maximize -f(x,y)
+#endif
+
+///ga---------------------------
 //filter scan class
 class filterScan{
 public:
@@ -59,10 +90,7 @@ public:
                             const std::vector<std::list<VecPositionDir> > &relative_pointclounds,
                              std::vector<VecPositionDir>& v_opt_center
                             );
-    void getFourDirValue( const std::list<VecPositionDir>  &relative_pointclounds,
-                           VecPositionDir cen,double* array);//used to cal the four dir var err
-
-
+    void getFourDirValue( const std::list<VecPositionDir>  &relative_pointclounds,VecPositionDir cen,double* array);//used to cal the four dir var err
     inline int getMin(double* array,double &v){
       int k = 0;
       for(int i = 0; i < 5; i++)//limit the size is 5
@@ -83,6 +111,8 @@ private:
   double _err;
   std::vector<std::list<scanCluster> >  _reflectors_group;
   std::vector<std::list<VecPositionDir> > _relative_pointclounds;
+  static std::list<VecPositionDir> _static_relative_pointclounds;
+  static double  _static_rf_radius;
   static const int sampe_limit_par1 = 15;
   static const int sampe_limit_par2 = 24;
 };

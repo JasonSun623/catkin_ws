@@ -51,7 +51,7 @@ the maximum and the minimum of two values.
 12/02/2001       Jelle Kok       Initial version created
 </pre>
 */
-#include "pf_filtercenter/Geometry.h"
+#include "Geometry.h"
 #include <stdio.h>    // needed for sprintf
 
 

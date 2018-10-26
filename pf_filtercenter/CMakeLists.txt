@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8.3)
 project(pf_filtercenter)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
-# add_compile_options(-std=c++11)
+ add_compile_options(-std=c++11)
 #add for debug
 #第一句保证了CXXFLAGS被加上了-g
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
@@ -108,7 +108,7 @@ find_package(Boost REQUIRED COMPONENTS system thread)
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
-  INCLUDE_DIRS include
+#  INCLUDE_DIRS include
 #  LIBRARIES pf_filtercenter
 #  CATKIN_DEPENDS roscpp std_msgs
 #  DEPENDS system_lib
@@ -121,7 +121,8 @@ catkin_package(
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
 include_directories(
- include
+  include
+  include/${PROJECT_NAME}
   ${catkin_INCLUDE_DIRS}
   ${Boost_INCLUDE_DIRS}
 )

@@ -4,7 +4,8 @@
 #include <boost/thread.hpp>
 #include <geometry_msgs/Pose.h>
 #include <geometry_msgs/PoseArray.h>
-#include "pf_filtercenter/filterscan.h"
+#include "filterscan.h"
+//#include "pf_filtercenter/GALGO_Lib/Galgo.hpp"
 #include <string>
 #include <visualization_msgs/Marker.h>
 int filter_num = 1;
@@ -26,6 +27,7 @@ void CallBackScan(const sensor_msgs::LaserScan & scan){
   }
    std::cout << "pf_filter.push scan size:" << raw_scan.size()<<std::endl;
 }
+
 
 int main(int argc, char **argv)
 {
@@ -49,11 +51,11 @@ int main(int argc, char **argv)
     nh_.param("reflector_radius",reflector_radius,reflector_radius);
     nh_.param("step",step,step);
     nh_.param("err_thread",err_thread,err_thread);
-    std::cout << "pf_filter.main.init done!"
-              << " scan_topic sub: " << scan_topic << std::endl ;
+    std::cout << "pf_filter.main.init done!"<< " scan_topic sub: " << scan_topic << std::endl ;
     ros::Duration(0.5).sleep();
     filterScan filter(reflector_radius,echo_thread,step,err_thread);
     pub_marker_rfs.publish(items_maker);
+
     while(nh.ok()){
        std::cout  << "pf_filter.main.loop\n";
       if(raw_scan.size()>=filter_num){
