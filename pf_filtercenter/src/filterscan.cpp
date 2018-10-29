@@ -77,12 +77,12 @@ void filterScan::groupingScan(const std::vector<sensor_msgs::LaserScan>& raw_sca
   double sum_echo =.0;
   int length = raw_scan[0].ranges.size();
   int size_v = raw_scan.size();
-  //average the vector scan data
+  //平均化几个连续激光束
   if(size_v >= 2){
     for(int i = 0 ;i < length;i++){//laser dist data index
-      sum_dist =.0;
+      sum_dist = .0;
       sum_echo = .0;
-      for(int j = 0 ; j < size_v;j++)//laser index
+      for(int j = 0; j < size_v; j++)//laser index
       {
         sum_dist+=raw_scan[j].ranges[i];
         sum_echo+=raw_scan[j].intensities[i];
@@ -95,16 +95,38 @@ void filterScan::groupingScan(const std::vector<sensor_msgs::LaserScan>& raw_sca
   //filter by echo_thread
   //todo 这里要考虑靠近的时候，可能中间有间隔无强度信号，但是实际下一个有强度数据仍然是当前的反光板的问题
   //但是对于很远处，可能会存在只要间隔就是另一个反光板
+  int diff_cnt = 0;
+  bool last_is_diff= false;
   for(int i = 0; i < length ; i++){
     double angle = avegrage_scan.angle_min + i * avegrage_scan.angle_increment;
+    //超过强度阈值　当前组插入新数据点
     if(avegrage_scan.intensities[i] > _echo){
+      last_is_diff  = false;
       one_group_scan.push_back(scanCluster(angle,avegrage_scan.ranges[i],avegrage_scan.intensities[i]));
     }
     else{
-      if(one_group_scan.size()){
-        v_reflectors_group.push_back(one_group_scan);
-        one_group_scan.clear();
+      //如果上次也低于阈值,继续累计
+      if(last_is_diff){
+       /* if(avegrage_scan.ranges[i]<10.0) *///在过滤模式下　强度值小于阈值的距离数据已经无效
+          diff_cnt++;
       }
+      //否则　重新累计
+      else{
+        last_is_diff  = true;
+        diff_cnt = 0;
+        diff_cnt++;
+      }
+      //如果连续两次是低于阈值，则步本簇数据采样完成
+      if( diff_cnt >= 2 ){
+        if(one_group_scan.size()){
+          v_reflectors_group.push_back(one_group_scan);
+          one_group_scan.clear();
+        }
+      }
+      else{
+        continue;
+      }
+
     }
   }
   ROS_INFO("pf_filter.grouping scan.group num: %d",v_reflectors_group.size());
@@ -282,19 +304,19 @@ v_opt_center.clear();
    */
     //method 1 min four dir err
     bool need_move = (kx!=0 || ky!=0);
-    double dia = 2.0*_rf_radius;
-    bool not_boundary = (fabs(x)<=dia && fabs(y)<=dia);
+    //double dia = 2.0*_rf_radius;
+    //bool not_boundary = (fabs(x)<=dia && fabs(y)<=dia);
     double err_bef = 99999;
-    while(need_move /*&& not_boundary*/){//如果仍然有偏移系数且未超出搜索范围，则继续搜索
+    while(need_move){//如果仍然有偏移系数且未超出搜索范围，则继续搜索
       move_center(tmp,x,y,_step,kx,ky,v);
       //如果前后迭代偏差(unit mm(not mm^2))小于一个步长（很小）　或者误差已经小于指定阈值，则退出循环
-     if( fabs(v - err_bef) < _step*_step||v< _err *_err)
-     {
-       ROS_INFO("pf_filtercenter.arrive to precision.end this search loop");
-       break;
-     }
-     else
-       err_bef = v;
+      if( fabs(v - err_bef) < _step*_step || v < _err *_err)
+      {
+        // ROS_INFO("pf_filtercenter.arrive to precision.end this search loop");
+        break;
+      }
+      else
+        err_bef = v;
 
       x += kx*_step;
       y += ky*_step;
