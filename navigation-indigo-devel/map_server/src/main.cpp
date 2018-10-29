@@ -111,7 +111,7 @@ class MapServer
     items_maker.lifetime = ros::Duration(1000000);
      ///common info for text 
 
-
+    /// 一种类型的所有点可以放入一个marker的points中
     if( map.dock_points_.size() ){
       items_maker.points.clear();
       for(int i=0;i < (map.dock_points_).size();i++){
@@ -131,6 +131,7 @@ class MapServer
         pose.position.x = p.x;
         pose.position.y = p.y;
         pose.position.z = 0;
+        ////fort text type,Only scale.z is used. scale.z specifies the height of an uppercase "A".
         text_marker = items_maker;
         text_marker.ns = "text_space";
         text_marker.type = text_shape;
@@ -234,7 +235,7 @@ class MapServer
       items_MarkerArray.markers.push_back(items_maker);
     }
     
-
+    /// 多线段的显示使用类型LINE_STRIP，注意，线条宽度使用scale.x控制
     shape = visualization_msgs::Marker::LINE_STRIP;
     items_maker.type = shape;//shape chageed
     items_maker.ns = "map_forbiddenarea_space";
@@ -264,6 +265,7 @@ class MapServer
         items_maker.id = sum;
         geometry_msgs::Point p;
         p.z = 0;
+        /// 对于矩形，文字的位置是ｒｅｇｉｎ中记录的对角点的中心
         geometry_msgs::Pose pose;
         pose.position.x = 0.5*(list[0].getX()+list[2].getX());
         pose.position.y = 0.5*(list[0].getY()+list[2].getY());
@@ -281,9 +283,7 @@ class MapServer
         text_marker = items_maker;
         text_marker.ns = "text_space";
         text_marker.type = text_shape;
-        text_marker.scale.x =0.5;
-        text_marker.scale.x =0.5;
-        text_marker.scale.x =0.5;
+        text_marker.scale.z = 0.5;
         text_marker.color.r = 255;
         text_marker.color.g = 0;
         text_marker.color.b = 0;
@@ -296,7 +296,7 @@ class MapServer
       }
       
     }
-    
+    /// 多个直线可以使用　LINE_LIST类型，多个线条可以放入一个ｍａｒｋｅｒ中去，按照0-1 2-3 4-5 逐个表示线条 
     //Line lists use the points member of the visualization_msgs/Marker message.
     //It will draw a line between each pair of points, so 0-1, 2-3, 4-5, ...
     shape = visualization_msgs::Marker::LINE_LIST;
@@ -330,7 +330,7 @@ class MapServer
         items_maker.points.push_back(p);
         p.x = e_pos.x();
         p.y = e_pos.y();
-        
+        /// 对于线条　文字的位置在首尾点的中心
         geometry_msgs::Pose pose;
         pose.position.x = 0.5*(s_pos.x()+e_pos.x());
         pose.position.y = 0.5*(s_pos.y()+e_pos.y());
@@ -341,9 +341,7 @@ class MapServer
         text_marker = items_maker;
         text_marker.ns = "text_space";
         text_marker.type = text_shape;
-        text_marker.scale.x =0.5;
-        text_marker.scale.x =0.5;
-        text_marker.scale.x =0.5;
+        text_marker.scale.z =0.5;
         text_marker.color.r = 255;
         text_marker.color.g = 0;
         text_marker.color.b = 0;

@@ -507,7 +507,10 @@ void SimpleGridMap::LeftExtent()
     //老数据数组也跳转一行
     sourceMem += oldWidth;
   }
-
+  //for share_ptr 
+  //reset() 相当于销毁当前所控制的对象
+  //reset(T* p) 相当于销毁当前所控制的对象，然后接管p所指的对象
+  //reset(T*, Deleter) 和上面一样
   grid_data_.reset();
   grid_data_ = new_data;
 }
