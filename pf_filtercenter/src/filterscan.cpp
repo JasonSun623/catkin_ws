@@ -10,19 +10,18 @@ public:
    static std::vector<T> Objective(const std::vector<T>& x)
    {
      std::list<VecPositionDir>::iterator it = _static_relative_pcls.begin();
-     T obj;
-     static T var_r = _static_rf_radius*1000*_static_rf_radius*1000;
+     T obj = 0;
      int i = 0;
      for(;it!=_static_relative_pcls.end();it++){
-       T sum=(it->getX()*1000 - x[0])*(it->getX()*1000 - x[0]);
-       obj += -fabs( sum - var_r);
-       sum=(it->getY()*1000 - x[1])*(it->getY()*1000 - x[1]);
-       obj += -fabs( sum - var_r);
+       T err_x = ( it->getX()*1000.0 - x[0] );
+       T err_y = ( it->getY()*1000.0 - x[1] );
+       T err =  sqrt(err_x*err_x+err_y*err_y) - _static_rf_radius*1000.0;
+       obj += err * err ;
        i++;
      }
      obj /= i;
      //// NB: GALGO maximize by default so we will maximize -f(x,y)
-      return {obj};
+      return {-obj};
    }
    //std::vector<T> ScanConstraint(const std::vector<T>& x)
    //{
@@ -30,6 +29,7 @@ public:
    //}
    static std::list<VecPositionDir> _static_relative_pcls;
    static T  _static_rf_radius;
+   static int cnt ;
 private:
 
 
@@ -37,6 +37,9 @@ private:
 ///!!!!!!!!!!!!!!!!!! we must init it
 template<typename T>
 T ScanObjective<T>::_static_rf_radius = 0;
+template<typename T>
+int ScanObjective<T>::cnt = 0;
+
 ///!!!!!!!!!!!!!!!!!
 template<typename T>
 std::list<VecPositionDir> ScanObjective<T>::_static_relative_pcls ;
@@ -191,23 +194,16 @@ void filterScan::getRelativePointClouds(const std::vector<std::list<scanCluster>
 }
 void filterScan::getFourDirValue( const std::list<VecPositionDir> &relative_pointclounds,
                        VecPositionDir cen,double *array){
-#if 0
+
   std::list<VecPositionDir>::const_iterator it = relative_pointclounds.begin();
-  double var_r = _rf_radius * _rf_radius;
+  double cen_x = cen.getX();
+  double cen_y = cen.getY();
   for(;it!=relative_pointclounds.end();it++){
-    array[1] += fabs( pow( (it->getX() - (cen.getX()-_step)),2) - var_r);
-    array[1] += fabs( pow( (it->getY() - cen.getY()),2) - var_r);
-
-    array[2] += fabs( pow( (it->getX() - (cen.getX()+_step)),2) - var_r);
-    array[2] += fabs( pow( (it->getY() - cen.getY()),2) - var_r);
-
-    array[3] += fabs( pow( (it->getX() - cen.getX()),2) - var_r);
-    array[3] += fabs( pow( (it->getY() - (cen.getY()+_step)),2) - var_r);
-
-    array[4] += fabs( pow( (it->getX() - cen.getX()),2) - var_r);
-    array[4] += fabs( pow( (it->getY() - (cen.getY()-_step)),2) - var_r);
+    array[1] += pow( (sqrt(pow( (it->getX() - (cen_x-_step)),2)+pow( (it->getY() - cen_y),2)) - _rf_radius),2);
+    array[2] += pow( (sqrt(pow( (it->getX() - (cen_x+_step)),2)+ pow( (it->getY() - cen_y),2)) - _rf_radius),2);
+    array[3] += pow( (sqrt(pow( (it->getX() - cen_x),2)+pow( (it->getY() - (cen_y+_step)),2)) - _rf_radius),2);
+    array[4] += pow( (sqrt(pow( (it->getX() - cen_x),2)+pow( (it->getY() - (cen_y-_step)),2)) - _rf_radius),2);
   }
-#endif
 }
 void filterScan::move_center( std::list<VecPositionDir> & relative_pointclounds,
                  const double x,const double y,const double _step,int &kx,int &ky,double& sum){
@@ -220,31 +216,21 @@ void filterScan::move_center( std::list<VecPositionDir> & relative_pointclounds,
     double sum_err_cent =0.0;
     kx = 0;
     ky = 0;
-    std::list<VecPositionDir>::iterator it = relative_pointclounds.begin();
-    double var_r = _rf_radius * _rf_radius;
     int i = 0;
+    std::list<VecPositionDir>::iterator it = relative_pointclounds.begin();
     for(;it!=relative_pointclounds.end();it++){
-      sum_err_cent += fabs( pow( (it->getX() - x),2) - var_r);
-      sum_err_cent += fabs( pow( (it->getY() - y),2) - var_r);
-
-      sum_err_ml += fabs( pow( (it->getX() - (x-_step)),2) - var_r);
-      sum_err_ml += fabs( pow( (it->getY() - y),2) - var_r);
-
-      sum_err_mr += fabs( pow( (it->getX() - (x+_step)),2) - var_r);
-      sum_err_mr += fabs( pow( (it->getY() - y),2) - var_r);
-
-      sum_err_mu += fabs( pow( (it->getX() - x),2) - var_r);
-      sum_err_mu += fabs( pow( (it->getY() - (y+_step)),2) - var_r);
-
-      sum_err_md += fabs( pow( (it->getX() - x),2) - var_r);
-      sum_err_md += fabs( pow( (it->getY() - (y-_step)),2) - var_r);
+      sum_err_cent += pow((sqrt( pow( (it->getX() - x),2)+ pow( (it->getY() - y),2)) - _rf_radius),2);
+        sum_err_ml += pow((sqrt( pow( (it->getX() - (x - _step)),2)+ pow( (it->getY() - y),2)) - _rf_radius),2);
+        sum_err_mr += pow((sqrt( pow( (it->getX() - (x + _step)),2)+ pow( (it->getY() - y),2)) - _rf_radius),2);
+        sum_err_mu += pow((sqrt( pow( (it->getX() - x),2) + pow( (it->getY() - (y+_step)),2)) - _rf_radius),2);
+        sum_err_md += pow((sqrt( pow( (it->getX() - x),2) + pow( (it->getY() - (y-_step)),2)) - _rf_radius),2);
       i++;
     }
-    sum_err_cent/=i;
-    sum_err_ml/=i;
-    sum_err_mr/=i;
-    sum_err_mu/=i;
-    sum_err_md/=i;
+    sum_err_cent /= i;
+    sum_err_ml /= i;
+    sum_err_mr /= i;
+    sum_err_mu /= i;
+    sum_err_md /= i;
 
     double array[5]={sum_err_cent,sum_err_ml,sum_err_mr,sum_err_mu,sum_err_md};
     int index = getMin(array,sum);
@@ -267,42 +253,49 @@ v_opt_center.clear();
   for(int i =0;i < len_group;i++){
     double x = 0;
     double y = 0;
-    double v =0.0;
+    double v = 0.0;
     int kx = 1;
     int ky = 1;
 
     std::list<VecPositionDir> tmp = relative_pointclounds[i];
-    ///method 0 ga alogrithm
-    galgo::Parameter<double> par1({-_rf_radius*1000,_rf_radius*1000});
-    galgo::Parameter<double> par2({-_rf_radius*1000,_rf_radius*1000});
+   /* method 0 ga alogrithm
     // initiliazing genetic algorithm
-    //ScanObjective<double>::_static_rf_radius = _rf_radius;
-    //ScanObjective<double>::_static_relative_pcls = tmp;
     ScanObjective<double> t;
     t._static_relative_pcls = tmp;
     t._static_rf_radius = _rf_radius;
-
-    galgo::GeneticAlgorithm<double> ga( ScanObjective<double>::Objective,100,1000,false,par1,par2);
+    galgo::Parameter<double> par1({-2*_rf_radius*1000,2*_rf_radius*1000});//unit mm
+    galgo::Parameter<double> par2({-2*_rf_radius*1000,2*_rf_radius*1000});
+    galgo::GeneticAlgorithm<double> ga( ScanObjective<double>::Objective,200,50,false,par1,par2);
     ga.covrate = 0.8;
-    ga.mutrate = 0.05;
-    ga.precision = 1;
+    ga.mutrate = 0.4;
+    //ga.precision = 1;
     // setting constraints
     //ga.Constraint = MyObj<double>::MyConstraint;
     //ga.tolerance = -0.05*0.05;//terminal condition to stop the algorithm
-    //ga.precision = 2;//number of decimals for outputting results
+    ga.precision = 10;//number of decimals for outputting results
     ga.run();
     galgo::CHR<double> result(ga.result()) ;
     std::vector<double> para = result.get()->getParam();
     std::vector<double> err = result.get()->getResult();
     //v_new_center.push_back(VecPositionDir(para[0]/1000,para[1]/1000,err[0]/1000));
-    ROS_INFO("pf_scanfilter.ga rf index:%d,err(mm)(sqrt):%.5f",i,sqrt(fabs(err[0])));
-
+    ROS_INFO("pf_scanfilter.ga rf index:%d,err(mm)(sqrt):%.10f",i,sqrt(fabs(err[0])));
+   */
     //method 1 min four dir err
     bool need_move = (kx!=0 || ky!=0);
     double dia = 2.0*_rf_radius;
     bool not_boundary = (fabs(x)<=dia && fabs(y)<=dia);
+    double err_bef = 99999;
     while(need_move /*&& not_boundary*/){//如果仍然有偏移系数且未超出搜索范围，则继续搜索
       move_center(tmp,x,y,_step,kx,ky,v);
+      //如果前后迭代偏差(unit mm(not mm^2))小于一个步长（很小）　或者误差已经小于指定阈值，则退出循环
+     if( fabs(v - err_bef) < _step*_step||v< _err *_err)
+     {
+       ROS_INFO("pf_filtercenter.arrive to precision.end this search loop");
+       break;
+     }
+     else
+       err_bef = v;
+
       x += kx*_step;
       y += ky*_step;
       need_move = (kx!=0 || ky!=0);
@@ -329,13 +322,18 @@ v_opt_center.clear();
       double new_y=0;
       const std::list<VecPositionDir> tmp = relative_pointclounds[i];
       std::list<VecPositionDir>::const_iterator it = tmp.begin();
-      double var_r = _rf_radius * _rf_radius;
       new_x = (v_center[i].getX()+new_step);
       new_y = (v_center[i].getY()+new_step);
+      double x_var = 0;
+      double y_var = 0;
+      int cnt = 0;
       for(;it!=tmp.end();it++){
-        new_err += fabs( pow( (it->getX() - new_x),2) - var_r);
-        new_err += fabs( pow( (it->getY() - new_y),2) - var_r);
+        x_var =  (it->getX()-new_x);
+        y_var =  (it->getY()-new_y);
+        new_err= pow((sqrt(x_var*x_var+y_var*y_var) - _rf_radius),2);
+        cnt++;
       }
+      new_err/=cnt;
       if(new_step <= _err){
         if(new_err< (v_center[i]).angle() )
           v_new_center.push_back(VecPositionDir(new_x,new_y,new_err));
@@ -346,11 +344,10 @@ v_opt_center.clear();
 
         v_new_center.push_back(v_center[i]);
       #if 0
-       if(new_err< (v_new_center[i]).angle() )v_new_center.push_back(VecPositionDir(new_x,new_y,new_err));
-       else {
-         //loop to move
-
-       }
+         if(new_err< (v_new_center[i]).angle() )v_new_center.push_back(VecPositionDir(new_x,new_y,new_err));
+         else {
+           //loop to move
+         }
       #endif
      }
     }
