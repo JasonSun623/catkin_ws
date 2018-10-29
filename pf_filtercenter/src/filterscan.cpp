@@ -1,60 +1,13 @@
 #include "pf_filtercenter/filterscan.h"
-#include "GALGO_Lib/Galgo.hpp"
-// objective class example
-template <typename T>
-class ScanObjective
-{
-public:
-   // objective function example : Rosenbrock function
-   // minimizing f(x,y) = (1 - x)^2 + 100 * (y - x^2)^2
-   static std::vector<T> Objective(const std::vector<T>& x)
-   {
-     std::list<VecPositionDir>::iterator it = _static_relative_pcls.begin();
-     T obj = 0;
-     int i = 0;
-     for(;it!=_static_relative_pcls.end();it++){
-       T err_x = ( it->getX()*1000.0 - x[0] );
-       T err_y = ( it->getY()*1000.0 - x[1] );
-       T err =  sqrt(err_x*err_x+err_y*err_y) - _static_rf_radius*1000.0;
-       obj += err * err ;
-       i++;
-     }
-     obj /= i;
-     //// NB: GALGO maximize by default so we will maximize -f(x,y)
-      return {-obj};
-   }
-   //std::vector<T> ScanConstraint(const std::vector<T>& x)
-   //{
-   //   return {x[0]*x[1]+x[0]-x[1]+1.5,10-x[0]*x[1]};
-   //}
-   static std::list<VecPositionDir> _static_relative_pcls;
-   static T  _static_rf_radius;
-   static int cnt ;
-private:
-
-
-};
-///!!!!!!!!!!!!!!!!!! we must init it
-template<typename T>
-T ScanObjective<T>::_static_rf_radius = 0;
-template<typename T>
-int ScanObjective<T>::cnt = 0;
-
-///!!!!!!!!!!!!!!!!!
-template<typename T>
-std::list<VecPositionDir> ScanObjective<T>::_static_relative_pcls ;
-
 // NB: a penalty will be applied if one of the constraints is > 0
 // using the default adaptation to constraint(s) method
 
  filterScan::filterScan(){
-  ;
 }
 
 filterScan::filterScan(double reflector_radius,int echo_thread,double step,double err_thread):
-  _echo(echo_thread),_step(step),_err(err_thread){
-  _rf_radius =reflector_radius;
-  ;
+  _rf_radius(reflector_radius),_echo(echo_thread),_step(step),_err(err_thread){
+
 }
 
 void filterScan::getReflectorsCenter(const std::vector<sensor_msgs::LaserScan> & raw_scan,
@@ -166,49 +119,52 @@ void filterScan::trimmingScanGroup(std::vector<std::list<scanCluster> > & v_refl
 void filterScan::getInitCenter(const std::vector<std::list<scanCluster> > & v_reflectors_group,
                    std::vector<VecPositionDir>& v_reflectors_center){
   v_reflectors_center.clear();
+  int cnt;
+  double sum_dist ;
+  double sum_angle ;
   for(int i = 0 ;i <v_reflectors_group.size();i++ ){
     std::list<scanCluster> tmp = v_reflectors_group[i];
     std::list<scanCluster>::iterator it = tmp.begin();
-    double sum_dist = 0.0;
-    double sum_angle = 0.0;
-    int cnt = 0;
+    cnt = 0;
+    sum_dist = 0.0;
+    sum_angle = 0.0;
     for(;it!=tmp.end();it++){
-      sum_dist+=it->dist();
-      sum_angle+=it->angle();
+      sum_dist += it->dist();
+      sum_angle += it->angle();
       cnt++;
     }
-    sum_dist /= cnt;
-    sum_angle /= cnt;
+    if(cnt)sum_dist /= cnt;
+    if(cnt)sum_angle /= cnt;
     double new_dist = (sum_dist + 0.78*_rf_radius);
     double c_x = new_dist * cos(sum_angle);
     double c_y = new_dist * sin(sum_angle);
     v_reflectors_center.push_back(VecPositionDir(c_x,c_y,sum_angle));//store the angle for cal the relative pcl in getRelativePointClouds fun
   }
-  std::cout << "filterscan.v_rfs_center.size():" << v_reflectors_center.size()<<std::endl;
+  ROS_INFO_STREAM("filterscan.v_rfs_center.size():" << v_reflectors_center.size() );
 }
 
 void filterScan::getRelativePointClouds(const std::vector<std::list<scanCluster> > & v_reflectors_group,
                             const std::vector<VecPositionDir>& v_reflectors_center,
                             std::vector<std::list<VecPositionDir> >& relative_pointclounds){
   int cnt = v_reflectors_group.size();
-  relative_pointclounds.clear();
-  std::list<scanCluster> tmp ;
-  VecPositionDir tmp_center;
-  std::list<scanCluster>::iterator it;
   double reverse_angle_deg =0.0;
-   std::list<VecPositionDir> new_tmp;
-  for(int i = 0;i < cnt;i++){
+  relative_pointclounds.clear();
+  VecPositionDir tmp_center;
+  std::list<scanCluster> tmp ;
+  std::list<scanCluster>::iterator it;
+  std::list<VecPositionDir> new_tmp;
+  for(int i = 0; i < cnt; i++){
     new_tmp.clear();
     tmp = v_reflectors_group[i];
     tmp_center = v_reflectors_center[i];
-    reverse_angle_deg = VecPositionDir::normalizeAngle(Rad2Deg( tmp_center.angle()-M_PI));
+    reverse_angle_deg = VecPositionDir::normalizeAngle( Rad2Deg( tmp_center.angle() - M_PI ) );
     it = tmp.begin();
-    for(;it!=tmp.end();it++){
-     VecPosition vecp(it->dist(),Rad2Deg(it->angle()),POLAR);
-     VecPosition p(vecp);
-     VecPosition np = p.globalToRelative(tmp_center,reverse_angle_deg);// the detail describered in Geometry.cpp
-     VecPositionDir new_p(np,reverse_angle_deg);//this angle restored for calculating the abs cord next step
-     new_tmp.push_back(new_p);
+    for( ;it!=tmp.end(); it++ ){
+      VecPosition vecp(it->dist(),Rad2Deg(it->angle()),POLAR);
+      VecPosition p(vecp);
+      VecPosition np = p.globalToRelative(tmp_center,reverse_angle_deg);// the detail describered in Geometry.cpp
+      VecPositionDir new_p(np,reverse_angle_deg);//this angle restored for calculating the abs cord next step
+      new_tmp.push_back(new_p);
     }
     relative_pointclounds.push_back(new_tmp);
   }
@@ -221,21 +177,21 @@ void filterScan::getFourDirValue( const std::list<VecPositionDir> &relative_poin
   double cen_x = cen.getX();
   double cen_y = cen.getY();
   for(;it!=relative_pointclounds.end();it++){
-    array[1] += pow( (sqrt(pow( (it->getX() - (cen_x-_step)),2)+pow( (it->getY() - cen_y),2)) - _rf_radius),2);
-    array[2] += pow( (sqrt(pow( (it->getX() - (cen_x+_step)),2)+ pow( (it->getY() - cen_y),2)) - _rf_radius),2);
-    array[3] += pow( (sqrt(pow( (it->getX() - cen_x),2)+pow( (it->getY() - (cen_y+_step)),2)) - _rf_radius),2);
-    array[4] += pow( (sqrt(pow( (it->getX() - cen_x),2)+pow( (it->getY() - (cen_y-_step)),2)) - _rf_radius),2);
+    array[1] += pow( ( sqrt( pow( ( it->getX() - (cen_x-_step) ),2) + pow( (it->getY() - cen_y ),2 ) ) - _rf_radius),2);
+    array[2] += pow( ( sqrt( pow( ( it->getX() - (cen_x+_step) ),2) + pow( (it->getY() - cen_y ),2 ) ) - _rf_radius),2);
+    array[3] += pow( ( sqrt( pow( ( it->getX() - cen_x ),2 ) + pow( (it->getY() - (cen_y+_step ) ),2 ) ) - _rf_radius),2);
+    array[4] += pow( ( sqrt( pow( ( it->getX() - cen_x ),2 ) + pow( (it->getY() - (cen_y-_step ) ),2 ) ) - _rf_radius),2);
   }
 }
 void filterScan::move_center( std::list<VecPositionDir> & relative_pointclounds,
                  const double x,const double y,const double _step,int &kx,int &ky,double& sum){
   //双向搜索
 
-    double sum_err_ml =0.0;
-    double sum_err_mr =0.0;
-    double sum_err_mu =0.0;
-    double sum_err_md =0.0;
-    double sum_err_cent =0.0;
+    double sum_err_ml = 0.0;
+    double sum_err_mr = 0.0;
+    double sum_err_mu = 0.0;
+    double sum_err_md = 0.0;
+    double sum_err_cent = 0.0;
     kx = 0;
     ky = 0;
     int i = 0;
@@ -248,11 +204,13 @@ void filterScan::move_center( std::list<VecPositionDir> & relative_pointclounds,
         sum_err_md += pow((sqrt( pow( (it->getX() - x),2) + pow( (it->getY() - (y-_step)),2)) - _rf_radius),2);
       i++;
     }
-    sum_err_cent /= i;
-    sum_err_ml /= i;
-    sum_err_mr /= i;
-    sum_err_mu /= i;
-    sum_err_md /= i;
+    if(i){
+      sum_err_cent /= i;
+      sum_err_ml /= i;
+      sum_err_mr /= i;
+      sum_err_mu /= i;
+      sum_err_md /= i;
+    }
 
     double array[5]={sum_err_cent,sum_err_ml,sum_err_mr,sum_err_mu,sum_err_md};
     int index = getMin(array,sum);
@@ -268,43 +226,24 @@ void filterScan::getOptimizedCenter(const std::vector<VecPositionDir>& v_pre_cen
                         const std::vector<std::list<VecPositionDir> > &relative_pointclounds,
                          std::vector<VecPositionDir>& v_opt_center
                         ){
-v_opt_center.clear();
+  v_opt_center.clear();
   std::vector<VecPositionDir> v_center;
-   std::vector<VecPositionDir> v_new_center;
+  std::vector<VecPositionDir> v_new_center;
   int len_group = relative_pointclounds.size();
+  double x = 0;
+  double y = 0;
+  double v = 0.0;
+  int kx = 1;
+  int ky = 1;
   for(int i =0;i < len_group;i++){
-    double x = 0;
-    double y = 0;
-    double v = 0.0;
-    int kx = 1;
-    int ky = 1;
-
+    x = 0;
+    y = 0;
+    v = 0.0;
+    kx = 1;
+    ky = 1;
     std::list<VecPositionDir> tmp = relative_pointclounds[i];
-   /* method 0 ga alogrithm
-    // initiliazing genetic algorithm
-    ScanObjective<double> t;
-    t._static_relative_pcls = tmp;
-    t._static_rf_radius = _rf_radius;
-    galgo::Parameter<double> par1({-2*_rf_radius*1000,2*_rf_radius*1000});//unit mm
-    galgo::Parameter<double> par2({-2*_rf_radius*1000,2*_rf_radius*1000});
-    galgo::GeneticAlgorithm<double> ga( ScanObjective<double>::Objective,200,50,false,par1,par2);
-    ga.covrate = 0.8;
-    ga.mutrate = 0.4;
-    //ga.precision = 1;
-    // setting constraints
-    //ga.Constraint = MyObj<double>::MyConstraint;
-    //ga.tolerance = -0.05*0.05;//terminal condition to stop the algorithm
-    ga.precision = 10;//number of decimals for outputting results
-    ga.run();
-    galgo::CHR<double> result(ga.result()) ;
-    std::vector<double> para = result.get()->getParam();
-    std::vector<double> err = result.get()->getResult();
-    //v_new_center.push_back(VecPositionDir(para[0]/1000,para[1]/1000,err[0]/1000));
-    ROS_INFO("pf_scanfilter.ga rf index:%d,err(mm)(sqrt):%.10f",i,sqrt(fabs(err[0])));
-   */
     //method 1 min four dir err
-    bool need_move = (kx!=0 || ky!=0);
-    //double dia = 2.0*_rf_radius;
+    bool need_move = ( kx != 0 || ky != 0 );
     //bool not_boundary = (fabs(x)<=dia && fabs(y)<=dia);
     double err_bef = 99999;
     while(need_move){//如果仍然有偏移系数且未超出搜索范围，则继续搜索
@@ -326,38 +265,43 @@ v_opt_center.clear();
     v_center.push_back(VecPositionDir(x,y,v));//为了存储方便and后续处理，最后一个存得是累计和
   }
   //以当前计算中心点(x0,y0)为中心，分别计算x和y方向的中心偏移量,确定最终的中心
+  double offset_x = 0;
+  double offset_y = 0;
   for(int i = 0; i < len_group; i++ ){
     double array[5];
     array[0] = (v_center[i]).angle();//angle var store the var err in last step
     getFourDirValue(relative_pointclounds[i],v_center[i],array);
-    double offset_x=0;
-    double offset_y=0;
-    if((array[1]+array[2]-2*array[0])!=0)
-      offset_x= _step*0.5*fabs((array[1]-array[2])/(array[1]+array[2]-2*array[0]));
-    if((array[3]+array[4]-2*array[0])!=0)
-      offset_y= _step*0.5*fabs((array[3]-array[4])/(array[3]+array[4]-2*array[0]));
-    double new_step=offset_x>offset_y?offset_x:offset_y;
-    if(new_step > _step)v_new_center.push_back(v_center[i]);
+    offset_x = 0;
+    offset_y = 0;
+    double c1 = array[1]+array[2]-2*array[0] ;
+    double c2 = array[3]+array[4]-2*array[0] ;
+    if( c1 != 0 )
+      offset_x=  _step*0.5*fabs( (array[1]-array[2])  / c1 );
+    if( c2 != 0 )
+      offset_y=  _step*0.5*fabs( (array[3]-array[4]) / c2 );
+    double new_step=offset_x > offset_y ? offset_x:offset_y;
+    if(new_step > _step)
+      v_new_center.push_back(v_center[i]);
     else {
-      double new_err =0;
-      double new_x=0;
-      double new_y=0;
+      double new_err = 0;
+      double new_x = 0;
+      double new_y = 0;
       const std::list<VecPositionDir> tmp = relative_pointclounds[i];
       std::list<VecPositionDir>::const_iterator it = tmp.begin();
-      new_x = (v_center[i].getX()+new_step);
-      new_y = (v_center[i].getY()+new_step);
+      new_x = (v_center[i].getX() + new_step);
+      new_y = (v_center[i].getY() + new_step);
       double x_var = 0;
       double y_var = 0;
       int cnt = 0;
       for(;it!=tmp.end();it++){
-        x_var =  (it->getX()-new_x);
-        y_var =  (it->getY()-new_y);
-        new_err= pow((sqrt(x_var*x_var+y_var*y_var) - _rf_radius),2);
+        x_var =  (it->getX() - new_x);
+        y_var =  (it->getY() - new_y);
+        new_err = pow( ( sqrt( x_var * x_var + y_var * y_var ) - _rf_radius ),2);
         cnt++;
       }
-      new_err/=cnt;
-      if(new_step <= _err){
-        if(new_err< (v_center[i]).angle() )
+      if(cnt)new_err /= cnt;
+      if( new_step <= _err ){
+        if( new_err< (v_center[i]).angle() )
           v_new_center.push_back(VecPositionDir(new_x,new_y,new_err));
         else
           v_new_center.push_back(v_center[i]);
