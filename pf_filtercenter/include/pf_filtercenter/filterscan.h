@@ -1,16 +1,26 @@
+
 #ifndef PF_FILTER_SCAN_
 #define PF_FILTER_SCAN_
+
 #include <iostream>
+#include <ros/ros.h>
 #include <vector>
 #include <utility>
 #include <list>
-#include <math.h>
-#include "Geometry.h"
-#include <ros/ros.h>
-#include <sensor_msgs/LaserScan.h>
 #include <stdio.h>
+#include <math.h>
+#include <sensor_msgs/LaserScan.h>
+
+#include "Geometry.h"
+
 using namespace std;
-//scan data struct
+
+/**
+ * @class scanCluster
+ *
+ * @brief record the raw scan data. including angle ,dist and echo value
+ * the data will be process by the filterScan class
+ */
 struct scanCluster{
 public:
   scanCluster(){}
@@ -24,95 +34,82 @@ public:
   int _echo;
 };
 
+/**
+ * @class VecPositionDir
+ *
+ * @brief drivated from VecPosition class ,and it also have the angle info of the cord pos
+ * it used for math calculating
+ */
 class VecPositionDir:public VecPosition{
 public:
   VecPositionDir(){}
   VecPositionDir(double x,double y,double ang =.0):_angle(ang),VecPosition(x,y){}
   VecPositionDir( const VecPosition & pos,double ang=0.0 ):_angle(ang),VecPosition(pos.getX(),pos.getY() ){}
   VecPositionDir(const VecPositionDir& posdir):_angle(posdir.angle()),VecPosition(posdir.getX(),posdir.getY()){}
-  double angle() const//we need to add const in here other the last line will not be permitted
+  double angle() const//we need to add const in here, otherwise the last line will not be permitted
   {return _angle;}
 private:
-double _angle;
+ double _angle;
 };
-///ga---------------------------
-// ga objective class example
-#if 0
-template <typename T>
-class MyObj
-{
-public:
- static T _rf_radius_static;
- static std::list<VecPositionDir>  _rf_list_pointclounds;
- static std::vector<T> MyObjFun(const std::vector<T>& x)
- {
-      T obj;
-      double var_r = _rf_radius_static*_rf_radius_static;
-      std::list<VecPositionDir>::iterator it = _rf_list_pointclounds.begin();
-      for(;it!=_rf_list_pointclounds.end();it++){
-        obj = -fabs( pow( (it->getX() - x[0]),2) - var_r);
-        obj += -fabs( pow( (it->getY() - x[1]),2) - var_r);//we want the min value
-        obj /= _rf_list_pointclounds.size();
-      }
-       return {obj};
-  }
- static std::vector<T> MyConstraint(const std::vector<T>& x)
- {
-   //x-r<0;x+r>0;y-r<0;y+r>0
-    return {x[0]-_rf_radius_static,-x[0]-_rf_radius_static,x[1]-_rf_radius_static,-x[1]-_rf_radius_static};
- }
 
-};
-  // NB: GALGO maximize by default so we will maximize -f(x,y)
-#endif
-
-///ga---------------------------
-//filter scan class
+/**
+ * @class filterScan
+ *
+ * @brief the filterScan used for grouping the scan data into some reflectors
+ * it also cal the center the center of rfs and also optimizes the center result
+ * 依据激光强度数据实现对反光板的提取与反光板中心精确计算
+ */
 class filterScan{
 public:
   filterScan();
   filterScan(double reflector_radius,int echo_thread,double step,double err_thread);
+  /**
+   * @brief the public func for calculating the rfs center called by user
+   * @param raw_scan raw scan data published by laser scan
+   * @return v_reflectors the rfs center pos in laser cord
+   */
   void getReflectorsCenter(const std::vector<sensor_msgs::LaserScan> & raw_scan,std::vector<VecPositionDir> & v_reflectors);
 
-    //
-    void groupingScan(const std::vector<sensor_msgs::LaserScan> &raw_scan,
-                      std::vector<std::list<scanCluster> > & v_reflectors_group);
-
-    void trimmingScanGroup(std::vector<std::list<scanCluster> > & v_reflectors_group);
-
-    void getInitCenter(const std::vector<std::list<scanCluster> > & v_reflectors_group,
-                       std::vector<VecPositionDir>& v_reflectors_center);
-    void getRelativePointClouds(const std::vector<std::list<scanCluster> > & v_reflectors_group,
-                            const std::vector<VecPositionDir>& v_reflectors_center,
-                            std::vector<std::list<VecPositionDir> > & relative_pointclounds);
-
-    void getOptimizedCenter(const std::vector<VecPositionDir>& v_pre_center,
-                            const std::vector<std::list<VecPositionDir> > &relative_pointclounds,
-                             std::vector<VecPositionDir>& v_opt_center
-                            );
-    void getFourDirValue( const std::list<VecPositionDir>  &relative_pointclounds,VecPositionDir cen,double* array);//used to cal the four dir var err
-    inline int getMin(double* array,double &v){
-      int k = 0;
-      for(int i = 0; i < 5; i++)//limit the size is 5
-      {
-        if(array[i] < array[k]) k = i;
-      }
-      v= array[k];
-      //array[k] 就是最大值
-      //k 就是对应下标
-      return k;
-      }
-    void move_center( std::list<VecPositionDir> & relative_pointclounds,
-                     const double x,const double y,const double _step,int &kx,int &ky,double& sum);
 private:
+  //按照激光强度分布，将激光数据分成若干组，每一组代表一个激光反光板
+  void groupingScan(const std::vector<sensor_msgs::LaserScan> &raw_scan,
+                    std::vector<std::list<scanCluster> > & v_reflectors_group);
+  //若激光数据帧过多，裁剪激光数据
+  void trimmingScanGroup(std::vector<std::list<scanCluster> > & v_reflectors_group);
+
+  void getInitCenter(const std::vector<std::list<scanCluster> > & v_reflectors_group,
+                     std::vector<VecPositionDir>& v_reflectors_center);
+  //获得激光数据点相对于初始计算的定位中心的位置
+  void getRelativePointClouds(const std::vector<std::list<scanCluster> > & v_reflectors_group,
+                          const std::vector<VecPositionDir>& v_reflectors_center,
+                          std::vector<std::list<VecPositionDir> > & relative_pointclounds);
+  //优化计算，获得最优的定位中心
+  void getOptimizedCenter(const std::vector<VecPositionDir>& v_pre_center,
+                          const std::vector<std::list<VecPositionDir> > &relative_pointclounds,
+                           std::vector<VecPositionDir>& v_opt_center
+                          );
+  //获得某个位置左右上下，步进为_step的相对平方误差
+  void getFourDirValue( const std::list<VecPositionDir>  &relative_pointclounds,VecPositionDir cen,double* array);//used to cal the four dir var err
+  inline int getMin(double* array,double &v){
+    int k = 0;
+    for(int i = 0; i < 5; i++)//limit the size is 5
+    {
+      if(array[i] < array[k]) k = i;
+    }
+    v= array[k];
+    //array[k] 就是最大值
+    //k 就是对应下标
+    return k;
+    }
+  //依据输入x,y 和激光相对位置数据，计算要移动的左右上下方向
+  void move_center( std::list<VecPositionDir> & relative_pointclounds,
+                   const double x,const double y,const double _step,int &kx,int &ky,double& sum);
   int _echo;
   double _rf_radius;
   double _step;
   double _err;
   std::vector<std::list<scanCluster> >  _reflectors_group;
   std::vector<std::list<VecPositionDir> > _relative_pointclounds;
-  static std::list<VecPositionDir> _static_relative_pointclounds;
-  static double  _static_rf_radius;
   static const int sampe_limit_par1 = 15;
   static const int sampe_limit_par2 = 24;
 };
