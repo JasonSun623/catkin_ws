@@ -18,7 +18,7 @@
          arg -model, if it have already excited in this world ,the spawn_model will load failed
          so here load a world without a robot (unless we do it on purpose)
     !!! -->
-    <arg name="world_name" value="$(find dhc_houdar_pkg)/worlds/norobot.world"/>
+    <arg name="world_name" value="$(find dhc_houdar_pkg)/worlds/autocharge.world"/>
     <arg name="debug" value="$(arg debug)" />
     <arg name="gui" value="$(arg gui)" />
     <arg name="paused" value="$(arg paused)"/>
@@ -48,7 +48,7 @@
   <!-- Run a python script to the send a service call to gazebo_ros to spawn a URDF robot -->
   <!-- arg name -unpause means when we have spawned model ,start the model-->
    <node name="urdf_spawner" pkg="gazebo_ros" type="spawn_model" respawn="false" output="screen"
-	   args="-urdf -model R2D2 -param robot_description  -unpause -z 0.05"/> 
+	   args="-urdf -model R2D2_base -param robot_description  -unpause -z 0.05"/> 
    <!-- diff wheel controller in gazebo -->
    <node name="rqt_robot_steering" pkg="rqt_robot_steering" type="rqt_robot_steering">
     <param name="default_topic" value="wheel_diff_controller/cmd_vel"/>
