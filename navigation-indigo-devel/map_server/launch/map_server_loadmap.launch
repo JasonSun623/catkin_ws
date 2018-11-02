@@ -1,0 +1,4 @@
+<launch>
+  <node pkg="map_server" type="map_server" name="test_map_server_added_gdb" args="/home/hdros/Qt/MapHandleTool_HD_Qt/maps/donghuanB1.map" output="screen" launch-prefix="gdb -ex --args" >
+  </node>
+</launch>

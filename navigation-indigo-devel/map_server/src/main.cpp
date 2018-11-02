@@ -379,25 +379,21 @@ class MapServer
         exit(-1);
       }
       else{
-        //read .map map
-        //default conf
-        negate = 0;
-        res = 0.05;
-        occ_th = 0.65;
-        free_th = 0.196;
-
         if(sep_tmp[sep_tmp.size()-1] == "map"){
-
+          //read .map map
+          //default conf
+          negate = 0;
+          res = 0.05;
+          occ_th = 0.65;
+          free_th = 0.196;
+          ROS_INFO("Map_server.Reading .map file");
           SimpleGridMap map_;
           map = map_;
           map.LoadFromFile(fname,&map_resp_,res);
-          
          }
-
-
-
         //read image map
         else{
+          ROS_INFO("Map_server.Reading .yaml default file");
           deprecated = (res != 0);
           //method 1 read map info from yaml file
           if (!deprecated) {

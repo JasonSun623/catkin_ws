@@ -74,6 +74,7 @@ loadMapFromFile(nav_msgs::GetMap::Response* resp,
   if(!(img = IMG_Load(fname)))
   {
     std::string errmsg = std::string("failed to open image file \"") + std::string(fname) + std::string("\"");
+    ROS_ERROR(errmsg.c_str());
     throw std::runtime_error(errmsg);
   }
 
