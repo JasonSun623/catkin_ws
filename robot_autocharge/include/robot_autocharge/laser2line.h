@@ -7,8 +7,13 @@
 #define DIST_THRESHOLD		0.03
 #define LINE_DENSITY		70
 #define LASER_NUM			540
-#define MIN_POINT_NUM		3
-#define MIN_LINE_DIST		0.03
+///#define MIN_POINT_NUM		3 chq disable
+///#define MIN_LINE_DIST		0.03 chq disable
+
+#define MIN_POINT_NUM		10
+#define MIN_LINE_DIST		1
+
+
 #define MAX_LINE2LINE_DIST	0.07
 #define MAXK				572957795.13082320818620513080389	// tan(89.9999999)
 

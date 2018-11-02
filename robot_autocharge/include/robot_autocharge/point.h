@@ -1,8 +1,5 @@
 /** \file
   \brief 2D point and oriented point plus operation
-  \author NanJiang Robot Inc.
-  \date 2016-02-26
-  \version 0.0.1
 */
 
 #ifndef POINT_H
@@ -28,7 +25,7 @@
   template <class T>
   struct point{
     inline point(T _x=0, T _y=0):x(_x),y(_y){}
-    double mod()const {return hypot(x,y);}
+    double mod()const {return hypot(x,y);}//hypot计算直角三角形的斜边长
     double dir()const {return atan2(y,x);}
     bool operator==(const point& p) const {
       return x == p.x && y == p.y;
@@ -73,8 +70,7 @@
     orientedpoint<T,A> delta=p1-p2;
     delta.theta=atan2(sin(delta.theta), cos(delta.theta));
     double s=sin(p2.theta), c=cos(p2.theta);
-    return orientedpoint<T,A>(c*delta.x+s*delta.y,
-      -s*delta.x+c*delta.y, delta.theta);
+    return orientedpoint<T,A>(c*delta.x+s*delta.y,-s*delta.x+c*delta.y, delta.theta);
   }
 
 /** @brief thansfer a point coodinate p1 from global coordinate system to p2's coordinate system, given p2's pose
@@ -92,9 +88,8 @@
   template <class T, class A>  //add a action p2 to p1，p2 is in p1's coodinate system //此处相当于把世界坐标系和p2同时进行相同的旋转平移，由于p2一直是相对于世界坐标系的坐标位置，当把世界坐标系移动到p1坐标系的位置，此时p2的坐标就是在p1坐标系下了
   orientedpoint<T,A> absoluteSum(const orientedpoint<T,A>& p1,const orientedpoint<T,A>& p2){
     double s=sin(p1.theta), c=cos(p1.theta);
-    orientedpoint<T,A> ans(c*p2.x-s*p2.y,
-      s*p2.x+c*p2.y, p2.theta);
-    ans = ans+ p1;
+    orientedpoint<T,A> ans(c*p2.x-s*p2.y,s*p2.x+c*p2.y, p2.theta);
+    ans = ans + p1;
     ans.normalize();
     return ans;
   }

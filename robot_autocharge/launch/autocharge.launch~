@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<launch>
+<arg name="scan_topic" default="scan">
+<arg name="odom_topic" default="scan">
+<arg name="cmd_vel_topic" default="scan">
+
+<arg name="base_frame" default="base_link"/>
+<arg name="odom_frame" default="odom"/>
+<arg name="laser_frame" default="hokuyo_link"/>
+<arg name="map_frame" default="/map"/>
+
+<arg name="init_target_dist" default="1.5"/>
+
+<node pkg="robot_autocharge" type="robot_autocharge_node" name="robot_autocharge" >
+  <param name="init_target_dist" value="$(arg init_target_dist)" />
+</node>
+<node pkg="rviz" type="rviz" name="autocharge_rviz" args="-d $(find robot_autocharge)/rviz/rviz.rviz">
+</node>
+ 
+</node>
+</launch>
