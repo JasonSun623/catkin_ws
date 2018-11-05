@@ -11,7 +11,7 @@
 ///#define MIN_LINE_DIST		0.03 chq disable
 
 #define MIN_POINT_NUM		10
-#define MIN_LINE_DIST		1
+#define MIN_LINE_DIST		0.3
 
 
 #define MAX_LINE2LINE_DIST	0.07
@@ -52,7 +52,7 @@ public:
 
 
 	// set laser data
-	void setLaserData(const PointList or_LaserData);
+  void setLaserData(const PointList& or_LaserData);
 	std::vector<segments> get_line();
 
 	double point_point_dist(int s, int e);

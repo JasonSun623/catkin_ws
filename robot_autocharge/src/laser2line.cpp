@@ -10,7 +10,7 @@ Laser2Line::~Laser2Line(void)
 
 
 // 获取原始激光数据
-void Laser2Line::setLaserData(const PointList or_LaserData)
+void Laser2Line::setLaserData(const PointList &or_LaserData)
 {
   dex = 0;
   Laser_Data.clear();
@@ -186,7 +186,7 @@ void Laser2Line::split(int first_index, int last_index)
       if (max_dist > DIST_THRESHOLD)//大于阈值,从拐点分离
     //  if (max_dist > point_point_dist(first_index, last_index)/0.12 * DIST_THRESHOLD)
       {
-        ROS_INFO_STREAM("Laser2Line::split.the max dist do line first to end : " << max_dist
+        ROS_INFO_STREAM("Laser2Line::split.the max dist to line first to end : " << max_dist
                         << "bigger than DIST_THRESHOLD: "<< DIST_THRESHOLD
                         <<".iter split from here index: " << max_index );
         split(first_index,max_index);
@@ -194,7 +194,7 @@ void Laser2Line::split(int first_index, int last_index)
       }
       else//小于阈值，首尾作为一条线段
       {
-        ROS_INFO_STREAM("Laser2Line::split.the max dist do line first to end : " << max_dist
+        ROS_INFO_STREAM("Laser2Line::split.the max dist to line first to end : " << max_dist
                         << "little than DIST_THRESHOLD: "<< DIST_THRESHOLD
                         <<" push this line directly!" );
         dex ++;
@@ -213,6 +213,7 @@ void Laser2Line::split(int first_index, int last_index)
       }
     }
   }
+  ROS_INFO_STREAM("split.at the end.the laser line num:" << laser_line.size());
 }
 
 
@@ -226,14 +227,14 @@ void Laser2Line::merge(void)
     // check number of points
     if (laser_line[i].end - laser_line[i].start + 1 < MIN_POINT_NUM)//chq若当前线段中的点小于个数阈值
     {
-      ROS_INFO("Laser2Line::merge.this line : %d,point number too little in this line merge this line to next.num:%d\n",i, laser_line[i].end - laser_line[i].start + 1);
+      ROS_INFO("Laser2Line::merge.erase line[%d],length:%.4f,point number:%d is too little!",i,laser_line[i].line_length, laser_line[i].end - laser_line[i].start + 1);
       erase_flag = true;//chq enable
     }
 
     // check the length of the line segment
     if (point_point_dist(laser_line[i].start, laser_line[i].end) < MIN_LINE_DIST)//chq若线段长度小于长度阈值
     {
-      ROS_INFO("Laser2Line::merge.this line:%d, length too short %lf\n",i,point_point_dist(laser_line[i].start, laser_line[i].end));
+      ROS_INFO("Laser2Line::merge.erase line[%d], length:%.4f bet start to end too short!",i,point_point_dist(laser_line[i].start, laser_line[i].end));
       erase_flag = true;//chq enable
     }
 
@@ -246,7 +247,6 @@ void Laser2Line::merge(void)
 
     if(erase_flag)
     {
-
       laser_line.erase(laser_line.begin()+i);
       i --;
     }
@@ -278,8 +278,8 @@ void Laser2Line::merge(void)
         //若线段i垂距比大于i i+1垂距比　|| 线段i+1垂距比大于i i+1垂距比 || i i+1 点线最大距离　小于距离阈值  合并两条线段 chq
         if (MNE1 > MNE || MNE2 > MNE || distmax < DIST_THRESHOLD)//
         {
-          ROS_INFO_STREAM("Laser2Line::merge.i " << i
-                          <<"ratio i:" << MNE1
+          ROS_INFO_STREAM("Laser2Line::merge.line[" << i
+                          <<"] ratio i:" << MNE1
                           << " ratio i+1: " << MNE2
                           << " i i+1 ratio: "<< MNE
                           << "distmax i i+1 "<<distmax
@@ -290,14 +290,14 @@ void Laser2Line::merge(void)
         //  printf("_");
         }
         else{
-          ROS_INFO_STREAM("Laser2Line::merge.i " << i << "do not merge.just fitting.");
+          ROS_INFO_STREAM("Laser2Line::merge.line[i " << i << "] do not merge.just fitting.");
           line_fitting(i,laser_line[i].start,laser_line[i].end);
         }
       }
       else{
-        ROS_INFO_STREAM("Laser2Line::merge.i " << i
-            << " the dist bet cur line end to next line start is " << point_point_dist(laser_line[i].end,laser_line[i+1].start)
-            << " large than thread:" << MAX_LINE2LINE_DIST << " do not merge.just fitting.");
+        ROS_INFO_STREAM("Laser2Line::merge.line [" << i
+            << "] dist bet cur line end to next line start is " << point_point_dist(laser_line[i].end,laser_line[i+1].start)
+            << " large than thread:" << MAX_LINE2LINE_DIST << " do not merge.just fitting.line length:" <<laser_line[i].line_length );
         line_fitting(i,laser_line[i].start,laser_line[i].end);
       }
     }

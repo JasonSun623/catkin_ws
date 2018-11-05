@@ -70,7 +70,7 @@
     orientedpoint<T,A> delta=p1-p2;
     delta.theta=atan2(sin(delta.theta), cos(delta.theta));
     double s=sin(p2.theta), c=cos(p2.theta);
-    return orientedpoint<T,A>(c*delta.x+s*delta.y,-s*delta.x+c*delta.y, delta.theta);
+    return orientedpoint<T,A>(c*delta.x+s*delta.y,-s*delta.x+c*delta.y, delta.theta);//chq v_pos.rot(-delta) this means rot to p2 cord
   }
 
 /** @brief thansfer a point coodinate p1 from global coordinate system to p2's coordinate system, given p2's pose
@@ -88,7 +88,7 @@
   template <class T, class A>  //add a action p2 to p1，p2 is in p1's coodinate system //此处相当于把世界坐标系和p2同时进行相同的旋转平移，由于p2一直是相对于世界坐标系的坐标位置，当把世界坐标系移动到p1坐标系的位置，此时p2的坐标就是在p1坐标系下了
   orientedpoint<T,A> absoluteSum(const orientedpoint<T,A>& p1,const orientedpoint<T,A>& p2){
     double s=sin(p1.theta), c=cos(p1.theta);
-    orientedpoint<T,A> ans(c*p2.x-s*p2.y,s*p2.x+c*p2.y, p2.theta);
+    orientedpoint<T,A> ans(c*p2.x-s*p2.y,s*p2.x+c*p2.y, p2.theta);//v_pos.rot(delta) chq this mean to rot to p1 cord
     ans = ans + p1;
     ans.normalize();
     return ans;

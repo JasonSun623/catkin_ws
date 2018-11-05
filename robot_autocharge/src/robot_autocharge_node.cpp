@@ -11,8 +11,8 @@
 #include "typevdock.h"
 #include "boost/bind.hpp"
 
-#define Vshape  1.8 //the edge length  chq
-#define MIN_R  0.06 //连续激光点间距，作为线条的阈值 chq
+#define Vshape  1.0 //the edge length  chq
+#define MIN_R  0.08 //连续激光点间距，作为线条的阈值 chq
 
 
 //need to modify.it is not the real RobotShapeRect class !!!!!!!!!!!! chq ---->
@@ -33,12 +33,12 @@ int main(int argc, char ** argv){
   ros::NodeHandle nh_private("~");
   ROS_INFO("auto_charge_node init done!");
   Docking V_dock;
-  double last_dis(0), out_dis(0.7);
+  double last_dis(0), out_dis(0.7);//charge in :角度调正，距离小于阈值，再行驶的距离, charge out permitted end dist
   std::vector<double> safe;
   safe.push_back(0.7);safe.push_back(0.7);safe.push_back(0.48);safe.push_back(0.48);  // front back left right
   safe_shape = RobotShapeRect(safe[0], safe[1], safe[2], safe[3]);
   /// Set v data
-  V_dock.Set_Vdata(Vshape,  125, MIN_R,last_dis, out_dis);
+  V_dock.Set_Vdata(Vshape,  120, MIN_R,last_dis, out_dis);
   if(argc>1)V_dock.setInitTargetDist(atof(argv[1]));
   /*chq auto charge main loop*/
   boost::thread thread_charge(boost::bind(&Docking::autoChargeThread, &V_dock));

@@ -54,10 +54,10 @@ public:
     ChargeStop = -1,
     ChargeFail = 0,
     ChargeBegin = 2,
-    NearDistMode = 3,
+    GoStraightLineMode = 3,
     ChargeInSuc = 4,
     ChargeOutSuc = 5,
-    NearMode = 35,
+    ModifyAngleOnly = 35,
     TypeVNotFound= 110,
     AtField1 = 999,
     AtField2 = 9999
@@ -71,15 +71,16 @@ public:
   {
     charge_status = sflag;
   }
+  void cal_pos(void);
   void track_target(PointList &scan, Point target_point);
-  void updateLaser(const sensor_msgs::LaserScan & ldata);
+  void updateLaser(const sensor_msgs::LaserScan::ConstPtr& ldata);
   ////接受任务回调，１，充电，２，退出充电,update date to type typeV
   void updateMotionFlags(const std_msgs::Int16  Docking_motion);
-  void updateOdom(const nav_msgs::Odometry& state_odata);
+  void updateOdom(const nav_msgs::Odometry::ConstPtr& state_odata);
   void autoChargeThread(void);
   void motionPlanning();
   void Set_Task(int motion_task);
-  void Set_Laser(PointList laser_data);//chq 
+  void Set_Laser(const PointList& laser_data);//chq
   void Set_Vdata(double l1, double ang1,double min_range_dist, double dis, double outdis);
   void Set_Frame(std::string od_f,std::string base_link_f,std::string laser_f,std::string map_f ="/map"){
     odom_frame = od_f;
@@ -114,11 +115,13 @@ private:
   double Vshape;   //the edge length  chq
   double MIN_R;  //连续激光点间距，作为线条的阈值 chq
   boost::mutex mut;
+  boost::mutex mut_loop;
   boost::mutex odom_lock_;
   boost::mutex scan_lock_;
   std::string scan_topic ;
   std::string odom_topic ;
   bool charge_status;
+  PointList obs_p;//for update in call back
   PointList obstacle_points_;//激光障碍物点数据
   double m_line_rechage;
   double m_line_roller;
@@ -133,6 +136,8 @@ private:
   double tan_max_recharge;
   double HX;
   double pre_targetx, pre_targety, preHX;
+  VecPosition l_pos;//laser pos
+  double laser_angle_deg;//laser angle
   bool odm_record_flag;
   bool has_typev_flag;
   bool last_go_ready_flag;
