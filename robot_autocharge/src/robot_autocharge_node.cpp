@@ -38,7 +38,7 @@ int main(int argc, char ** argv){
   safe.push_back(0.7);safe.push_back(0.7);safe.push_back(0.48);safe.push_back(0.48);  // front back left right
   safe_shape = RobotShapeRect(safe[0], safe[1], safe[2], safe[3]);
   /// Set v data
-  V_dock.Set_Vdata(Vshape,  120, MIN_R,last_dis, out_dis);
+  V_dock.setVTypeProperty(Vshape,  120, MIN_R,last_dis, out_dis);
   if(argc>1)V_dock.setInitTargetDist(atof(argv[1]));
   /*chq auto charge main loop*/
   boost::thread thread_charge(boost::bind(&Docking::autoChargeThread, &V_dock));

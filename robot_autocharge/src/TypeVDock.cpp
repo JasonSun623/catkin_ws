@@ -36,7 +36,7 @@ Docking::Docking(void)
 
   scan_sub = n.subscribe(scan_topic,1000,&Docking::updateLaser,this);
   odo_sub = n.subscribe(odom_topic,1000,&Docking::updateOdom,this);
-  autocharge_task_sub = n.subscribe("autocharge_task",1,&Docking::updateMotionFlags,this);
+  autocharge_task_sub = n.subscribe("autocharge_task",1,&Docking::callBackTask,this);
   items_marker_pub = n.advertise<visualization_msgs::Marker>("dock_items_marker",1,true);
 
   vel_pub_ = n.advertise<geometry_msgs::Twist>(cmd_vel_topic, 1);
@@ -54,13 +54,12 @@ void Docking::updateOdom(const nav_msgs::Odometry::ConstPtr& state_odata)
   const nav_msgs::Odometry odo = (*state_odata);
   m_cur_odom.x = odo.pose.pose.position.x;
   m_cur_odom.y = odo.pose.pose.position.y;
-  geometry_msgs::Quaternion quat = odo.pose.pose.orientation;
-  double yaw = tf::getYaw(quat);
+  double yaw = tf::getYaw(odo.pose.pose.orientation);
   m_cur_odom.theta = yaw;
   //ROS_INFO("Docking::updateOdom.(x,y,angle):(%.6f,%.6f,%.6f)",m_cur_odom.x,m_cur_odom.y,m_cur_odom.theta );
 }
 /// 筛选激光
-void Docking::track_target(PointList &scan, Point target_point)
+void Docking::trackTarget(PointList &scan, Point target_point)
 {
 
   double dx,dy,dx1,dy1;
@@ -86,7 +85,7 @@ void Docking::track_target(PointList &scan, Point target_point)
       i--;
     }
   }
-   ROS_INFO_STREAM(" Docking::track_target.after filter by tar p:(" <<  target_point.x <<"," <<  target_point.y <<").the scan size:" << scan.size());
+   ROS_INFO_STREAM(" Docking::trackTarget.after filter by tar p:(" <<  target_point.x <<"," <<  target_point.y <<").the scan size:" << scan.size());
   //激光点间距超过指定阈值的 过滤
   int tmp_size = scan.size() - 1;
   for (int i = 1; i < tmp_size; ++i)
@@ -105,7 +104,7 @@ void Docking::track_target(PointList &scan, Point target_point)
       i--;
     }
   }
- ROS_INFO_STREAM(" Docking::track_target.after filter by point dentisity,the scan size:" << scan.size());
+ ROS_INFO_STREAM(" Docking::trackTarget.after filter by point dentisity,the scan size:" << scan.size());
  static visualization_msgs::Marker items_maker;
  items_maker.points.clear();
  static uint32_t shape = visualization_msgs::Marker::POINTS;
@@ -167,7 +166,7 @@ void Docking::updateLaser(const sensor_msgs::LaserScan::ConstPtr& ldata)
 
   }
 }
-void Docking::cal_pos(void){
+void Docking::calPos(void){
   static tf::TransformListener tf_listenter;
   tf::StampedTransform transform;
   try{
@@ -188,23 +187,23 @@ void Docking::cal_pos(void){
   l_pos.setY(laser_pos_y);
 }
 ///接收新任务
-void Docking::updateMotionFlags(const std_msgs::Int16  Docking_motion)
+void Docking::callBackTask(const std_msgs::Int16  Docking_motion)
 {
   boost::mutex::scoped_lock l(mut);
   int tmp_reflag(0);
   ros::Rate r(1);
-  ROS_INFO("Docking::updateMotionFlags.get dock type arg is:%d ",Docking_motion.data);
+  ROS_INFO("Docking::callBackTask.get dock type arg is:%d ",Docking_motion.data);
   const int dock_m = Docking_motion.data;
   switch (dock_m)
   {
 
     case 1:
       tmp_reflag = 1;
-      ROS_INFO("Docking::updateMotionFlags.Get Charge IN task");
+      ROS_INFO("Docking::callBackTask.Get Charge IN task");
       break;
     case 2:
       tmp_reflag = 2;
-      ROS_INFO("Docking::updateMotionFlags.Get Charge OUT task");
+      ROS_INFO("Docking::callBackTask.Get Charge OUT task");
       break;
     default:
       tmp_reflag = 0;
@@ -214,18 +213,18 @@ void Docking::updateMotionFlags(const std_msgs::Int16  Docking_motion)
   {
     r.sleep();///!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     Set_Switch(true);
-    Set_Task(tmp_reflag);
+    setTask(tmp_reflag);
   }
 }
 /// judge stop
-bool Docking::Judge_stop()
+bool Docking::judgeStop()
 {
   m_task_status =ChargeStop;    // stopped
   return false;
 }
 
 /// 配置VType属性
-void Docking::Set_Vdata(double l1, double ang1,double min_range_dist, double dis, double outdis)
+void Docking::setVTypeProperty(double l1, double ang1,double min_range_dist, double dis, double outdis)
 {
   m_line_rechage = l1;          //V Type length for one edge chq
   m_angle_recharge = ang1;      //V Type Angle(deg) chq
@@ -242,16 +241,16 @@ void Docking::Set_Vdata(double l1, double ang1,double min_range_dist, double dis
 }
 
 /// 处理目标点数据　计算偏转角
-void Docking::Set_Laser(const PointList & laser_data)
+void Docking::searchVType(const PointList & laser_data)
 {
   has_typev_flag = false;
   double include_angle_k,include_angle_k_modify, include_angle_test;
   m_vdetec.setLaserData(laser_data);
   m_vdetec.split_and_merge();
   m_line = m_vdetec.get_line();
-   ROS_INFO("Docking::Set_Laser.laser_data size:%d, line number:%d ",laser_data.size(), m_line.size() );
+   ROS_INFO("Docking::searchVType.laser_data size:%d, line number:%d ",laser_data.size(), m_line.size() );
   for( int i = 0; i < m_line.size(); i++){
-    ROS_INFO("Docking::Set_Laser.line[%d]'s length:%.4f,k:%.4f",i, m_line[i].line_length,m_line[i].line_k);
+    ROS_INFO("Docking::searchVType.line[%d]'s length:%.4f,k:%.4f",i, m_line[i].line_length,m_line[i].line_k);
   }
   static visualization_msgs::Marker items_maker;
 
@@ -299,13 +298,16 @@ void Docking::Set_Laser(const PointList & laser_data)
     if (-1.0 != m_line[i].line_k*m_line[i + 1].line_k /*&& m_line[i].line_k*m_line[i + 1].line_k<0*/)//如果不vertical
     {
       include_angle_k_modify = (m_line[i + 1].line_k - m_line[i].line_k) / (1.0 + m_line[i].line_k*m_line[i + 1].line_k);
-      if(include_angle_k_modify>0)include_angle_k_modify=-include_angle_k_modify;//计算角度是锐角时，计算其补角（xielv互为相反数）
+      double include_angle_rad = getIncludeAngleRad(m_line[i + 1].line_k, m_line[i].line_k);
+      if(include_angle_k_modify > 0)
+        include_angle_k_modify=-include_angle_k_modify;//计算角度是锐角时，计算其补角（xielv互为相反数）
        deg_a_modify =  180+Rad2Deg( atan(include_angle_k_modify));
+
     }
     else{
-      ROS_INFO("Set_Laser.line[%d] vertical to line[%d]!",i,i+1);
+      ROS_INFO("searchVType.line[%d] vertical to line[%d]!",i,i+1);
     }
-    ROS_INFO("Set_Laser.cur cal line[%d] to line[%d] include_angle_deg:%.2f",i,i+1,deg_a_modify);
+    ROS_INFO("searchVType.cur cal line[%d] to line[%d] include_angle_deg:%.2f",i,i+1,deg_a_modify);
     if (
         //fabs(m_line[i].line_length - m_line_rechage) < MIN_LENGTH_ERROR &&   //chq disabled temp
         //fabs(m_line[i + 1].line_length - m_line_rechage) < MIN_LENGTH_ERROR && //chq disabled temp
@@ -315,13 +317,21 @@ void Docking::Set_Laser(const PointList & laser_data)
     {
       /// Todo: get the point
       /// 两线交点
-      double a1 = (m_line[i].lbegin_x - m_line[i].lend_x) / (m_line[i].lbegin_y - m_line[i].lend_y);
-      double b1 = m_line[i].lbegin_x - a1 * m_line[i].lbegin_y;
-      double a2 = (m_line[i+1].lbegin_x - m_line[i+1].lend_x) / (m_line[i+1].lbegin_y - m_line[i+1].lend_y);
-      double b2 = m_line[i + 1].lbegin_x - a2 * m_line[i + 1].lbegin_y;
-      robot2vy = (b1 - b2) / (a2 - a1);
-      robot2vx = a1 * robot2vy + b1;
-
+     // double a1 = (m_line[i].lbegin_x - m_line[i].lend_x) / (m_line[i].lbegin_y - m_line[i].lend_y);
+      //double b1 = m_line[i].lbegin_x - a1 * m_line[i].lbegin_y;
+      //double a2 = (m_line[i+1].lbegin_x - m_line[i+1].lend_x) / (m_line[i+1].lbegin_y - m_line[i+1].lend_y);
+      //double b2 = m_line[i + 1].lbegin_x - a2 * m_line[i + 1].lbegin_y;
+      //robot2vy = (b1 - b2) / (a2 - a1);
+      //robot2vx = a1 * robot2vy + b1;
+      Line a(m_line[i].line_k,-1,m_line[i].line_b);
+      Line b(m_line[i+1].line_k,-1,m_line[i+1].line_b);
+      VecPosition cross = a.getIntersection(b);
+      robot2vx= cross.getX();
+      robot2vy= cross.getY();
+      double l1tocar_rad = fabs(atan(m_line[i].line_k));// limit to 0~pi/2
+      double half_angular_bisector = fabs((atan(m_line[i].line_k) - atan(m_line[i + 1].line_k))/2.0);// limit to 0~pi/2
+      double turn_w = l1tocar_rad - half_angular_bisector;
+      turn_w *= (robot2vy>0?1:-1);//车在左侧　y>0 ,w取正　左转　否则　取负
       //////////////////////////////////////////////////////////////////////////
       //if (pre_robot2v.x != init_target_dist)//disable by chq temp
       /*if ( fabs(pre_robot2v.x - init_target_dist) > 0.0001 )
@@ -329,18 +339,18 @@ void Docking::Set_Laser(const PointList & laser_data)
         //如果新计算得到的目标与上一次目标相差过大，则以上一次记录目标为目标
         if (fabs(robot2vx - pre_robot2v.x) > 0.07){
           robot2vx = pre_robot2v.x;
-          ROS_INFO_STREAM("Set_Laser.prevr2v not init.cur r2v.x - pre r2v > 0.07 set r2v.y=pre r2v.y");
+          ROS_INFO_STREAM("searchVType.prevr2v not init.cur r2v.x - pre r2v > 0.07 set r2v.y=pre r2v.y");
         }
         if (fabs(robot2vy - pre_robot2v.y) > 0.07){
           robot2vy = pre_robot2v.y;
-          ROS_INFO_STREAM("Set_Laser.prevr2v not init.cur r2v.y - pre r2v > 0.07 set r2v.y=pre r2v.y");
+          ROS_INFO_STREAM("searchVType.prevr2v not init.cur r2v.y - pre r2v > 0.07 set r2v.y=pre r2v.y");
         }
       }*/
 
       /// todo some 0 judge
       /// tanα=(k-k1)/(1+kk1)=(k2-k)/(1+kk2)
       double k1 = MAXK;
-      double a11 = atan((m_line[i].line_k - k1)/(1 + m_line[i].line_k*k1));//求k1与垂线的夹角
+      double a11 = atan((m_line[i].line_k - k1)/(1 + m_line[i].line_k*k1));//求k1与垂线(y)的夹角
 
       a11 = M_PI / 2.0 - a11;
       double a11_deg_look = Rad2Deg(a11);
@@ -351,17 +361,22 @@ void Docking::Set_Laser(const PointList & laser_data)
       double jia = atan(m_line[i].line_k) - atan(m_line[i + 1].line_k);//atana +/- atan b = atan( a +/- b /(1 -/+ ab) )
       double jia_test = atan((m_line[i].line_k-m_line[i+1].line_k)/(1+m_line[i].line_k*m_line[i+1].line_k));
       double jia_deg_look  = Rad2Deg(jia);
+
+      double turn_angle_rad = fabs(a11+M_PI/2) - fabs(jia / 2.0);
+      //HX - M_PI/2 车子与角平分线的夹角 已经证明 chq
       HX = 1.5 * M_PI - jia / 2.0 - a11;
+
+      double turn_angle_this = HX - M_PI/2;
       double HX_deg_look = Rad2Deg(HX);
-      ROS_INFO_STREAM("Docking::Set_Laser."
-                      << "Found VType.the angle bet two lines(deg):" << deg_a_modify
+      ROS_INFO_STREAM("Docking::searchVType."
+                      << "Found VType.The angle bet two lines(deg):" << deg_a_modify
                       << " cross pos : (" << robot2vx << "," << robot2vy << ")."
                       << " turn angle(deg): " <<  VecPosition::normalizeAngle( RAD2DEG(a11) )
                       );
 
       m_target.x = robot2vx * sin(HX) - robot2vy * cos(HX);
       m_target.y = robot2vx * cos(HX) + robot2vy * sin(HX);
-      ROS_INFO_STREAM("Docking::Set_Laser.The VType target in motion control cord: (" << m_target.x << "," << m_target.y << ")");
+      ROS_INFO_STREAM("Docking::searchVType.The VType target in motion control cord: (" << m_target.x << "," << m_target.y << ")");
       //最新数据做比较，选较大的一个
       allx.push_back(m_target.x);
       if (allx.size() > 1)
@@ -392,7 +407,7 @@ void Docking::Set_Laser(const PointList & laser_data)
       has_typev_flag = true;
       if (m_task_status == TypeVNotFound)//chq Can Not Fine Type V Dock
       {
-        set_task_status(m_reme_status);//reset task
+        setTaskStatus(m_reme_status);//reset task
         ROS_INFO_STREAM("Find tye v_dock again, reset task_status to " << m_reme_status);
       }
     }
@@ -402,7 +417,7 @@ void Docking::Set_Laser(const PointList & laser_data)
       forecast_t[0] = pre_targetx - m_forecast_target.x;
       forecast_t[1] = pre_targety + m_forecast_target.y;
 
-      ROS_INFO_STREAM("Docking::Set_Laser.cur inculde_angle_k:" << include_angle_k_modify
+      ROS_INFO_STREAM("Docking::searchVType.cur inculde_angle_k:" << include_angle_k_modify
                       << " do not fit angle condition "
                       <<"do tar equal to pre_targetx - m_forecast_target and HX = pre HX. ");
 
@@ -410,13 +425,13 @@ void Docking::Set_Laser(const PointList & laser_data)
       m_target.y = forecast_t[1];
       HX = preHX;
     }
-    ROS_INFO_STREAM("Docking::Set_Laser End. target(x,y):(" << m_target.x << "," << m_target.y << ")" );
+    ROS_INFO_STREAM("Docking::searchVType End. target(x,y):(" << m_target.x << "," << m_target.y << ")" );
   }
   items_marker_pub.publish(items_maker);
 }
 
 /// handle task order
-void Docking::Set_Task(int motion_task)
+void Docking::setTask(int motion_task)
 {
   odm_record_flag = false;
   has_typev_flag = false;
@@ -438,17 +453,17 @@ void Docking::Set_Task(int motion_task)
   allx.clear();
   ally.clear();
   allhx.clear();
-  ROS_INFO("Docking::Set_Task.Set TaskChargeBegin");
+  ROS_INFO("Docking::setTask.Set TaskChargeBegin");
 }
 
 /// set task status
-int Docking::get_status()
+int Docking::getStatus()
 {
   return m_task_status;
 }
 
 /// handle output speed
-geometry_msgs::Twist Docking::get_speed()
+geometry_msgs::Twist Docking::getSpeed()
 {
     geometry_msgs::Twist cmd_vel;
 
@@ -464,7 +479,7 @@ geometry_msgs::Twist Docking::get_speed()
 }
 
 /// get target point
-Point Docking::get_target()
+Point Docking::getTarget()
 {
   //if (m_task_flag == 0)
   //{
@@ -479,17 +494,17 @@ Point Docking::get_target()
 
 
 /// record odm
-OrientedPoint Docking::Record_odm(bool switch_odm_record)
+OrientedPoint Docking::recordOdom(bool switch_odm_record)
 {
   if (switch_odm_record)
   {
     boost::mutex::scoped_lock l(mut);//we use the global var m_cur_odom,if will chage in callback fun :update odom ,so we must add a lock
-    //ROS_INFO("Docking::Record_odm.m_cur_odom(x,y,angle):(%.6f,%.6f,%.6f)",m_cur_odom.x,m_cur_odom.y,m_cur_odom.theta );
-    //ROS_INFO("Docking::Record_odm.m_pre_odom(x,y,angle):(%.6f,%.6f,%.6f)",m_pre_odom.x,m_pre_odom.y,m_pre_odom.theta );
+    //ROS_INFO("Docking::recordOdom.m_cur_odom(x,y,angle):(%.6f,%.6f,%.6f)",m_cur_odom.x,m_cur_odom.y,m_cur_odom.theta );
+    //ROS_INFO("Docking::recordOdom.m_pre_odom(x,y,angle):(%.6f,%.6f,%.6f)",m_pre_odom.x,m_pre_odom.y,m_pre_odom.theta );
     m_delta_odm = absoluteDifference(m_cur_odom, m_pre_odom);
-    //ROS_INFO("Docking::Record_odm.m_delta_odm(in pre cord)(x,y,angle):(%.6f,%.6f,%.6f)",m_delta_odm.x,m_delta_odm.y,m_delta_odm.theta );
+    //ROS_INFO("Docking::recordOdom.m_delta_odm(in pre cord)(x,y,angle):(%.6f,%.6f,%.6f)",m_delta_odm.x,m_delta_odm.y,m_delta_odm.theta );
     m_leave_odm = absoluteSum(m_leave_odm, m_delta_odm);
-    //ROS_INFO("Docking::Record_odm.m_leave_odm(in last leave cord)(x,y,angle):(%.6f,%.6f,%.6f)",m_leave_odm.x,m_leave_odm.y,m_leave_odm.theta );
+    //ROS_INFO("Docking::recordOdom.m_leave_odm(in last leave cord)(x,y,angle):(%.6f,%.6f,%.6f)",m_leave_odm.x,m_leave_odm.y,m_leave_odm.theta );
     m_pre_odom = m_cur_odom;
     return m_leave_odm;
   }
@@ -498,12 +513,12 @@ OrientedPoint Docking::Record_odm(bool switch_odm_record)
 }
 
 /// set speed
-void Docking::set_speed(double _v, double _w)
+void Docking::setSpeed(double _v, double _w)
 {
   m_speedv = _v;  m_speedw = _w;
 }
 /// set task status
-void Docking::set_task_status(int s)
+void Docking::setTaskStatus(int s)
 {
   m_task_status = s;
 }
@@ -516,15 +531,15 @@ void Docking::autoChargeThread(void){
         {
           ROS_INFO("autoChargeThread.-----------------------------------start");
           //if in charge in/out process chq
-          cal_pos();
+          calPos();
           obstacle_points_ = obs_p;//与订阅更新数据隔离
-          track_target(obstacle_points_, get_target());
-          Set_Laser(obstacle_points_);
+          trackTarget(obstacle_points_, getTarget());
+          searchVType(obstacle_points_);
           motionPlanning();
           /// pub speed
-          vel_pub_.publish(get_speed());
+          vel_pub_.publish(getSpeed());
           /// update task status
-          int status_flag = get_status();
+          int status_flag = getStatus();
           if (status_flag == ChargeInSuc)
           {
             ROS_INFO("Docking::autoChargeThread.Finish update task status, In success~ go sleeping...");
@@ -569,7 +584,7 @@ void Docking::motionPlanning()
     //{
     //  if (m_task_status != 110)
     //    m_reme_status = m_task_status;
-    //  set_task_status(110);
+    //  setTaskStatus(110);
     //  LOG_COUT_INFO(m_vdock_logger, "Can not find type v_dock set task_status 110, and remember now task_status " << m_reme_status);
     //}
     // chq 进入充电位 任务
@@ -587,14 +602,14 @@ void Docking::motionPlanning()
             //if (fabs(m_target.y) > ydist_err)
             //{
               //m_task_flag = NoTask;
-              //ROS_ERROR("Docking::motionPlanning.found VType.but m_target.y:%f, ERROR TOO LARGE.set_task_status(AtField2)！！！;", m_target.y);
-             // set_task_status(AtField2);
+              //ROS_ERROR("Docking::motionPlanning.found VType.but m_target.y:%f, ERROR TOO LARGE.setTaskStatus(AtField2)！！！;", m_target.y);
+             // setTaskStatus(AtField2);
             //}
             //chq 否则，固定线速度，角速度通过实时的偏差Hx与target.y计算
             //else
             {
               _speedv = v_fast;
-              _speedw = HX - M_PI / 2.0 + m_target.y * 2.0;
+              _speedw = mapToMinusPIToPI(HX - M_PI / 2.0) + m_target.y * 2.0;//mod by chq
               //  _speedw = 1.0 * m_target.y;
               //  _speedv = 0;
               //  _speedw = 0;
@@ -603,8 +618,8 @@ void Docking::motionPlanning()
               if (m_target.x < xdist_near)
               {
                 odm_record_flag = false;
-                set_task_status(  ModifyAngleOnly);
-                ROS_INFO("Docking::motionPlanning.found VType.m_target.x :%f < 0.8 Enter Modified HX Status.set_task_status(  ModifyAngleOnly);", m_target.x );
+                setTaskStatus(  ModifyAngleOnly);
+                ROS_INFO("Docking::motionPlanning.found VType.m_target.x :%f < 0.8 Enter Modified HX Status.setTaskStatus(  ModifyAngleOnly);", m_target.x );
               }
             }
             odm_record_flag = false;
@@ -622,20 +637,20 @@ void Docking::motionPlanning()
               m_leave_odm.theta = 0.0;
               odm_record_flag = true;
             }
-            double record_dis = Record_odm(odm_record_flag).mod();
+            double record_dis = recordOdom(odm_record_flag).mod();
             //chq 如果累计调整超过0.2m 还未找到charge,stop
             if (record_dis > blind_move_thread)  /// if has no typevdock above 20cm  stop it
             {
               _speedv = 0.0;
               _speedw = 0.0;
-              set_task_status(AtField1);
+              setTaskStatus(AtField1);
               ROS_ERROR("Docking::motionPlanning.this time no found typev.record_dis %.4f > blind_move_thread %.4f.Long Dis Can Not Find Type V Dock", record_dis,blind_move_thread);
             }
             //chq 否则，恒速前进，计算危险距离
             else
             {
-              m_forecast_target.y = Record_odm(odm_record_flag).x * cos(HX) + Record_odm(odm_record_flag).y * sin(HX);
-              m_forecast_target.x = Record_odm(odm_record_flag).x * sin(HX) - Record_odm(odm_record_flag).y * cos(HX);
+              m_forecast_target.y = recordOdom(odm_record_flag).x * cos(HX) + recordOdom(odm_record_flag).y * sin(HX);
+              m_forecast_target.x = recordOdom(odm_record_flag).x * sin(HX) - recordOdom(odm_record_flag).y * cos(HX);
               _speedv = v_slow;
               _speedw = 0.0;
              ROS_INFO("Docking::motionPlanning.no found typev.record_dis: %.4ff,below to blind_move_thread:%.4f, pub v:%.4f,w = 0", record_dis, blind_move_thread, _speedv);
@@ -644,8 +659,8 @@ void Docking::motionPlanning()
             if (m_target.x < xdist_near)
             {
               odm_record_flag = false;
-              set_task_status(ModifyAngleOnly);
-              ROS_INFO("Docking::motionPlanning.no found typev.m_target.x:%.4f below to xdist_near :%.4f.Enter Modified angle only BY Blind Moving. set_task_status(  ModifyAngleOnly);",m_target.x,xdist_near);
+              setTaskStatus(ModifyAngleOnly);
+              ROS_INFO("Docking::motionPlanning.no found typev.m_target.x:%.4f below to xdist_near :%.4f.Enter Modified angle only BY Blind Moving. setTaskStatus(  ModifyAngleOnly);",m_target.x,xdist_near);
             }
           }
         }
@@ -653,25 +668,27 @@ void Docking::motionPlanning()
         if (m_task_status == ModifyAngleOnly) // modified
         {
           _speedv = 0.0;
-          _speedw = HX - M_PI / 2.0;
-          ROS_INFO("Docking::motionPlanning.modify angle only.target x:%f, y:%f, Hx:%.4f.v:0,w:%.4f ", m_target.x, m_target.y, HX / M_PI*180.0,_speedw);
-          if (fabs(Rad2Deg(HX - M_PI/2)) < angle_near)//若距离较小，且角度偏差已经很小，角速度设为0
+          _speedw = mapToMinusPIToPI(HX - M_PI / 2.0);
+          ROS_INFO("Docking::motionPlanning.modify angle only.target x:%f, y:%f, Hx(deg):%.4f.v:0,w(rad):%.4f,w(deg):%.4f", m_target.x, m_target.y, HX / M_PI*180.0,_speedw,Rad2Deg(_speedw));
+          if (fabs(Rad2Deg(_speedw)) < angle_near)//若距离较小，且角度偏差已经很小，角速度设为0
           {
+            ROS_INFO("Docking::motionPlanning.turn angle(deg):%.4f below to angle_near:%.4f,set w=0.setTaskStatus(GoStraightLineMode(GoStraightLineMode));",fabs(_speedw),angle_near);
             _speedw = 0.0;
-            set_task_status(GoStraightLineMode);
-            ROS_INFO("Docking::motionPlanning.turn angle(deg):%.4f below to angle_near:%.4f,set w=0.set_task_status(GoStraightLineMode(GoStraightLineMode));",fabs(Rad2Deg(HX - M_PI/2)),angle_near);
+            setTaskStatus(GoStraightLineMode);
           }
         }
         //chq x距离偏差已较小且角度调整到位,进入 直行到充电桩 模式
         if (m_task_status == GoStraightLineMode)  // last dis
         {
           //chq 如果y方向发生偏差较大情况，失败
-          if (!last_go_ready_flag && fabs(m_target.y) > yarrived_thread)
+          //chq disable temp
+         /* if (!last_go_ready_flag && fabs(m_target.y) > yarrived_thread)
           {
             m_task_flag = NoTask;
-            ROS_ERROR("Docking::motionPlanningfirst into GoStraightLineMode.but the Y :%f > yarrived_thread, IS TOO LARGE.set m_task_flag = NoTask; .set_task_status(AtField1);",fabs(m_target.y));
-            set_task_status(AtField1);
+            ROS_ERROR("Docking::motionPlanningfirst into GoStraightLineMode.but the Y :%f > yarrived_thread, IS TOO LARGE.set m_task_flag = NoTask; .setTaskStatus(AtField1);",fabs(m_target.y));
+            setTaskStatus(AtField1);
           }
+          */
           ROS_INFO("Docking::motionPlanning.judge suc lastly..set last_go_ready_flag = true;");
           last_go_ready_flag = true;
            //chq 重置并累计计算里程计距离值
@@ -684,7 +701,7 @@ void Docking::motionPlanning()
             m_leave_odm.theta = 0.0;
             odm_record_flag = true;
           }
-          double record_dis = Record_odm(odm_record_flag).mod();
+          double record_dis = recordOdom(odm_record_flag).mod();
 
           //chq 如果小于设定的限制行驶距离，固定速度前进
           if (record_dis < m_lastdis)
@@ -700,7 +717,7 @@ void Docking::motionPlanning()
             odm_record_flag = false;
             _speedv = 0.0;
             _speedw = 0.0;
-            set_task_status(ChargeInSuc);  // in finish
+            setTaskStatus(ChargeInSuc);  // in finish
             ROS_INFO("Docking::motionPlanning.go ahead mode.Record odm dist:%f > m_lastdis:%.4f.set _speedv = v_slow.Charge in suc! ", record_dis,m_lastdis);
           }
 
@@ -719,7 +736,7 @@ void Docking::motionPlanning()
         odm_record_flag = true;
       }
       //chq 小于限定行驶距离值，恒速倒退
-      if (Record_odm(odm_record_flag).mod() < m_outdis)
+      if (recordOdom(odm_record_flag).mod() < m_outdis)
       {
         _speedv = v_back_fast;
         _speedw = -0.0;
@@ -731,23 +748,23 @@ void Docking::motionPlanning()
         odm_record_flag = false;
         _speedv = 0.0;
         _speedw = 0.0;
-        set_task_status(ChargeOutSuc);  // out finish
+        setTaskStatus(ChargeOutSuc);  // out finish
         ROS_INFO("Docking::Run_Navigation.Charge Out Success!");
       }
     }
   }
 
-//  if (Judge_stop())
+//  if (judgeStop())
 //  {
-//    set_speed(0.0, 0.0);
+//    setSpeed(0.0, 0.0);
 //    LOG_COUT_INFO(m_vdock_logger, "Laser Stop");
 //  }
 //  else
 //  {
-//    set_speed(_speedv, _speedw);
+//    setSpeed(_speedv, _speedw);
 //  }
     //chq 下发速度给控制器
-  set_speed(_speedv, _speedw);
+  setSpeed(_speedv, _speedw);
   ros::Duration(0.03).sleep();
 }
 

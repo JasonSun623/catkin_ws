@@ -71,27 +71,51 @@ public:
   {
     charge_status = sflag;
   }
-  void cal_pos(void);
-  void track_target(PointList &scan, Point target_point);
+  void calPos(void);
+  void trackTarget(PointList &scan, Point target_point);
   void updateLaser(const sensor_msgs::LaserScan::ConstPtr& ldata);
   ////接受任务回调，１，充电，２，退出充电,update date to type typeV
-  void updateMotionFlags(const std_msgs::Int16  Docking_motion);
+  void callBackTask(const std_msgs::Int16  Docking_motion);
   void updateOdom(const nav_msgs::Odometry::ConstPtr& state_odata);
   void autoChargeThread(void);
   void motionPlanning();
-  void Set_Task(int motion_task);
-  void Set_Laser(const PointList& laser_data);//chq
-  void Set_Vdata(double l1, double ang1,double min_range_dist, double dis, double outdis);
+  void setTask(int motion_task);
+  void searchVType(const PointList& laser_data);//chq
+  void setVTypeProperty(double l1, double ang1,double min_range_dist, double dis, double outdis);
   void Set_Frame(std::string od_f,std::string base_link_f,std::string laser_f,std::string map_f ="/map"){
     odom_frame = od_f;
     base_link_frame = base_link_f;
     laser_frame = laser_f;
     map_frame = map_f;
   }
+  //include angle range -pi/2~pi/2
+  double getIncludeAngleRad(double ka,double kb){
+    if(ka*kb<-0.000001)
+      return  ka>kb?M_PI/2:-M_PI/2;
+    else
+      return atan((ka-kb)/(1+ka*kb));
+  }
 
-  Point get_target();//chq 
-  geometry_msgs::Twist get_speed();
-  int get_status();
+  double mapToMinusPIToPI( double angle )
+  {
+    double angle_overflow = static_cast<double>( static_cast<int>(angle / M_PI ) );
+
+    if( angle_overflow > 0.0 )
+    {
+      angle_overflow = ceil( angle_overflow / 2.0 );
+    }
+    else
+    {
+      angle_overflow = floor( angle_overflow / 2.0 );
+    }
+
+    angle -= 2 * M_PI * angle_overflow;
+    return angle;
+  }
+
+  Point getTarget();//chq
+  geometry_msgs::Twist getSpeed();
+  int getStatus();
 
 protected:
 
@@ -165,10 +189,10 @@ private:
   static const  double v_back_fast ;
   static const  double w_none ;
   /// some function
-  bool Judge_stop();
-  void set_speed(double _v, double _w);
-  void set_task_status(int s);
-  OrientedPoint Record_odm(bool switch_odm_record);
+  bool judgeStop();
+  void setSpeed(double _v, double _w);
+  void setTaskStatus(int s);
+  OrientedPoint recordOdom(bool switch_odm_record);
 
 };
 #endif
