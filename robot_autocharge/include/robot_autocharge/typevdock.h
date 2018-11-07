@@ -88,14 +88,64 @@ public:
     laser_frame = laser_f;
     map_frame = map_f;
   }
+  void PubMark(std::string frame,std::string ns, uint32_t shape,float scale,double *rgba,vector<VecPosition> points);
   //include angle range -pi/2~pi/2
   double getIncludeAngleRad(double ka,double kb){
-    if(ka*kb<-0.000001)
-      return  ka>kb?M_PI/2:-M_PI/2;
+    if(fabs(ka*kb+1)<0.000001)
+      return  (ka-kb)*(ka*kb+1)>0?M_PI/2:-M_PI/2;
     else
       return atan((ka-kb)/(1+ka*kb));
   }
-
+  double getIncludeAngleK(double ka,double kb){
+    if(fabs(ka*kb+1)<0.000001)
+      return  (ka-kb)*(ka*kb+1)<0?-MAXK:MAXK;
+    else
+      return ((ka-kb)/(1+ka*kb));
+  }
+  //角平分线所在的斜率
+ double getAngularBisector_k(double ka,double kb){
+#if 0
+   double ka_deg =Rad2Deg(atan(ka));
+   double kb_deg = Rad2Deg(atan(kb));
+   double angle = 0.0;
+   //angle夹角,强制为正值[0-180)
+   if(fabs(ka*kb+1)<0.000001)
+     angle = M_PI/2;
+   else{
+     angle = getIncludeAngleRad(ka, kb);
+     if(angle < 0)
+       angle+=M_PI;//计算角度是锐角时，计算其补角（xielv互为相反数）
+   }
+    double angle_deg =Rad2Deg(angle);
+   if(ka*kb>=0&&ka>0 )//都在第1相限
+     return tan(atan(min(ka,kb))+angle/2);
+   else
+   if(ka*kb>=0&&ka<0)//都在第2相限
+     return tan(M_PI+atan(min(ka,kb))+angle/2);
+   else {//在第1相限 + 在第2相限
+     double ang = atan(max(ka,kb))+angle/2;
+     double ang_deg = Rad2Deg(ang);
+     int flag = (ang-M_PI/2)>0?-1:1;
+     if(fabs(ang-M_PI/2)<0.00001)//如果平分线垂直
+       return flag*MAXK;
+     else
+       return tan(ang);
+   }
+#endif
+   //由于两条直线的角平分线有两条　故关键是确定是哪一条平分线
+  if(fabs(ka+kb)<0.00001)
+    return (ka+kb)<0?M_PI/2:-M_PI/2;
+  else{
+    double k1=( (ka*kb-1)+sqrt((1-ka*kb)*(1-ka*kb)+(ka+kb)*(ka+kb)) )/(ka+kb);
+    double k2=( (ka*kb-1)-sqrt((1-ka*kb)*(1-ka*kb)+(ka+kb)*(ka+kb)) )/(ka+kb);
+    double include_angle1_k = fabs(getIncludeAngleK(ka,k1));//force rui jiao
+    double include_angle2_K = fabs(getIncludeAngleK(ka,k2));
+    if(include_angle1_k > tan_halfmin_recharge && include_angle1_k < tan_halfmax_recharge)
+    return k1;
+    else
+    return k2;
+  }
+ }
   double mapToMinusPIToPI( double angle )
   {
     double angle_overflow = static_cast<double>( static_cast<int>(angle / M_PI ) );
@@ -123,6 +173,7 @@ private:
   ros::NodeHandle n;
   ros::Publisher items_marker_pub;
   ros::Publisher target_scan_pub;
+  ros::Publisher track_targets_pub;
   ros::Subscriber scan_sub ;
   ros::Subscriber odo_sub ;
   ros::Subscriber autocharge_task_sub;
@@ -135,6 +186,7 @@ private:
     ALMOST_LAST,
     FINISH,
   };
+  double turn_ratio;//转向率　０～１，1 沿着垂线直接转　最剧烈
   double init_target_dist ;
   double Vshape;   //the edge length  chq
   double MIN_R;  //连续激光点间距，作为线条的阈值 chq
@@ -158,6 +210,8 @@ private:
   double tan_max_roller;
   double tan_min_recharge;
   double tan_max_recharge;
+  double tan_halfmin_recharge;
+  double tan_halfmax_recharge;
   double HX;
   double pre_targetx, pre_targety, preHX;
   VecPosition l_pos;//laser pos

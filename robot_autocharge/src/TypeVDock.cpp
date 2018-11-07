@@ -24,6 +24,7 @@ Docking::Docking(void)
   base_link_frame = "base_link";
   odom_frame = "odom";
   init_target_dist = 1.5;
+  turn_ratio = 0.9;
   private_nh.param("scan_topic",scan_topic,scan_topic);
   private_nh.param("odom_topic",odom_topic,odom_topic);
   private_nh.param("cmd_vel_topic",cmd_vel_topic,cmd_vel_topic);
@@ -33,6 +34,7 @@ Docking::Docking(void)
   private_nh.param("base_link_frame",base_link_frame,base_link_frame);
   private_nh.param("odom_frame",odom_frame,odom_frame);
   private_nh.param("init_target_dist",init_target_dist,init_target_dist);
+  private_nh.param("turn_ratio",turn_ratio,turn_ratio);
 
   scan_sub = n.subscribe(scan_topic,1000,&Docking::updateLaser,this);
   odo_sub = n.subscribe(odom_topic,1000,&Docking::updateOdom,this);
@@ -41,6 +43,7 @@ Docking::Docking(void)
 
   vel_pub_ = n.advertise<geometry_msgs::Twist>(cmd_vel_topic, 1);
   target_scan_pub = n.advertise<visualization_msgs::Marker>("dock_targets_marker",1,true);
+  track_targets_pub = n.advertise<visualization_msgs::Marker>("track_targets_marker",1,true);
 }
 
 
@@ -57,6 +60,38 @@ void Docking::updateOdom(const nav_msgs::Odometry::ConstPtr& state_odata)
   double yaw = tf::getYaw(odo.pose.pose.orientation);
   m_cur_odom.theta = yaw;
   //ROS_INFO("Docking::updateOdom.(x,y,angle):(%.6f,%.6f,%.6f)",m_cur_odom.x,m_cur_odom.y,m_cur_odom.theta );
+}
+void Docking::PubMark(std::string frame,std::string ns, uint32_t shape,float scale,double *rgba,std::vector<VecPosition> points){
+  static visualization_msgs::Marker items_maker;
+  items_maker.points.clear();
+  ///common info for item
+  items_maker.header.frame_id=frame;
+  items_maker.type = shape;
+  items_maker.ns = ns;
+  items_maker.action = visualization_msgs::Marker::ADD;
+  // Set the scale of the marker -- 1x1x1 here means 1m on a side
+  items_maker.scale.x = scale;
+  items_maker.scale.y = scale;
+  items_maker.scale.z = scale;
+  // Set the color -- be sure to set alpha to something non-zero!
+  //DarkOrchid  153 50 204
+  items_maker.color.r = rgba[0];
+  items_maker.color.g = rgba[1];
+  items_maker.color.b = rgba[2];
+  items_maker.color.a = rgba[3];
+  items_maker.lifetime = ros::Duration(1000);
+   for(int i = 0; i < points.size(); i++){
+     items_maker.id = i;
+     items_maker.header.stamp = ros::Time::now();
+     VecPosition rot = points[i].rotate(laser_angle_deg);
+     VecPosition pos = rot + l_pos;
+     geometry_msgs::Point p;
+     p.x = pos.getX();
+     p.y = pos.getY();
+     p.z = 0;
+     items_maker.points.push_back(p);
+   }
+   track_targets_pub.publish(items_maker);
 }
 /// 筛选激光
 void Docking::trackTarget(PointList &scan, Point target_point)
@@ -145,7 +180,7 @@ void Docking::updateLaser(const sensor_msgs::LaserScan::ConstPtr& ldata)
   const sensor_msgs::LaserScan scan = (*ldata);
   double dist;
   double angle;
-
+  //ROS_INFO_STREAM("update laser.------------rostime:"<<ros::Time::now());
   if (charge_status)
   {
     obs_p.clear();
@@ -162,9 +197,8 @@ void Docking::updateLaser(const sensor_msgs::LaserScan::ConstPtr& ldata)
       //Point obj(obs.getX(),obs.getY());
       obs_p.push_back( Point(obs.getX(),obs.getY()) );
     }
-
-
   }
+
 }
 void Docking::calPos(void){
   static tf::TransformListener tf_listenter;
@@ -233,6 +267,9 @@ void Docking::setVTypeProperty(double l1, double ang1,double min_range_dist, dou
   MIN_R = min_range_dist;
   tan_min_recharge = tan(Deg2Rad(m_angle_recharge - MAX_ANGLE_ERROR));
   tan_max_recharge = tan(Deg2Rad(m_angle_recharge + MAX_ANGLE_ERROR));
+  tan_halfmin_recharge = tan(Deg2Rad(m_angle_recharge/2 - MAX_ANGLE_ERROR));
+  tan_halfmax_recharge = tan(Deg2Rad(m_angle_recharge/2 + MAX_ANGLE_ERROR));
+
   odm_record_flag = false;      //do not have recorded odom data
   has_typev_flag = false;       //do not have found typev
 
@@ -244,7 +281,7 @@ void Docking::setVTypeProperty(double l1, double ang1,double min_range_dist, dou
 void Docking::searchVType(const PointList & laser_data)
 {
   has_typev_flag = false;
-  double include_angle_k,include_angle_k_modify, include_angle_test;
+  double include_angle_k,include_angle_k_modify, include_angle_test,include_angle_rad;
   m_vdetec.setLaserData(laser_data);
   m_vdetec.split_and_merge();
   m_line = m_vdetec.get_line();
@@ -252,6 +289,7 @@ void Docking::searchVType(const PointList & laser_data)
   for( int i = 0; i < m_line.size(); i++){
     ROS_INFO("Docking::searchVType.line[%d]'s length:%.4f,k:%.4f",i, m_line[i].line_length,m_line[i].line_k);
   }
+
   static visualization_msgs::Marker items_maker;
 
   items_maker.points.clear();
@@ -298,7 +336,8 @@ void Docking::searchVType(const PointList & laser_data)
     if (-1.0 != m_line[i].line_k*m_line[i + 1].line_k /*&& m_line[i].line_k*m_line[i + 1].line_k<0*/)//如果不vertical
     {
       include_angle_k_modify = (m_line[i + 1].line_k - m_line[i].line_k) / (1.0 + m_line[i].line_k*m_line[i + 1].line_k);
-      double include_angle_rad = getIncludeAngleRad(m_line[i + 1].line_k, m_line[i].line_k);
+      include_angle_rad = getIncludeAngleRad(m_line[i + 1].line_k, m_line[i].line_k);
+      if(include_angle_rad < 0)include_angle_rad+=M_PI;
       if(include_angle_k_modify > 0)
         include_angle_k_modify=-include_angle_k_modify;//计算角度是锐角时，计算其补角（xielv互为相反数）
        deg_a_modify =  180+Rad2Deg( atan(include_angle_k_modify));
@@ -316,22 +355,76 @@ void Docking::searchVType(const PointList & laser_data)
         )//如果两条直线的夹角与ｖ板夹角不超过阈值
     {
       /// Todo: get the point
-      /// 两线交点
-     // double a1 = (m_line[i].lbegin_x - m_line[i].lend_x) / (m_line[i].lbegin_y - m_line[i].lend_y);
+      //double a1 = (m_line[i].lbegin_x - m_line[i].lend_x) / (m_line[i].lbegin_y - m_line[i].lend_y);
       //double b1 = m_line[i].lbegin_x - a1 * m_line[i].lbegin_y;
       //double a2 = (m_line[i+1].lbegin_x - m_line[i+1].lend_x) / (m_line[i+1].lbegin_y - m_line[i+1].lend_y);
       //double b2 = m_line[i + 1].lbegin_x - a2 * m_line[i + 1].lbegin_y;
       //robot2vy = (b1 - b2) / (a2 - a1);
       //robot2vx = a1 * robot2vy + b1;
-      Line a(m_line[i].line_k,-1,m_line[i].line_b);
-      Line b(m_line[i+1].line_k,-1,m_line[i+1].line_b);
+      //计算交点
+      Line a(-1,m_line[i].line_k,m_line[i].line_b);
+      Line b(-1,m_line[i+1].line_k,m_line[i+1].line_b);
       VecPosition cross = a.getIntersection(b);
       robot2vx= cross.getX();
       robot2vy= cross.getY();
-      double l1tocar_rad = fabs(atan(m_line[i].line_k));// limit to 0~pi/2
-      double half_angular_bisector = fabs((atan(m_line[i].line_k) - atan(m_line[i + 1].line_k))/2.0);// limit to 0~pi/2
-      double turn_w = l1tocar_rad - half_angular_bisector;
-      turn_w *= (robot2vy>0?1:-1);//车在左侧　y>0 ,w取正　左转　否则　取负
+      //计算角平分线的斜率
+      double angularb_k = getAngularBisector_k(m_line[i].line_k,m_line[i+1].line_k);
+      double l1_deg = Rad2Deg(atan(m_line[i].line_k));
+      double l2_deg = Rad2Deg(atan(m_line[i+1].line_k));
+      double angularb_k_deg = Rad2Deg(atan(angularb_k));
+      Line abiseline;
+      VecPosition verticalPoint;
+      //计算车子到角平分线的垂点
+      if(fabs(fabs(angularb_k)-MAXK) <0.00001)
+      {
+        verticalPoint.setX(cross.getX());
+        verticalPoint.setY(0);
+      }
+      else
+      {
+        double ang = atan(angularb_k);//角平分线有两个　互为垂线 tar.y 有正负两种，tar.x>0
+        abiseline = Line::makeLineFromPositionAndAngle(cross,Rad2Deg(ang));
+        verticalPoint = abiseline.getPointOnLineClosestTo(VecPosition(0,0));
+      }
+      //计算垂点沿着角平分线方向的一半距离偏移点
+      double dist = (verticalPoint-cross).getMagnitude();
+      VecPosition forward_point;
+      if(fabs(fabs(angularb_k)-MAXK) <0.00001){
+        int flag = robot2vy>0?1:-1;
+        forward_point.setX(verticalPoint.getX());
+        forward_point.setY(verticalPoint.getY()+(1-turn_ratio)*flag*dist);
+      }
+      else{
+        VecPosition addOn((1-turn_ratio)*dist,Rad2Deg(atan(angularb_k)),POLAR);
+        forward_point = verticalPoint+addOn;
+      }
+      std::vector<VecPosition> pub_points;
+      pub_points.push_back(verticalPoint);
+      pub_points.push_back(forward_point);
+      pub_points.push_back(cross);
+      double rgba[4]={0,244,0,1};
+      uint32_t shape = visualization_msgs::Marker::POINTS;
+      PubMark(odom_frame,"track target",shape,0.1,rgba,pub_points);
+      //计算偏转角＋M_PI/2
+       {
+        double dx=forward_point.getX();
+        double dy=forward_point.getY();
+
+        double rot=0.0;
+        if(dx>0)
+          rot = atan2(1.5*dy,dx);
+        else
+          rot =atan2(dy/1.5,dx);
+        ROS_INFO("forward heading x,y(%.4f,%.4f).rot deg:%.4f",dx,dy,Rad2Deg( rot));
+        HX = rot+M_PI/2;
+      }
+      m_target.x = robot2vx ;
+      m_target.y = robot2vy ;
+      #if 0 //method previous
+      //double l1tocar_rad = fabs(atan(m_line[i].line_k));// limit to 0~pi/2
+      //double half_angular_bisector = fabs((atan(m_line[i].line_k) - atan(m_line[i + 1].line_k))/2.0);// limit to 0~pi/2
+     // double turn_w = l1tocar_rad - half_angular_bisector;
+      //turn_w *= (robot2vy>0?1:-1);//车在左侧　y>0 ,w取正　左转　否则　取负
       //////////////////////////////////////////////////////////////////////////
       //if (pre_robot2v.x != init_target_dist)//disable by chq temp
       /*if ( fabs(pre_robot2v.x - init_target_dist) > 0.0001 )
@@ -376,6 +469,7 @@ void Docking::searchVType(const PointList & laser_data)
 
       m_target.x = robot2vx * sin(HX) - robot2vy * cos(HX);
       m_target.y = robot2vx * cos(HX) + robot2vy * sin(HX);
+      #endif
       ROS_INFO_STREAM("Docking::searchVType.The VType target in motion control cord: (" << m_target.x << "," << m_target.y << ")");
       //最新数据做比较，选较大的一个
       allx.push_back(m_target.x);
@@ -609,7 +703,8 @@ void Docking::motionPlanning()
             //else
             {
               _speedv = v_fast;
-              _speedw = mapToMinusPIToPI(HX - M_PI / 2.0) + m_target.y * 2.0;//mod by chq
+              _speedw = HX - M_PI / 2.0;//ver 2
+              //_speedw = mapToMinusPIToPI(HX - M_PI / 2.0) + m_target.y * 2.0;//mod by chq
               //  _speedw = 1.0 * m_target.y;
               //  _speedv = 0;
               //  _speedw = 0;
