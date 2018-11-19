@@ -53,6 +53,9 @@ public:
     init_pos.theta = a;
     recking_pos = init_pos;
   }
+  double normalizeRad(double angle_rad){
+    return atan2(sin(angle_rad),cos(angle_rad));
+  }
   comparedata calCoefficient(VecPosition v_a,VecPosition v_b,VecPosition v_c);
   void createTriangleTemplate();
   VecPosition calTrianglePoint(VecPosition a, VecPosition b,VecPosition c );
@@ -99,7 +102,7 @@ private:
   ros::Publisher marker_pos_pub;
   ros::Subscriber rfs_sub ;
   ros::Subscriber odom_sub ;
-   ros::Timer timer ;
+   ros::Timer timer,timer_cal ;
   boost::mutex odom_mut;
   boost::mutex cal_mut;
   boost::mutex mut_recking;

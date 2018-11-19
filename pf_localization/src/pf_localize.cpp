@@ -47,10 +47,12 @@ nh.param<double>("triangle_side_min_len",triangle_side_min_len,2);
 nh.param<double>("triangle_grouping_thread",triangle_grouping_thread,20);
 nh.param<double>("search_triangle_thread",search_triangle_thread,20);
 nh.param<double>("match_angle_thread",match_angle_thread,10);//deg
-nh.param<double>("match_dist_thread",match_dist_thread,0.3);
+nh.param<double>("match_dist_thread",match_dist_thread,0.4);
 nh.param<double>("score_thread",score_thread,0.9);
 
 timer= nh.createTimer(ros::Duration(0.01), boost::bind(&pfLocalize::deadReckingThread,this));
+timer_cal= nh.createTimer(ros::Duration(0.06), boost::bind(&pfLocalize::calGlobalPosThread,this));
+
 rfs_sub = nh.subscribe(rfs_topic,1,&pfLocalize::callBackRelativeRfs,this);
 odom_sub = nh.subscribe(odom_topic,1,&pfLocalize::callbackOdom,this);
 global_pos_pub = nh.advertise<geometry_msgs::Pose2D>(pos_topic,1);
@@ -62,7 +64,7 @@ void pfLocalize::localize(){
   loadRfsMap(map_name);
   createTriangleTemplate();
   //boost::thread recking_thread(boost::bind(&pfLocalize::deadReckingThread,this));
-  boost::thread calpos_thread(boost::bind(&pfLocalize::calGlobalPosThread,this));
+  //boost::thread calpos_thread(boost::bind(&pfLocalize::calGlobalPosThread,this));
 }
 
 void pfLocalize::callbackOdom(const nav_msgs::Odometry::ConstPtr& state_odata){
@@ -85,6 +87,7 @@ void pfLocalize::callBackRelativeRfs(const geometry_msgs::PoseArray::ConstPtr& r
 }
 void pfLocalize::deadReckingThread(){
   double delta_x,delta_y,theta,cur_theta,delta_theta,dt;
+  double r_x,r_y;
   static CountTime gcount_time;
   //ros::Rate r(100);
 //  while(nh.ok()){
@@ -92,17 +95,36 @@ void pfLocalize::deadReckingThread(){
     dt = gcount_time.getTime()/1000;//getTime is ms
     gcount_time.begin();
     //TODO need to optimize
+
     if(_re_deadrecking){
+      ///更新为全局坐标时，会打乱里程计的计时，从而影响到位置，角度的推算，
+      ///从而影响反光板的匹配，间接影响定位精度～！！！！(important!!!)
+      ///
+      /// 目前的处理是，一旦有全局位置更新进来，丢失上次计时（因为上次的参考点已经被更新了），
+      /// 更新本次位置为反光板匹配位置
       recking_pos = global_pos;
       _re_deadrecking = false;
-      //gcount_time.end();
-      //gcount_time.begin();//reset clock
+      gcount_time.end();
+      gcount_time.begin();//reset clock
       //continue;
-      //return;
+      ROS_INFO("dead recking.using golbal pos!");
+      return;
     }
 
     //已知：x,y为初始坐标，theta为初始角，(vx,vy),vtheta 为线速度和角速度
     theta = recking_pos.theta;
+
+    double temp_angle = theta;
+    static double last_angle_result=temp_angle;
+    double dec = last_angle_result-temp_angle;
+    dec =atan2(sin(dec),cos(dec));
+    if(fabs(dec) > M_PI/3  ){
+      ROS_INFO("may be meet error!");
+    }
+    else{
+      last_angle_result= temp_angle;
+    }
+
     delta_theta = m_cur_w * dt;
     cur_theta = theta + delta_theta;
     if ( fabs( m_cur_w ) < EPSILON )
@@ -112,8 +134,8 @@ void pfLocalize::deadReckingThread(){
     }
     else
     {
-      double r_x = m_cur_vec_x/m_cur_w;
-      double r_y = m_cur_vec_y/m_cur_w;
+       r_x = m_cur_vec_x/m_cur_w;
+       r_y = m_cur_vec_y/m_cur_w;
 
       delta_x = (  r_x * ( sin( cur_theta ) - sin( theta ) ) + r_y * ( cos( cur_theta ) - cos( theta ) ) ) ;
       delta_y = ( -r_x * ( cos( cur_theta ) - cos( theta ) ) + r_y * ( sin( cur_theta ) - sin( theta ) ) ) ;//注意，y方向上，前后偏移差值再取负，因为投影方向是向上为正
@@ -121,7 +143,7 @@ void pfLocalize::deadReckingThread(){
      recking_pos.x += delta_x;
      recking_pos.y += delta_y;
      recking_pos.theta = atan2(sin(cur_theta),cos(cur_theta));
-
+     ROS_INFO("deckrecking.x:%.6f,y:%.6f,rot_x radius:%.6f,ang(deg):%.3f",recking_pos.x,recking_pos.y,r_x,Rad2Deg( recking_pos.theta));
      //ros::Duration(0.01).sleep();
      ros::spinOnce();
      //r.sleep();
@@ -236,8 +258,9 @@ VecPosition pfLocalize::calTrianglePoint(VecPosition a, VecPosition b,VecPositio
   for(int i=0;i < candidate_rfs.size();i++){
     flash_candidate_rfs.push_back( std::make_pair(candidate_rfs[i],relative_candidate_rfs[i]) );
   }
-double rel_dist[mea_rfs.size()][flash_candidate_rfs.size()];
-double rel_angle[mea_rfs.size()][flash_candidate_rfs.size()];
+
+  double rel_dist[mea_rfs.size()][flash_candidate_rfs.size()];
+  double rel_angle[mea_rfs.size()][flash_candidate_rfs.size()];
   //try to match every measured rfs
   std::list<std::pair<int,VecPosition>>::iterator itr;
   for(int i=0;i < mea_rfs.size();i++){
@@ -263,7 +286,9 @@ double rel_angle[mea_rfs.size()][flash_candidate_rfs.size()];
       }
     }
   }
-
+  if(matched_mea_rfs.size()&&matched_mea_rfs.size()<3){
+    ROS_ERROR("WARNNING!!!getMatchedMeaRfs size below 3!");
+  }
   if(matched_mea_rfs.empty()){
     ROS_ERROR("error to match!");
   }
@@ -322,31 +347,47 @@ double rel_angle[mea_rfs.size()][flash_candidate_rfs.size()];
  //到三个反光板点的距离的方差越小，，越利于减少定位计算误差
  int pfLocalize::getMinIndex( std::vector< std::vector<std::pair<int,int> > >& group){
   int k = 0;
-  double var_k,var_i,dist0,dist1,dist2,mean_dist = 0;
+  double var_k,var_i,dist0,dist1,dist2,mean_dist,angle0,angle1,angle2,rel_ang01,rel_ang02,rel_ang12,ang_delta,ang_delta_k = 0;
+  angle0=mea_rfs[group[0][0].second].getDirection();
+  angle1=mea_rfs[group[0][1].second].getDirection();
+  angle2=mea_rfs[group[0][2].second].getDirection();
 
-  dist0=mea_rfs[group[0][0].second].getMagnitude();
-  dist1=mea_rfs[group[0][1].second].getMagnitude();
-  dist2=mea_rfs[group[0][2].second].getMagnitude();
-  mean_dist =(dist0+dist1+dist2)/3.;
-  var_k = pow(dist0-mean_dist,2)+pow(dist1-mean_dist,2)+pow(dist2-mean_dist,2);
+  rel_ang01 = fabs(normalizeRad(angle0-angle1));
+  rel_ang02 = fabs(normalizeRad(angle0-angle2));
+  rel_ang12 = fabs(normalizeRad(angle1-angle2));
+  //每个三角形夹角最大减去最小的偏差越小，三角形形状越偏向于等边三角形
+  //（按照距离可能会出现三个点都偏离中心点（如落在以激光头为中心，测距为半径的圆上），非等边形）
+  ang_delta_k = max(max(rel_ang01,rel_ang02),rel_ang12)-min(min(rel_ang01,rel_ang02),rel_ang12);
+
+  //
+  //dist0=mea_rfs[group[0][0].second].getMagnitude();
+  //dist1=mea_rfs[group[0][1].second].getMagnitude();
+  //dist2=mea_rfs[group[0][2].second].getMagnitude();
+  //mean_dist =(dist0+dist1+dist2)/3.;
+  //var_k = pow(dist0-mean_dist,2)+pow(dist1-mean_dist,2)+pow(dist2-mean_dist,2);
 
   for(int i = 1; i < group.size(); i++)//limit the size is 5
   {
-    dist0=mea_rfs[group[i][0].second].getMagnitude();
-    dist1=mea_rfs[group[i][1].second].getMagnitude();
-    dist2=mea_rfs[group[i][2].second].getMagnitude();
-    mean_dist =(dist0+dist1+dist2)/3.;
-    var_i = pow(dist0-mean_dist,2)+pow(dist1-mean_dist,2)+pow(dist2-mean_dist,2);
+    angle0=mea_rfs[group[i][0].second].getDirection();
+    angle1=mea_rfs[group[i][1].second].getDirection();
+    angle2=mea_rfs[group[i][2].second].getDirection();
 
-    if( var_i < var_k ){
+    rel_ang01 = fabs(normalizeRad(angle0-angle1));
+    rel_ang02 = fabs(normalizeRad(angle0-angle2));
+    rel_ang12 = fabs(normalizeRad(angle1-angle2));
+
+    ang_delta = max(max(rel_ang01,rel_ang02),rel_ang12)-min(min(rel_ang01,rel_ang02),rel_ang12);
+
+    if( ang_delta < ang_delta_k ){
       k = i;
-      var_k = var_i;
+      ang_delta_k = ang_delta;
     }
   }
   return k;
   }
 
-  int pfLocalize::getOptimizeTriangle(std::vector<std::pair<int,int> > matched_rfs,std::vector<std::pair<int,int> >& best){
+  int pfLocalize::getOptimizeTriangle(std::vector<std::pair<int,int> > matched_rfs,
+                                      std::vector<std::pair<int,int> >& best){
   int size = matched_rfs.size();
    //std::pair<set<int>,VecPosition> first:the rfs index in map,second: the measured rfs abs cord
   std::vector<std::vector<std::pair<int,int> > > good_group;
@@ -407,41 +448,88 @@ double rel_angle[mea_rfs.size()][flash_candidate_rfs.size()];
    double r_b_angle = relative_v_b.getDirection();
    double r_c_angle = relative_v_c.getDirection();
 
+   double theta[3];
    //atan2(v_a.getY(),v_a.getX()) the abs angle bet  the map rfs and  measured rfs
-   double theta1 = Deg2Rad( v_a.getDirection()-r_a_angle );
-   double theta2 = Deg2Rad( v_b.getDirection()-r_b_angle );
-   double theta3 = Deg2Rad( v_c.getDirection()-r_c_angle );
+    theta[0] = Deg2Rad( v_a.getDirection()-r_a_angle );
+    theta[1] = Deg2Rad( v_b.getDirection()-r_b_angle );
+    theta[2] = Deg2Rad( v_c.getDirection()-r_c_angle );
    //nomorlize angle
-   theta1 = atan2(sin(theta1),cos(theta1));
-   theta2 = atan2(sin(theta2),cos(theta2));
-   theta3 = atan2(sin(theta3),cos(theta3));
+    for(int i=0;i<3;i++)
+     theta[i] = atan2(sin(theta[i]),cos(theta[i]));
 
-   angle_result = (theta1+theta2+theta3)/3;
+    double sum_neg=0.0;double sum_pos=0.0;
+    int cnt_neg=0;int cnt_pos=0;
+
+    for(int i=0;i<3;i++){
+      if(theta[i]<0){
+        sum_neg+=theta[i];
+        cnt_neg++;
+      }
+      else{
+        sum_pos+=theta[i];
+      }
+    }
+   cnt_pos=3-cnt_neg;
+   if(cnt_neg>1)sum_neg/=cnt_neg;
+   if(cnt_pos>1)sum_pos/=cnt_pos;
+   //如果有正有负，负的归一化到０－２*pi,两者相减，超过pi,正角减去平均，否则正角加上平均
+   if( sum_neg*sum_pos < 0){
+     double delta_pos=(sum_pos-sum_neg)/2;
+     double temp_neg=sum_neg+2*M_PI;
+     if(temp_neg-sum_pos>M_PI)
+       angle_result-=delta_pos;
+     else
+       angle_result+=delta_pos;
+   }
+   else{
+     angle_result=cnt_neg>0?sum_neg:sum_pos;
+   }
+
+   angle_result = atan2(sin(angle_result),cos(angle_result));
+
+   //double temp_angle = (angle_result <-0.5*M_PI)?(angle_result+2*M_PI):angle_result;
+   double temp_angle = angle_result;
+   static double last_angle_result=temp_angle;
+   double dec = last_angle_result-temp_angle;
+   dec =atan2(sin(dec),cos(dec));
+   if(fabs(dec) > M_PI/3  ){
+     ROS_INFO("may be meet error!");
+   }
+   else{
+     last_angle_result= temp_angle;
+   }
+
    return angle_result;
  }
+
 void pfLocalize::calGlobalPosThread(){
-  ros::Rate r(50);
+  //ros::Rate r(100);
+  static CountTime tim;
+  tim.begin();
+
+
   double angle_result;
   VecPosition cord_result;
   std::vector<std::pair<int,int> > best ;
   std::vector<std::pair<int,int> > matched_mea_rfs;
 
-  while(nh.ok()){
+  //while(nh.ok()){
     ///update
-    best.clear();
-    matched_mea_rfs.clear();
-    {
+
+   // {
       boost::mutex::scoped_lock l(cal_mut);
+     // best.clear();
+      //matched_mea_rfs.clear();
       cur_recking_pos = recking_pos;//update cur recking pos for calculating
       mea_rfs = _rfs;//update cur measured rfs for calculating
-    }
+    //}
     ///get the matched rfs correspond to map rfs
     getMatchedMeaRfs(matched_mea_rfs);
     if(mea_rfs.empty()){
       ROS_ERROR("ERROR!!!pfLocalize::calGlobalPosThread.no measured rfs.Using recking pos!.");
     }
     if( matched_mea_rfs.size() < 3 ){
-      ROS_WARN("WARNING!!!pfLocalize::calGlobalPosThread.matched_mea_rfs size:%d,no enough matched rfs.Using recking pos!.",matched_mea_rfs.size());
+      ROS_ERROR("WARNING!!!pfLocalize::calGlobalPosThread.matched_mea_rfs size:%d,no enough matched rfs.Using recking pos!.",matched_mea_rfs.size());
       global_pos_pub.publish(recking_pos);
     }
     else{
@@ -481,10 +569,12 @@ void pfLocalize::calGlobalPosThread(){
 
       }
     }
-
-    r.sleep();
+    tim.end();
+    double dt = tim.getTime();
+    //ROS_INFO("calGolbalPosThread.waster time(ms):%.6f",dt);
+   // r.sleep();
     ros::spinOnce();
-  }
+  //}
 }
 
 
