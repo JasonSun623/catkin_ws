@@ -1361,6 +1361,7 @@ int Circle::getIntersectionPoints( Circle c, VecPosition *p1, VecPosition *p2)
     // a is distance between p0 and point that is the intersection point P2
     // that intersects P0-P1 and the line that crosses the two intersection
     // points P3 and P4.
+    // chq.P3 P4 is the potential two cross point whit circle 1 and 2,the p2 is cross point bet the line p0-p1 and line p3-p4
     // Define two triangles: P0,P2,P3 and P1,P2,P3.
     // with distances a, h, r0 and b, h, r1 with d = a + b
     // We know a^2 + h^2 = r0^2 and b^2 + h^2 = r1^2 which then gives

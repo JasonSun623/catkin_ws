@@ -1,25 +1,26 @@
 
 #ifndef PF_FILTER_SCAN_
 #define PF_FILTER_SCAN_
-
-#include <iostream>
 #include <ros/ros.h>
+#include <iostream>
 #include <vector>
 #include <utility>
 #include <list>
 #include <stdio.h>
 #include <math.h>
+#include <boost/thread.hpp>
+#include <std_msgs/String.h>
+#include <geometry_msgs/Pose.h>
 #include <sensor_msgs/LaserScan.h>
-
 #include "Geometry.h"
 
 using namespace std;
-
+namespace filter_rfs_center_space {
 /**
  * @class scanCluster
  *
  * @brief record the raw scan data. including angle ,dist and echo value
- * the data will be process by the filterScan class
+ * the data will be process by the FilterRfsCenter class
  */
 struct scanCluster{
 public:
@@ -53,23 +54,35 @@ private:
 };
 
 /**
- * @class filterScan
+ * @class FilterRfsCenter
  *
- * @brief the filterScan used for grouping the scan data into some reflectors
+ * @brief the FilterRfsCenter used for grouping the scan data into some reflectors
  * it also cal the center the center of rfs and also optimizes the center result
  * 依据激光强度数据实现对反光板的提取与反光板中心精确计算
  */
-class filterScan{
+class FilterRfsCenter{
 public:
-  filterScan();
-  filterScan(double reflector_radius,int echo_thread,double step,double err_thread);
+  FilterRfsCenter();
+  FilterRfsCenter(bool judge_by_dist,double reflector_radius,int echo_thread,double step,double err_thread);
+  FilterRfsCenter& operator() (FilterRfsCenter b){
+
+    this->_judge_by_dist=b._judge_by_dist;
+    this->_rf_radius=b._rf_radius;
+    this->_echo=b._echo;
+    this->_step=b._step;
+    this->_err=b._err;
+    return (*this);
+  }
   /**
    * @brief the public func for calculating the rfs center called by user
    * @param raw_scan raw scan data published by laser scan
    * @return v_reflectors the rfs center pos in laser cord
    */
   void getReflectorsCenter(const std::vector<sensor_msgs::LaserScan> & raw_scan,std::vector<VecPositionDir> & v_reflectors);
-
+  //void callBackScan(const sensor_msgs::LaserScan & scan);
+  //void callbackOdom(const nav_msgs::Odometry::ConstPtr& state_odata);
+  //void pubPos(const std::vector<VecPositionDir>& v_optrfs_center);
+  //void compensateScanMoveDist(double *angle,double *dist);
 private:
   //按照激光强度分布，将激光数据分成若干组，每一组代表一个激光反光板
   void groupingScan(const std::vector<sensor_msgs::LaserScan> &raw_scan,
@@ -101,16 +114,41 @@ private:
     //k 就是对应下标
     return k;
     }
+  double mapToMinusPIToPI( double angle )
+  {
+    double angle_overflow = static_cast<double>( static_cast<int>(angle / M_PI ) );
+
+    if( angle_overflow > 0.0 )
+    {
+      //ceil函数。ceil(x)返回的是大于x的最小整数。
+      angle_overflow = ceil( angle_overflow / 2.0 );
+    }
+    else
+    {
+      //floor(x)返回的是小于或等于x的最大整数。
+      angle_overflow = floor( angle_overflow / 2.0 );
+    }
+
+    angle -= 2 * M_PI * angle_overflow;
+    return angle;
+  }
   //依据输入x,y 和激光相对位置数据，计算要移动的左右上下方向
   void move_center( std::list<VecPositionDir> & relative_pointclounds,
                    const double x,const double y,const double _step,int &kx,int &ky,double& sum);
+  bool _judge_by_dist;//直接通过距离判断反光板
   int _echo;
   double _rf_radius;
   double _step;
   double _err;
+  int scan_num=0;
+
+
   std::vector<std::list<scanCluster> >  _reflectors_group;
   std::vector<std::list<VecPositionDir> > _relative_pointclounds;
   static const int sampe_limit_par1 = 15;
   static const int sampe_limit_par2 = 24;
+
 };
+}
+
 #endif

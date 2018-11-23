@@ -1,16 +1,24 @@
-#include "pf_filtercenter/filterscan.h"
+#include "filter_rfs_center.h"
 // NB: a penalty will be applied if one of the constraints is > 0
 // using the default adaptation to constraint(s) method
+using namespace filter_rfs_center_space;
+ FilterRfsCenter::FilterRfsCenter(){
+   //ros::NodeHandle nh_("~");
 
- filterScan::filterScan(){
+   _judge_by_dist=true;//直接通过距离判断反光板
+   _echo=100;
+  _rf_radius=0.025;
+  _step=0.0005;
+   _err=0.0011;
+    ROS_INFO_STREAM("pf_filter.construct.init done!");
 }
 
-filterScan::filterScan(double reflector_radius,int echo_thread,double step,double err_thread):
-  _rf_radius(reflector_radius),_echo(echo_thread),_step(step),_err(err_thread){
+ FilterRfsCenter::FilterRfsCenter(bool judge_by_dist,double reflector_radius,int echo_thread,double step,double err_thread):
+   _judge_by_dist(judge_by_dist),_echo(echo_thread),_step(step),_err(err_thread),_rf_radius(reflector_radius){
+ }
 
-}
 
-void filterScan::getReflectorsCenter(const std::vector<sensor_msgs::LaserScan> & raw_scan,
+void FilterRfsCenter::getReflectorsCenter(const std::vector<sensor_msgs::LaserScan> & raw_scan,
                                     std::vector<VecPositionDir> & v_reflectors){
   std::vector<VecPositionDir> v_reflectors_center;
   groupingScan(raw_scan,_reflectors_group);
@@ -19,7 +27,7 @@ void filterScan::getReflectorsCenter(const std::vector<sensor_msgs::LaserScan> &
   getOptimizedCenter(v_reflectors_center,_relative_pointclounds,v_reflectors);
 }
 
-void filterScan::groupingScan(const std::vector<sensor_msgs::LaserScan>& raw_scan,
+void FilterRfsCenter::groupingScan(const std::vector<sensor_msgs::LaserScan>& raw_scan,
                   std::vector<std::list<scanCluster> > & v_reflectors_group){
   //average the dist
   v_reflectors_group.clear();
@@ -28,11 +36,14 @@ void filterScan::groupingScan(const std::vector<sensor_msgs::LaserScan>& raw_sca
   avegrage_scan = raw_scan[0];
   double sum_dist =.0;
   double sum_echo =.0;
-  int length = raw_scan[0].ranges.size();
+  double dist_min = raw_scan[0].range_min;
+  double dist_max = raw_scan[0].range_max;
+
+  scan_num = raw_scan[0].ranges.size();
   int size_v = raw_scan.size();
   //平均化几个连续激光束
   if(size_v >= 2){
-    for(int i = 0 ;i < length;i++){//laser dist data index
+    for(int i = 0 ;i < scan_num;i++){//laser dist data index
       sum_dist = .0;
       sum_echo = .0;
       for(int j = 0; j < size_v; j++)//laser index
@@ -50,12 +61,24 @@ void filterScan::groupingScan(const std::vector<sensor_msgs::LaserScan>& raw_sca
   //但是对于很远处，可能会存在只要间隔就是另一个反光板
   int diff_cnt = 0;
   bool last_is_diff= false;
-  for(int i = 0; i < length ; i++){
+  for(int i = 0; i < scan_num ; i++){
     double angle = avegrage_scan.angle_min + i * avegrage_scan.angle_increment;
+    double dist = avegrage_scan.ranges[i];
     //超过强度阈值　当前组插入新数据点
-    if(avegrage_scan.intensities[i] > _echo){
+    bool is_rf;
+    if(_judge_by_dist){
+      is_rf =(dist<dist_max &&dist>dist_min )?true:false;
+    }
+    else
+    {
+      is_rf =( avegrage_scan.intensities[i] > _echo)?true:false;
+    }
+    if(is_rf){
+
       last_is_diff  = false;
-      one_group_scan.push_back(scanCluster(angle,avegrage_scan.ranges[i],avegrage_scan.intensities[i]));
+     //TODO we do not need compsate every scan beam ,for saving time,only need to update every rfs center!!!
+      //compensateScanMoveDist(&angle,&dist);
+      one_group_scan.push_back(scanCluster(angle,dist,avegrage_scan.intensities[i]));
     }
     else{
       //如果上次也低于阈值,继续累计
@@ -82,10 +105,12 @@ void filterScan::groupingScan(const std::vector<sensor_msgs::LaserScan>& raw_sca
 
     }
   }
-  ROS_INFO("pf_filter.grouping scan.group num: %d",v_reflectors_group.size());
+  //ROS_INFO("pf_filter.grouping scan.group num: %d",v_reflectors_group.size());
 
 }
-void filterScan::trimmingScanGroup(std::vector<std::list<scanCluster> > & v_reflectors_group){
+
+
+void FilterRfsCenter::trimmingScanGroup(std::vector<std::list<scanCluster> > & v_reflectors_group){
   std::vector<std::list<scanCluster> > v_rf ;
   // step o
   for(int i = 0;i < v_reflectors_group.size();i++){
@@ -116,7 +141,7 @@ void filterScan::trimmingScanGroup(std::vector<std::list<scanCluster> > & v_refl
   v_reflectors_group = v_rf;
 }
 
-void filterScan::getInitCenter(const std::vector<std::list<scanCluster> > & v_reflectors_group,
+void FilterRfsCenter::getInitCenter(const std::vector<std::list<scanCluster> > & v_reflectors_group,
                    std::vector<VecPositionDir>& v_reflectors_center){
   v_reflectors_center.clear();
   int cnt;
@@ -140,10 +165,10 @@ void filterScan::getInitCenter(const std::vector<std::list<scanCluster> > & v_re
     double c_y = new_dist * sin(sum_angle);
     v_reflectors_center.push_back(VecPositionDir(c_x,c_y,sum_angle));//store the angle for cal the relative pcl in getRelativePointClouds fun
   }
-  ROS_INFO_STREAM("filterscan.v_rfs_center.size():" << v_reflectors_center.size() );
+  //ROS_INFO_STREAM("filterscan.v_rfs_center.size():" << v_reflectors_center.size() );
 }
 
-void filterScan::getRelativePointClouds(const std::vector<std::list<scanCluster> > & v_reflectors_group,
+void FilterRfsCenter::getRelativePointClouds(const std::vector<std::list<scanCluster> > & v_reflectors_group,
                             const std::vector<VecPositionDir>& v_reflectors_center,
                             std::vector<std::list<VecPositionDir> >& relative_pointclounds){
   int cnt = v_reflectors_group.size();
@@ -170,7 +195,7 @@ void filterScan::getRelativePointClouds(const std::vector<std::list<scanCluster>
   }
 
 }
-void filterScan::getFourDirValue( const std::list<VecPositionDir> &relative_pointclounds,
+void FilterRfsCenter::getFourDirValue( const std::list<VecPositionDir> &relative_pointclounds,
                        VecPositionDir cen,double *array){
 
   std::list<VecPositionDir>::const_iterator it = relative_pointclounds.begin();
@@ -183,7 +208,7 @@ void filterScan::getFourDirValue( const std::list<VecPositionDir> &relative_poin
     array[4] += pow( ( sqrt( pow( ( it->getX() - cen_x ),2 ) + pow( (it->getY() - (cen_y-_step ) ),2 ) ) - _rf_radius),2);
   }
 }
-void filterScan::move_center( std::list<VecPositionDir> & relative_pointclounds,
+void FilterRfsCenter::move_center( std::list<VecPositionDir> & relative_pointclounds,
                  const double x,const double y,const double _step,int &kx,int &ky,double& sum){
   //双向搜索
 
@@ -222,7 +247,7 @@ void filterScan::move_center( std::list<VecPositionDir> & relative_pointclounds,
 
 }
 
-void filterScan::getOptimizedCenter(const std::vector<VecPositionDir>& v_pre_center,
+void FilterRfsCenter::getOptimizedCenter(const std::vector<VecPositionDir>& v_pre_center,
                         const std::vector<std::list<VecPositionDir> > &relative_pointclounds,
                          std::vector<VecPositionDir>& v_opt_center
                         ){
@@ -322,7 +347,7 @@ void filterScan::getOptimizedCenter(const std::vector<VecPositionDir>& v_pre_cen
 
   //when we get the optimized center group in relative cordinate ,now we transform them to sick head cord
   for(int i = 0; i < len_group; i++ ){
-    ROS_INFO("pf_scanfilter.moveventer rf index:%d,err(mm)(sqrt):%.5f",i,1000*sqrt(fabs(v_new_center[i].angle())));
+    ROS_INFO("pf_scanfilter.movecenter rf index:%d,err(mm)(sqrt):%.5f",i,1000*sqrt(fabs(v_new_center[i].angle())));
     VecPositionDir new_relative_cen ( v_new_center[i]);
     VecPositionDir new_origin_cen( v_pre_center[i] );
     VecPosition tmp_p = new_relative_cen.relativeToGlobal(new_origin_cen,v_pre_center[i].angle());

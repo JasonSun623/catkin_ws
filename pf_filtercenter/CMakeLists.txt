@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8.3)
 project(pf_filtercenter)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
- add_compile_options(-std=c++11)
+add_compile_options(-std=c++11)
 #add for debug
 #第一句保证了CXXFLAGS被加上了-g
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
@@ -108,10 +108,9 @@ find_package(Boost REQUIRED COMPONENTS system thread)
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
-#  INCLUDE_DIRS include
-#  LIBRARIES pf_filtercenter
-#  CATKIN_DEPENDS roscpp std_msgs
-#  DEPENDS system_lib
+#CATKIN_DEPENDS roscpp nav_msgs std_msgs sensor_msgs geometry_msgs
+INCLUDE_DIRS include
+LIBRARIES ${PROJECT_NAME}
 )
 
 ###########
@@ -128,25 +127,31 @@ include_directories(
 )
 
 ## Declare a C++ library
-# add_library(${PROJECT_NAME}
-#   src/${PROJECT_NAME}/pf_filtercenter.cpp
-# )
-
+set(Project_File_Lib
+ src/Geometry.cpp
+ src/filter_rfs_center.cpp
+)
+add_library(${PROJECT_NAME} ${Project_File_Lib})
+target_link_libraries(${PROJECT_NAME}
+  ${catkin_LIBRARIES}
+  ${Boost_LIBRARIES}
+)
 ## Add cmake target dependencies of the library
 ## as an example, code may need to be generated before libraries
 ## either from message generation or dynamic reconfigure
-# add_dependencies(${PROJECT_NAME} ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+add_dependencies(${PROJECT_NAME} ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
 
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
 set(Project_File
  src/main.cpp
- src/Geometry.cpp
- src/filterscan.cpp
 )
  add_executable(${PROJECT_NAME}_node  ${Project_File})
-
+ target_link_libraries(${PROJECT_NAME}_node
+  ${PROJECT_NAME}
+ )
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
 ## target back to the shorter version for ease of user use
@@ -158,10 +163,9 @@ set(Project_File
 # add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Specify libraries to link a library or executable target against
- target_link_libraries(${PROJECT_NAME}_node
-   ${catkin_LIBRARIES}
-   ${Boost_LIBRARIES}
- )
+target_link_libraries(${PROJECT_NAME}_node
+ ${PROJECT_NAME}
+)
 
 #############
 ## Install ##
@@ -178,28 +182,29 @@ set(Project_File
 # )
 
 ## Mark executables and/or libraries for installation
-# install(TARGETS ${PROJECT_NAME} ${PROJECT_NAME}_node
-#   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-#   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-#   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-# )
+ install(TARGETS ${PROJECT_NAME} ${PROJECT_NAME}_node
+   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+ )
 
 ## Mark cpp header files for installation
-# install(DIRECTORY include/${PROJECT_NAME}/
-#   DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
-#   FILES_MATCHING PATTERN "*.h"
-#   PATTERN ".svn" EXCLUDE
-# )
+ install(DIRECTORY include/pf_filtercenter/
+   DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
+   PATTERN ".svn" EXCLUDE
+ )
 
 ## Mark other files for installation (e.g. launch and bag files, etc.)
-# install(FILES
-#   # myfile1
-#   # myfile2
-#   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
-# )
-
+ install(FILES
+   launch/rfs_loc.launch
+   # myfile2
+   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+ )
+#install(DIRECTORY launch
+#    DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+#    )
 #############
-## Testing ##
+## Testing ##${CMAKE_THREAD_LIBS_INIT}
 #############
 
 ## Add gtest based cpp test target and link libraries
