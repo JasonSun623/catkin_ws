@@ -21,8 +21,9 @@
 #include "calthreearc.h"
 #include "Geometry.h"
 #include "CountTime.hpp"
+#include <pf_filtercenter/filter_rfs_center.h>
 
-
+using namespace filter_rfs_center_space;
 struct comparedata{
   comparedata(){}
   comparedata(double l,double dx,double p){
@@ -56,11 +57,32 @@ public:
   double normalizeRad(double angle_rad){
     return atan2(sin(angle_rad),cos(angle_rad));
   }
+  double mapToMinusPIToPI( double angle )
+  {
+    double angle_overflow = static_cast<double>( static_cast<int>(angle / M_PI ) );
+
+    if( angle_overflow > 0.0 )
+    {
+      //ceil函数。ceil(x)返回的是大于x的最小整数。
+      angle_overflow = ceil( angle_overflow / 2.0 );
+    }
+    else
+    {
+      //floor(x)返回的是小于或等于x的最大整数。
+      angle_overflow = floor( angle_overflow / 2.0 );
+    }
+
+    angle -= 2 * M_PI * angle_overflow;
+    return angle;
+  }
   comparedata calCoefficient(VecPosition v_a,VecPosition v_b,VecPosition v_c);
   void createTriangleTemplate();
   VecPosition calTrianglePoint(VecPosition a, VecPosition b,VecPosition c );
   void calGlobalPosThread();
   void deadReckingThread();
+  void compensateRfsUsedDelay(std::vector<VecPosition>& mea_rfs,double dt);
+  void compensateScanRecDelay(std::vector<VecPositionDir>& mea_rfs,double loop_time);
+
   int getMinIndex( std::vector< std::vector<std::pair<int,int> > >& group);
   double getScore( comparedata & comp);
   //评价匹配到的反光板，选出最优的三个反光板（三角形）,相对坐标系下的
@@ -70,7 +92,9 @@ public:
   //将实测反光板与地图中的反光板进行一一匹配，匹配上的添加到匹配列表，内容包括匹配的地图反光板索引和对应的测量反光板在绝对坐标系下的位置
   void getMatchedMeaRfs(std::vector<std::pair<int,int> > & matched_mea_rfs);//loc pos(base_link) ,real measured rfs
   void callbackOdom(const nav_msgs::Odometry::ConstPtr& state_odata);
-  void callBackRelativeRfs(const geometry_msgs::PoseArray::ConstPtr& rfs_data);
+  //void callBackRelativeRfs(const geometry_msgs::PoseArray::ConstPtr& rfs_data);
+  void callBackScan(const sensor_msgs::LaserScan & scan);
+
 private:
   double m_cur_vec_x,m_cur_vec_y,m_cur_w;
   double lrange1,lrange2,lrange3,lrange4;
@@ -92,6 +116,9 @@ private:
   std::vector<VecPosition> mea_rfs;//cur _rfs
   std::map<set<int>,comparedata> _triangle_template;
   bool _re_deadrecking;
+  int scan_update_fre;//laser scan frequency
+  double compensate_time;//when cal global pos the delay time bet when the rfs be used and the rfs msg arrived
+  CountTime compensate_timer;
   geometry_msgs::Pose2D recking_pos;
   geometry_msgs::Pose2D init_pos;
   geometry_msgs::Pose2D global_pos;
@@ -102,7 +129,8 @@ private:
   ros::Publisher marker_pos_pub;
   ros::Subscriber rfs_sub ;
   ros::Subscriber odom_sub ;
-   ros::Timer timer,timer_cal ;
+  ros::Subscriber scan_sub;
+  ros::Timer timer,timer_cal ;
   boost::mutex odom_mut;
   boost::mutex cal_mut;
   boost::mutex mut_recking;
@@ -112,6 +140,27 @@ private:
   std::string pos_frame ;
   std::string pos_topic ;
   std::string rfs_topic ;
-   std::string odom_topic ;
+  std::string odom_topic ;
+
+  ///for filter rfs center---start
+  ros::Publisher pub_rfs_center;
+  boost::mutex scan_lock_;
+  std::string scan_topic;
+  std::string scan_frame ;
+  std::string pub_rfs_topic;
+  geometry_msgs::PoseArray rfs_pos_pub;
+  std::vector<sensor_msgs::LaserScan> raw_scan;
+  std::vector<VecPositionDir> v_optrfs_center;
+  int _echo;
+  int pub_rate;
+  int _fiter_scan_num;
+
+  bool if_pub_marker;
+  bool _judge_by_dist;//直接通过距离判断反光板
+  double _rf_radius;
+  double _step;
+  double _err;
+  ///for filter rfs center---end
+  FilterRfsCenter filter;
 } ;
 #endif

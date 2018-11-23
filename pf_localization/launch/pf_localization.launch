@@ -1,0 +1,41 @@
+<?xml version="1.0"?>
+<launch>
+<arg name="filter_scan_name" default="filter_scan"/>
+
+<!-- load robot base urdf and simlulation -->
+<include file="$(find pf_localization)/launch/R2D2_base_for_localization.launch" />
+<!-- filter the invalid data -->
+<node pkg="filter_scan" type="filter_scan_node" name="filter_scan" output="screen" >
+    <param name="pre_scan_topic" value="scan" />
+    <param name="new_scan_topic" value="$(arg filter_scan_name)" />
+    <param name="max_beam_dist" value="6.0" />
+    <param name="min_beam_dist" value="0.001" />
+  </node>
+<!--get the reflectors cord center by the raw scan data  -->
+  <!--node name="pf_filtercenter" pkg="pf_filtercenter" type="pf_filtercenter_node">
+    <- -if judge the rfs by dist - ->
+    <param name="judge_by_dist" value="true"/>
+    <param name="scan_frame" value="hokuyo_link"/>
+    <param name="scan_topic" value="filter_scan"/>
+    <param name="odom_topic" value="/wheel_diff_controller/odom"/>
+    <- -if judge the rfs by echo ,then the give echo thred papa - ->
+    <param name="echo_thread" value="100"/>
+    <param name="reflector_radius" value="0.025"/>
+    <- -search optimize center step (unit in m) - ->
+    <param name="step" value="0.0005"/>
+    <param name="pub_rate" value="20"/>
+    <- -end condition- ->
+    <param name="err_thread" value="0.0011"/>
+   </node>
+-->
+<!-- 
+cal the robot scan pos by the rfs data
+-->
+   <!--node name="pf_localization" pkg="pf_localization" type="pf_localization_node" >
+     <param name="map_name" value="$(find pf_localization)/map/rfs.map"/>
+     <param name="init_pos_x" value="-2.87"/>
+     <param name="init_pos_y" value="-5.87"/>
+   
+     <param name="init_pos_angle" value="1.403"/>
+   </node-->
+</launch>

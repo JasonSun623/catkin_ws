@@ -3,6 +3,21 @@
 pfLocalize::pfLocalize(){
 _re_deadrecking = false;
 ros::NodeHandle private_nh("~");
+
+ ///for filter rfs center---start
+ private_nh.param<int>("scan_update_fre",scan_update_fre,30);
+ private_nh.param<int>("fiter_scan_num", _fiter_scan_num, 1);
+ private_nh.param<bool>("if_pub_marker",if_pub_marker,true);
+ private_nh.param<bool>("judge_by_dist", _judge_by_dist, true);//直接通过距离判断反光板
+ private_nh.param<int>("echo_thread", _echo, 100);
+ private_nh.param<double>("reflector_radius",_rf_radius,0.025);
+ private_nh.param<double>("step",_step,0.0005);
+ private_nh.param<double>("err_thread",_err,0.0011);
+ private_nh.param<std::string>("pub_rfs_topic", pub_rfs_topic, "pf_reflectors");
+ private_nh.param<std::string>("scan_frame", scan_frame, "hokuyo_link");
+ private_nh.param<std::string>("scan_topic", scan_topic, "filter_scan");
+///for filter rfs center---end
+
 private_nh.param<std::string>("map_name",map_name,"/home/hdros/catkin_ws/src/pf_localization/map/rfs.map");
 private_nh.param<std::string>("pos_frame",pos_frame,"base_link");
 private_nh.param<std::string>("pos_topic",pos_topic,"pose");
@@ -49,11 +64,15 @@ nh.param<double>("search_triangle_thread",search_triangle_thread,20);
 nh.param<double>("match_angle_thread",match_angle_thread,10);//deg
 nh.param<double>("match_dist_thread",match_dist_thread,0.4);
 nh.param<double>("score_thread",score_thread,0.9);
+nh.param<int>("scan_update_fre",scan_update_fre,30);
+
+filter(FilterRfsCenter(_judge_by_dist,_rf_radius,_echo,_step,_err));
 
 timer= nh.createTimer(ros::Duration(0.01), boost::bind(&pfLocalize::deadReckingThread,this));
 timer_cal= nh.createTimer(ros::Duration(0.06), boost::bind(&pfLocalize::calGlobalPosThread,this));
-
-rfs_sub = nh.subscribe(rfs_topic,1,&pfLocalize::callBackRelativeRfs,this);
+pub_rfs_center = nh.advertise<geometry_msgs::PoseArray>(pub_rfs_topic,1,true);
+scan_sub = nh.subscribe(scan_topic,100,&pfLocalize::callBackScan,this);
+//rfs_sub = nh.subscribe(rfs_topic,1,&pfLocalize::callBackRelativeRfs,this);
 odom_sub = nh.subscribe(odom_topic,1,&pfLocalize::callbackOdom,this);
 global_pos_pub = nh.advertise<geometry_msgs::Pose2D>(pos_topic,1);
 recking_pos = init_pos;
@@ -74,7 +93,48 @@ void pfLocalize::callbackOdom(const nav_msgs::Odometry::ConstPtr& state_odata){
   m_cur_vec_y = odo.twist.twist.linear.y;
   m_cur_w = odo.twist.twist.angular.z;
 }
-void pfLocalize::callBackRelativeRfs(const geometry_msgs::PoseArray::ConstPtr& rfs_data){
+void  pfLocalize::callBackScan(const sensor_msgs::LaserScan & scan){
+  boost::mutex::scoped_lock l(scan_lock_);
+  static CountTime timer;//compensate the time scan received delay
+  static int push_num = 0;
+  if( push_num < _fiter_scan_num ){
+    raw_scan.push_back(scan);
+    push_num++;
+  }
+  else{
+    raw_scan.pop_back();
+    raw_scan.push_back(scan);
+  }
+
+  //cal the cneter of rfs
+  filter.getReflectorsCenter(raw_scan,v_optrfs_center);
+  timer.end();
+  double dt = timer.getTime()/1000.0;
+  compensateScanRecDelay(v_optrfs_center,dt);
+  ROS_INFO("pfLocalize::callBackScan.the scan reced delay time:%.6f(ms)",dt*1000);
+  std::vector<VecPosition> temp_rfs;
+  rfs_pos_pub.poses.clear();
+  rfs_pos_pub.header.frame_id = scan_frame;
+  geometry_msgs::Pose pose;
+  for (int i = 0;i < v_optrfs_center.size(); i++){
+    temp_rfs.push_back( VecPosition(v_optrfs_center[i]) );
+
+     pose.position.x = v_optrfs_center[i].getX();
+     pose.position.y = v_optrfs_center[i].getY();
+     pose.position.z = 0;
+     rfs_pos_pub.poses.push_back(pose);
+  }
+  pub_rfs_center.publish(rfs_pos_pub);
+  _rfs=temp_rfs;
+  //calGlobalPosThread();
+  //getPubPos(v_optrfs_center,rfs_pos,items_MarkerArray);
+  //ROS_INFO("pfLocalize.rate:%.3f(ms).rfs num:%d",dt*1000,v_optrfs_center.size());
+  //ROS_INFO_STREAM("pfLocalize.push scan size:" << raw_scan.size() );
+  timer.begin();
+  compensate_timer.begin();
+}
+
+/*void pfLocalize::callBackRelativeRfs(const geometry_msgs::PoseArray::ConstPtr& rfs_data){
   boost::mutex::scoped_lock l(rfs_mut);
   static std::vector<VecPosition> temp_rfs;
   temp_rfs.clear();
@@ -83,8 +143,11 @@ void pfLocalize::callBackRelativeRfs(const geometry_msgs::PoseArray::ConstPtr& r
     temp_rfs.push_back( VecPosition(v_pos.poses[i].position.x,v_pos.poses[i].position.y) );
   }
   _rfs=temp_rfs;
+  //when the rfs msg arrived we start the compensate_timer
+  //when we used the rfs msg ,we stop then timer
+  compensate_timer.begin();
 
-}
+}*/
 void pfLocalize::deadReckingThread(){
   double delta_x,delta_y,theta,cur_theta,delta_theta,dt;
   double r_x,r_y;
@@ -102,12 +165,15 @@ void pfLocalize::deadReckingThread(){
       ///
       /// 目前的处理是，一旦有全局位置更新进来，丢失上次计时（因为上次的参考点已经被更新了），
       /// 更新本次位置为反光板匹配位置
+      double dx = recking_pos.x-global_pos.x;
+      double dy = recking_pos.y-global_pos.y;
+      ROS_INFO("uopate golbal pos to recking pos!err dx,dy:(%.6f,%.6f)",dx,dy);
       recking_pos = global_pos;
       _re_deadrecking = false;
       gcount_time.end();
       gcount_time.begin();//reset clock
       //continue;
-      ROS_INFO("dead recking.using golbal pos!");
+
       return;
     }
 
@@ -143,9 +209,11 @@ void pfLocalize::deadReckingThread(){
      recking_pos.x += delta_x;
      recking_pos.y += delta_y;
      recking_pos.theta = atan2(sin(cur_theta),cos(cur_theta));
-     ROS_INFO("deckrecking.x:%.6f,y:%.6f,rot_x radius:%.6f,ang(deg):%.3f",recking_pos.x,recking_pos.y,r_x,Rad2Deg( recking_pos.theta));
+     //ROS_INFO("deckrecking.x:%.6f,y:%.6f,rot_x radius:%.6f,ang(deg):%.3f",recking_pos.x,recking_pos.y,r_x,Rad2Deg( recking_pos.theta));
      //ros::Duration(0.01).sleep();
+
      ros::spinOnce();
+
      //r.sleep();
   //}
 }
@@ -183,8 +251,8 @@ void pfLocalize::createTriangleTemplate(){
   double i_j_dist,i_k_dist,j_k_dist;
   double len,mean,dx,max_side,min_side,p;
   Line a;
-  for(int i = 0; i < map_rfs_size;i++){
-    for(int j = i+1; j < map_rfs_size ;j++ ){
+  for(int i = 0; i < map_rfs_size-2;i++){
+    for(int j = i+1; j < map_rfs_size-1 ;j++ ){
       i_j_dist = map_rfs[j].getDistanceTo(map_rfs[i]);
       if( i_j_dist > triangle_grouping_thread || i_j_dist < triangle_side_min_len  ){
         if(i_j_dist < triangle_side_min_len)
@@ -288,7 +356,7 @@ VecPosition pfLocalize::calTrianglePoint(VecPosition a, VecPosition b,VecPositio
   }
   if(matched_mea_rfs.size()&&matched_mea_rfs.size()<3){
     ROS_ERROR("WARNNING!!!getMatchedMeaRfs size below 3!");
-  }
+ }
   if(matched_mea_rfs.empty()){
     ROS_ERROR("error to match!");
   }
@@ -347,17 +415,26 @@ VecPosition pfLocalize::calTrianglePoint(VecPosition a, VecPosition b,VecPositio
  //到三个反光板点的距离的方差越小，，越利于减少定位计算误差
  int pfLocalize::getMinIndex( std::vector< std::vector<std::pair<int,int> > >& group){
   int k = 0;
-  double var_k,var_i,dist0,dist1,dist2,mean_dist,angle0,angle1,angle2,rel_ang01,rel_ang02,rel_ang12,ang_delta,ang_delta_k = 0;
+  //double var_k,var_i,dist0,dist1,dist2,mean_dist;
+  double angle0,angle1,angle2,rel_ang01,rel_ang02,rel_ang12,ang_delta,ang_delta_k = 0;
   angle0=mea_rfs[group[0][0].second].getDirection();
   angle1=mea_rfs[group[0][1].second].getDirection();
   angle2=mea_rfs[group[0][2].second].getDirection();
+  //set to 0~360
+  if(angle0<0)angle0+=360;
+  if(angle1<0)angle1+=360;
+  if(angle2<0)angle2+=360;
 
-  rel_ang01 = fabs(normalizeRad(angle0-angle1));
-  rel_ang02 = fabs(normalizeRad(angle0-angle2));
-  rel_ang12 = fabs(normalizeRad(angle1-angle2));
+  rel_ang01 = fabs(angle0-angle1);
+  rel_ang02 = fabs(angle0-angle2);
+  rel_ang12 = fabs(angle1-angle2);
+  //取角度小于１８0的角
+  if(rel_ang01>180)rel_ang01=360-rel_ang01;
+  if(rel_ang02>180)rel_ang02=360-rel_ang02;
+  if(rel_ang12>180)rel_ang12=360-rel_ang12;
   //每个三角形夹角最大减去最小的偏差越小，三角形形状越偏向于等边三角形
   //（按照距离可能会出现三个点都偏离中心点（如落在以激光头为中心，测距为半径的圆上），非等边形）
-  ang_delta_k = max(max(rel_ang01,rel_ang02),rel_ang12)-min(min(rel_ang01,rel_ang02),rel_ang12);
+  ang_delta_k = pow(rel_ang01-120,2)+pow(rel_ang02-120,2)+pow(rel_ang12-120,2);
 
   //
   //dist0=mea_rfs[group[0][0].second].getMagnitude();
@@ -371,12 +448,21 @@ VecPosition pfLocalize::calTrianglePoint(VecPosition a, VecPosition b,VecPositio
     angle0=mea_rfs[group[i][0].second].getDirection();
     angle1=mea_rfs[group[i][1].second].getDirection();
     angle2=mea_rfs[group[i][2].second].getDirection();
+    //all set to 0~360
+    if(angle0<0)angle0+=360;
+    if(angle1<0)angle1+=360;
+    if(angle2<0)angle2+=360;
 
-    rel_ang01 = fabs(normalizeRad(angle0-angle1));
-    rel_ang02 = fabs(normalizeRad(angle0-angle2));
-    rel_ang12 = fabs(normalizeRad(angle1-angle2));
-
-    ang_delta = max(max(rel_ang01,rel_ang02),rel_ang12)-min(min(rel_ang01,rel_ang02),rel_ang12);
+    rel_ang01 = fabs(angle0-angle1);
+    rel_ang02 = fabs(angle0-angle2);
+    rel_ang12 = fabs(angle1-angle2);
+    //取角度小于１８0的角
+    if(rel_ang01>180)rel_ang01=360-rel_ang01;
+    if(rel_ang02>180)rel_ang02=360-rel_ang02;
+    if(rel_ang12>180)rel_ang12=360-rel_ang12;
+    //每个三角形夹角最大减去最小的偏差越小，三角形形状越偏向于等边三角形
+    //（按照距离可能会出现三个点都偏离中心点（如落在以激光头为中心，测距为半径的圆上），非等边形）
+    ang_delta = pow(rel_ang01-120,2)+pow(rel_ang02-120,2)+pow(rel_ang12-120,2);
 
     if( ang_delta < ang_delta_k ){
       k = i;
@@ -395,8 +481,8 @@ VecPosition pfLocalize::calTrianglePoint(VecPosition a, VecPosition b,VecPositio
   VecPosition v_loc_pos(cur_recking_pos.x,cur_recking_pos.y);
   std::vector<VecPosition > _mea_rfs = mea_rfs;//value transform
   double cur_recking_angle = cur_recking_pos.theta;
-   for(int i = 0; i < size; i++){
-     for(int j = i+1; j < size; j++){
+   for(int i = 0; i < size-2; i++){
+     for(int j = i+1; j < size-1; j++){
        for(int k = j+1; k < size; k++){
          int a[3]={matched_rfs[i].first,matched_rfs[j].first,matched_rfs[k].first};//get the index
          std::set<int> _set(a,a+3);
@@ -411,7 +497,8 @@ VecPosition pfLocalize::calTrianglePoint(VecPosition a, VecPosition b,VecPositio
            comparedata mea_rfs_triangle = calCoefficient(v_a,v_b,v_c);
            comparedata comp = mea_rfs_triangle - _triangle_template[_set];
           //超过一定阈值的放入待筛选列表
-           if( getScore(comp) > score_thread){
+           //if( getScore(comp) > score_thread)//disable temp
+           {
              std::vector<std::pair<int,int> > one_group;
              one_group.push_back(matched_rfs[i]);
              one_group.push_back(matched_rfs[j]);
@@ -422,7 +509,8 @@ VecPosition pfLocalize::calTrianglePoint(VecPosition a, VecPosition b,VecPositio
        }
      }
    }
-  //找出最优的三角形(等边最好)
+
+   //找出最优的三角形(等边最好)
    int best_index;
    if(good_group.size()){
      best_index = getMinIndex(good_group);
@@ -501,6 +589,74 @@ VecPosition pfLocalize::calTrianglePoint(VecPosition a, VecPosition b,VecPositio
 
    return angle_result;
  }
+ void pfLocalize::compensateScanRecDelay(std::vector<VecPositionDir>& mea_rfs,double loop_time){
+
+   static double every_angle_waster_t = (1.0/(double)scan_update_fre)/360;
+   static double min_scan_period = (1.0/(double)scan_update_fre);
+   if(loop_time < min_scan_period)return ;//below to scan period we no not compensate
+
+   std::vector<VecPositionDir> temp_rfs;
+   for(int i =0 ;i < mea_rfs.size();i++){
+     double cur_angle = mea_rfs[i].getDirection();
+     if( cur_angle < 0 ) cur_angle+=360;
+     double dt = (loop_time - min_scan_period)+(360-cur_angle)*every_angle_waster_t;
+
+     double theta = 0;
+     double delta_theta = m_cur_w * dt;//因为里程计更新速度足够快，我们认为里程计是准的,忽略了延迟
+     double cur_theta = delta_theta+theta ;
+     double delta_x,delta_y;
+
+     if ( fabs( m_cur_w ) < EPSILON )
+     {// fit the condition that there is no rotate speed
+       delta_x = (m_cur_vec_x * cos(theta) - m_cur_vec_y * sin(theta) ) * dt;
+       delta_y = (m_cur_vec_x * sin(theta) + m_cur_vec_y * cos(theta) ) * dt;
+     }
+     else
+     {
+       double r_x = m_cur_vec_x/m_cur_w;
+       double r_y = m_cur_vec_y/m_cur_w;
+
+       delta_x = (  r_x * ( sin( cur_theta ) - sin( theta ) ) + r_y * ( cos( cur_theta ) - cos( theta ) ) ) ;
+       delta_y = ( -r_x * ( cos( cur_theta ) - cos( theta ) ) + r_y * ( sin( cur_theta ) - sin( theta ) ) ) ;//注意，y方向上，前后偏移差值再取负，因为投影方向是向上为正
+     }
+     VecPosition scan_pre=mea_rfs[i];
+     VecPosition new_origin(delta_x,delta_y);
+     VecPosition scan_new = scan_pre.globalToRelative(new_origin,Rad2Deg( cur_theta) );
+     temp_rfs.push_back(VecPositionDir(scan_new,mea_rfs[i].angle()));
+   }
+   mea_rfs = temp_rfs;
+ }
+
+ void pfLocalize::compensateRfsUsedDelay(std::vector<VecPosition>& mea_rfs,double dt){
+   if(dt < EPSILON)return ;//below to scan period we no not compensate
+   std::vector<VecPosition> temp_rfs;
+   for(int i =0 ;i < mea_rfs.size();i++){
+
+     double theta =0;
+     double delta_theta = m_cur_w * dt;//因为里程计更新速度足够快，我们认为里程计是准的,忽略了延迟
+     double cur_theta = delta_theta+theta ;
+     double delta_x,delta_y;
+
+     if ( fabs( m_cur_w ) < EPSILON )
+     {// fit the condition that there is no rotate speed
+       delta_x = (m_cur_vec_x * cos(theta) - m_cur_vec_y * sin(theta) ) * dt;
+       delta_y = (m_cur_vec_x * sin(theta) + m_cur_vec_y * cos(theta) ) * dt;
+     }
+     else
+     {
+       double r_x = m_cur_vec_x/m_cur_w;
+       double r_y = m_cur_vec_y/m_cur_w;
+
+       delta_x = (  r_x * ( sin( cur_theta ) - sin( theta ) ) + r_y * ( cos( cur_theta ) - cos( theta ) ) ) ;
+       delta_y = ( -r_x * ( cos( cur_theta ) - cos( theta ) ) + r_y * ( sin( cur_theta ) - sin( theta ) ) ) ;//注意，y方向上，前后偏移差值再取负，因为投影方向是向上为正
+     }
+     VecPosition scan_pre=mea_rfs[i];
+     VecPosition new_origin(delta_x,delta_y);
+     VecPosition scan_new = scan_pre.globalToRelative(new_origin,Rad2Deg( cur_theta) );
+     temp_rfs.push_back(scan_new);
+   }
+   mea_rfs = temp_rfs;
+ }
 
 void pfLocalize::calGlobalPosThread(){
   //ros::Rate r(100);
@@ -517,11 +673,17 @@ void pfLocalize::calGlobalPosThread(){
     ///update
 
    // {
+  ///disable lock temp
       boost::mutex::scoped_lock l(cal_mut);
      // best.clear();
       //matched_mea_rfs.clear();
       cur_recking_pos = recking_pos;//update cur recking pos for calculating
       mea_rfs = _rfs;//update cur measured rfs for calculating
+      compensate_timer.end();//the compensate_timer will be restarted by callBackScan fun when the new rfs be caled
+      double comp_dt = compensate_timer.getTime()/1000.0;
+      ROS_INFO("cal global pos.the rfs used delay time:%.6f(ms)",comp_dt*1000);
+      compensateRfsUsedDelay(mea_rfs,comp_dt);
+
     //}
     ///get the matched rfs correspond to map rfs
     getMatchedMeaRfs(matched_mea_rfs);
@@ -571,7 +733,7 @@ void pfLocalize::calGlobalPosThread(){
     }
     tim.end();
     double dt = tim.getTime();
-    //ROS_INFO("calGolbalPosThread.waster time(ms):%.6f",dt);
+    ROS_INFO("calGolbalPosThread.waster time(ms):%.6f",dt);
    // r.sleep();
     ros::spinOnce();
   //}
