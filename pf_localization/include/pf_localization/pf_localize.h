@@ -18,12 +18,19 @@
 #include <tf/transform_listener.h>
 #include <visualization_msgs/Marker.h>
 #include <tf/transform_listener.h>
+
+// given the three abs cord rfs and their dist to robot,cal the robot abs pos
 #include "calthreearc.h"
+
 #include "Geometry.h"
 #include "CountTime.hpp"
 #include <pf_filtercenter/filter_rfs_center.h>
 
 using namespace filter_rfs_center_space;
+/**
+ * @struct comparedata
+ * @brief record the triangle para such as the len of three sides,their variance,and the side ratio bet largest side and the least side
+ */
 struct comparedata{
   comparedata(){}
   comparedata(double l,double dx,double p){
@@ -42,12 +49,29 @@ struct comparedata{
   double _p;
 };
 
+/**
+ * @class pfLocalize
+ * @brief reflectors localize proc.use the reflectors scan data to get every center of the rfs and according them to loc robot pos
+ */
 class pfLocalize{
 
 public:
+  /**
+   * @brief Default constructor
+   */
   pfLocalize();
+  /**
+   * @brief call this fun to active loc thread
+   */
   void localize();
-  void loadRfsMap(string name);
+  /**
+   * @brief accoring the excited map,we record them in memory for matching laterly,and according this we will also pre construct the triangles bet them under limit dist lately
+   */
+  void loadRfsMap(std::string name);
+  /**
+   * @brief the first step to loc  ,given a better init pos to start mathching the rfs in map to the rfs measured
+   * @param x,y,a init pos: x,y,theta
+   */
   void setInitPos(double x,double y,double a){
     init_pos.x = x;
     init_pos.y = y;
@@ -75,28 +99,65 @@ public:
     angle -= 2 * M_PI * angle_overflow;
     return angle;
   }
-  comparedata calCoefficient(VecPosition v_a,VecPosition v_b,VecPosition v_c);
-  void createTriangleTemplate();
-  VecPosition calTrianglePoint(VecPosition a, VecPosition b,VecPosition c );
-  void calGlobalPosThread();
-  void deadReckingThread();
-  void compensateRfsUsedDelay(std::vector<VecPosition>& mea_rfs,double dt);
-  void compensateScanRecDelay(std::vector<VecPositionDir>& mea_rfs,double loop_time);
 
+  /**
+   * @brief given three cords ,cal the para about the triangle sides length,side variance,and the ratio bet max side len and min len
+   * @param v_a,v_b,v_c,three cord
+   */
+  comparedata calCoefficient(VecPosition v_a,VecPosition v_b,VecPosition v_c);
+
+ /**
+ * @brief given the rfs maps cord info ,pre construct the triangles template bet them under limit dist lately
+ */
+  VecPosition calTrianglePoint(VecPosition a, VecPosition b,VecPosition c );
+  /**
+   * @brief the rfs global localization thread
+   * use the dead recking pos and the newest measured rfs to cal the loc pos
+   * the rfs measured data will be delayed when we used so need to compensate according the delta bet the time rfs measured and the time be used
+   */
+  void calGlobalPosThread();
+  /**
+   * @brief odom dead recking thread .we think the  pos will be more accurate in short time (the time bet the global loc thread end and restart)
+   * the start pos will be updated when the new cald global pos by calGlobalPosThread is coming
+   */
+  void deadReckingThread();
+  /**
+   * @brief Compensate the delay time from the rfs info be used(in calGlobalPosThread) to the rfs be caled (in callBackScan)
+   */
+  void compensateRfsUsedDelay(std::vector<VecPosition>& mea_rfs,double dt);
+  /**
+   * @brief Compensate the diff time "A" bet every scan frame,and the same time *B* from  the scannging complate to the scan be received in call back func
+   * A:0 deg will be compensate with (360-0)*(1/scan_fre),360 deg will be compsate with (360-3600)*(1/scan_fre)
+   * B:all deg from 0 to 360 will be compensate by (cur scan received  time - last scan received time)-(1/scan_fre)
+   */
+  void compensateScanRecDelay(std::vector<VecPositionDir>& mea_rfs,double loop_time);
+  /**
+   * @brief For the matched triangles, find out include angles bet the lines constructed by robot pos and the triangle point  whose angles are most close to 120 degrees.
+   */
   int getMinIndex( std::vector< std::vector<std::pair<int,int> > >& group);
+  /**
+   * @brief given the score limit,select the triangles which comparedata para is fullfill
+   */
   double getScore( comparedata & comp);
-  //评价匹配到的反光板，选出最优的三个反光板（三角形）,相对坐标系下的
+  /**
+   * @brief 评价匹配到的反光板，选出最优的三个反光板（三角形）,相对坐标系下的
+   */
   int getOptimizeTriangle(std::vector<std::pair<int,int> > matched_rfs, std::vector<std::pair<int,int> >& best);
-  //根据计算出来的坐标　和匹配到的三角形，测量三角形　计算车身方向
+  /**
+   * @brief 根据计算出来的坐标　和匹配到的三角形，测量三角形　计算车身方向
+   */
+
   double getOptimizeAngle(std::vector<std::pair<int,int> > result,VecPosition cord_result);
-  //将实测反光板与地图中的反光板进行一一匹配，匹配上的添加到匹配列表，内容包括匹配的地图反光板索引和对应的测量反光板在绝对坐标系下的位置
+  /**
+   * @brief 将实测反光板与地图中的反光板进行一一匹配，匹配上的添加到匹配列表，内容包括匹配的地图反光板索引和对应的测量反光板在绝对坐标系下的位置
+   */
   void getMatchedMeaRfs(std::vector<std::pair<int,int> > & matched_mea_rfs);//loc pos(base_link) ,real measured rfs
   void callbackOdom(const nav_msgs::Odometry::ConstPtr& state_odata);
   //void callBackRelativeRfs(const geometry_msgs::PoseArray::ConstPtr& rfs_data);
   void callBackScan(const sensor_msgs::LaserScan & scan);
 
 private:
-  double m_cur_vec_x,m_cur_vec_y,m_cur_w;
+  double m_cur_vec_x,m_cur_vec_y,m_cur_w;//the trans velocity and the rot velocity cal by odom data
   double lrange1,lrange2,lrange3,lrange4;
   double dxrange1,dxrange2,dxrange3,dxrange4;
   double prange1,prange2,prange3,prange4;
@@ -115,13 +176,13 @@ private:
   std::vector<VecPosition> _rfs;
   std::vector<VecPosition> mea_rfs;//cur _rfs
   std::map<set<int>,comparedata> _triangle_template;
-  bool _re_deadrecking;
-  int scan_update_fre;//laser scan frequency
+  bool _re_deadrecking;//when the global pos is caled successfully,set _re_deadrecking be true to force the dead recking restart
+  int scan_update_fre;//laser scan frequency(property data not set data)
   double compensate_time;//when cal global pos the delay time bet when the rfs be used and the rfs msg arrived
   CountTime compensate_timer;
-  geometry_msgs::Pose2D recking_pos;
-  geometry_msgs::Pose2D init_pos;
-  geometry_msgs::Pose2D global_pos;
+  geometry_msgs::Pose2D recking_pos;//odom recking pos
+  geometry_msgs::Pose2D init_pos;//
+  geometry_msgs::Pose2D global_pos;//caled by calGlobalPosThread
   geometry_msgs::Pose2D cur_recking_pos;
 
   ros::NodeHandle nh;
@@ -150,11 +211,10 @@ private:
   std::string pub_rfs_topic;
   geometry_msgs::PoseArray rfs_pos_pub;
   std::vector<sensor_msgs::LaserScan> raw_scan;
-  std::vector<VecPositionDir> v_optrfs_center;
+  std::vector<VecPositionDir> v_optrfs_center;//the optimized rfs center data
   int _echo;
   int pub_rate;
   int _fiter_scan_num;
-
   bool if_pub_marker;
   bool _judge_by_dist;//直接通过距离判断反光板
   double _rf_radius;

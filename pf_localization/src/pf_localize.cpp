@@ -110,6 +110,7 @@ void  pfLocalize::callBackScan(const sensor_msgs::LaserScan & scan){
   filter.getReflectorsCenter(raw_scan,v_optrfs_center);
   timer.end();
   double dt = timer.getTime()/1000.0;
+  //补偿不同帧激光点采样时间存在的不同时间差　以及采样后到接收到存在的相同时间差
   compensateScanRecDelay(v_optrfs_center,dt);
   ROS_INFO("pfLocalize::callBackScan.the scan reced delay time:%.6f(ms)",dt*1000);
   std::vector<VecPosition> temp_rfs;
@@ -126,11 +127,10 @@ void  pfLocalize::callBackScan(const sensor_msgs::LaserScan & scan){
   }
   pub_rfs_center.publish(rfs_pos_pub);
   _rfs=temp_rfs;
-  //calGlobalPosThread();
   //getPubPos(v_optrfs_center,rfs_pos,items_MarkerArray);
   //ROS_INFO("pfLocalize.rate:%.3f(ms).rfs num:%d",dt*1000,v_optrfs_center.size());
-  //ROS_INFO_STREAM("pfLocalize.push scan size:" << raw_scan.size() );
   timer.begin();
+  //记录每次计算到反光板时的时间，在全局定位线程中会终止此定时器，用于补偿从反光板计算到　到　使用　存在的时间差　导致的反光板测量时移
   compensate_timer.begin();
 }
 
@@ -292,10 +292,7 @@ void pfLocalize::createTriangleTemplate(){
   }
 
 }
-VecPosition pfLocalize::calTrianglePoint(VecPosition a, VecPosition b,VecPosition c ){
-  VecPosition p;
-  return p;
-}
+
  void pfLocalize::getMatchedMeaRfs(std::vector<std::pair<int,int> > &matched_mea_rfs){
 //TODO given the relative bet map and base_link how can we adjust the relation bet map and odom(we only know the relationship bet odom ->base_link->scan)
 //这里temp简化为全局位置就是激光头位置（激光相对于base_link无偏差）
