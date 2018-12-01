@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<launch>
+<arg name="filter_scan_name" default="filter_scan"/>
+
+<!-- load robot base urdf and simlulation -->
+<include file="$(find pf_mapping)/launch/R2D2_base_for_pf_mapping.launch" />
+<!-- filter the invalid data -->
+<node pkg="filter_scan" type="filter_scan_node" name="filter_scan" output="screen" >
+    <param name="pre_scan_topic" value="scan" />
+    <param name="new_scan_topic" value="$(arg filter_scan_name)" />
+    <param name="max_beam_dist" value="6.0" />
+    <param name="min_beam_dist" value="0.001" />
+  </node>
+
+<!-- 
+cal the robot scan pos by the rfs data
+-->
+   <!--node name="pf_mapping" pkg="pf_mapping" type="pf_mapping_node" >
+     <param name="map_name" value="$(find pf_mapping)/map/rfs.map"/>
+     <param name="init_pos_x" value="-2.87"/>
+     <param name="init_pos_y" value="-5.87"/>
+     <param name="init_pos_angle" value="1.403"/>
+   </node-->
+</launch>
