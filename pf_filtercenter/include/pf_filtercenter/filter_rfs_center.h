@@ -1,4 +1,6 @@
-
+// Copyright (c) 2018, Pepperl+Fuchs Cal Rfs center @Houdar Company
+// Copyright (c) 2018, @author CaiHuaQiang
+// All rights reserved.
 #ifndef PF_FILTER_SCAN_
 #define PF_FILTER_SCAN_
 #include <ros/ros.h>
@@ -61,6 +63,7 @@ private:
  * 依据激光强度数据实现对反光板的提取与反光板中心精确计算
  */
 class FilterRfsCenter{
+
 public:
   FilterRfsCenter();
   FilterRfsCenter(bool judge_by_dist,double reflector_radius,int echo_thread,double step,double err_thread);
@@ -71,6 +74,7 @@ public:
     this->_echo=b._echo;
     this->_step=b._step;
     this->_err=b._err;
+    this->_cluster_min_num = b._cluster_min_num;
     return (*this);
   }
   /**
@@ -141,13 +145,13 @@ private:
   double _step;
   double _err;
   int scan_num=0;
-
+  int _cluster_min_num;//聚类作为一组反光板数据的最小激光点数
 
   std::vector<std::list<scanCluster> >  _reflectors_group;
   std::vector<std::list<VecPositionDir> > _relative_pointclounds;
   static const int sampe_limit_par1 = 15;
   static const int sampe_limit_par2 = 24;
-
+  ros::NodeHandle nh;
 };
 }
 

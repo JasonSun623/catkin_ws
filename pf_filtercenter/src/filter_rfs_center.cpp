@@ -3,14 +3,14 @@
 // using the default adaptation to constraint(s) method
 using namespace filter_rfs_center_space;
  FilterRfsCenter::FilterRfsCenter(){
-   //ros::NodeHandle nh_("~");
-
-   _judge_by_dist=true;//直接通过距离判断反光板
-   _echo=100;
-  _rf_radius=0.025;
-  _step=0.0005;
-   _err=0.0011;
-    ROS_INFO_STREAM("pf_filter.construct.init done!");
+  //ros::NodeHandle private_nh("~");
+  nh.param<int>("cluster_min_num",_cluster_min_num,3);
+  nh.param<bool>("judge_by_dist",_judge_by_dist,true);
+  nh.param<int>("echo",_echo,100);
+  nh.param<double>("rf_radius",_rf_radius,0.025);
+  nh.param<double>("search_step",_step,0.0005);
+  nh.param<double>("err_thread",_err,0.0011);
+  ROS_INFO_STREAM("pf_filter.construct.init done!");
 }
 
  FilterRfsCenter::FilterRfsCenter(bool judge_by_dist,double reflector_radius,int echo_thread,double step,double err_thread):
@@ -94,10 +94,10 @@ void FilterRfsCenter::groupingScan(const std::vector<sensor_msgs::LaserScan>& ra
       }
       //如果连续两次是低于阈值，则步本簇数据采样完成
       if( diff_cnt >= 2 ){
-        if(one_group_scan.size()){
+        if(one_group_scan.size()>_cluster_min_num){//only when the num beyond min cluster num,they can be treate rfs scan
           v_reflectors_group.push_back(one_group_scan);
-          one_group_scan.clear();
         }
+         one_group_scan.clear();
       }
       else{
         continue;

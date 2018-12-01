@@ -1,7 +1,10 @@
 #include "pf_localize.h"
+namespace pf_localization_space {
+
 
 pfLocalize::pfLocalize(){
 _re_deadrecking = false;
+_run_loc_thread = false;
 ros::NodeHandle private_nh("~");
 
  ///for filter rfs center---start
@@ -18,6 +21,7 @@ ros::NodeHandle private_nh("~");
  private_nh.param<std::string>("scan_topic", scan_topic, "filter_scan");
 ///for filter rfs center---end
 
+private_nh.param<std::string>("map_frame",map_frame,"/map");
 private_nh.param<std::string>("map_name",map_name,"/home/hdros/catkin_ws/src/pf_localization/map/rfs.map");
 private_nh.param<std::string>("pos_frame",pos_frame,"base_link");
 private_nh.param<std::string>("pos_topic",pos_topic,"pose");
@@ -66,7 +70,7 @@ nh.param<double>("match_dist_thread",match_dist_thread,0.4);
 nh.param<double>("score_thread",score_thread,0.9);
 nh.param<int>("scan_update_fre",scan_update_fre,30);
 
-filter(FilterRfsCenter(_judge_by_dist,_rf_radius,_echo,_step,_err));
+//filter(FilterRfsCenter(_judge_by_dist,_rf_radius,_echo,_step,_err));
 
 timer= nh.createTimer(ros::Duration(0.01), boost::bind(&pfLocalize::deadReckingThread,this));
 timer_cal= nh.createTimer(ros::Duration(0.06), boost::bind(&pfLocalize::calGlobalPosThread,this));
@@ -74,14 +78,16 @@ pub_rfs_center = nh.advertise<geometry_msgs::PoseArray>(pub_rfs_topic,1,true);
 scan_sub = nh.subscribe(scan_topic,100,&pfLocalize::callBackScan,this);
 //rfs_sub = nh.subscribe(rfs_topic,1,&pfLocalize::callBackRelativeRfs,this);
 odom_sub = nh.subscribe(odom_topic,1,&pfLocalize::callbackOdom,this);
-global_pos_pub = nh.advertise<geometry_msgs::Pose2D>(pos_topic,1);
-recking_pos = init_pos;
+global_pos_pub = nh.advertise<geometry_msgs::PoseStamped>(pos_topic,1);
+
 
 }
 
 void pfLocalize::localize(){
   loadRfsMap(map_name);
   createTriangleTemplate();
+  recking_pos = init_pos;
+  run();
   //boost::thread recking_thread(boost::bind(&pfLocalize::deadReckingThread,this));
   //boost::thread calpos_thread(boost::bind(&pfLocalize::calGlobalPosThread,this));
 }
@@ -152,6 +158,10 @@ void pfLocalize::deadReckingThread(){
   double delta_x,delta_y,theta,cur_theta,delta_theta,dt;
   double r_x,r_y;
   static CountTime gcount_time;
+  if(!_run_loc_thread){
+    ROS_DEBUG("wait for running.do not start dead recking thread");
+    return;
+   }
   //ros::Rate r(100);
 //  while(nh.ok()){
     gcount_time.end();
@@ -293,10 +303,15 @@ void pfLocalize::createTriangleTemplate(){
 
 }
 
- void pfLocalize::getMatchedMeaRfs(std::vector<std::pair<int,int> > &matched_mea_rfs){
+ void pfLocalize::getMatchedMeaRfs(std::vector<VecPosition> mea_rfs,std::vector<std::pair<int,int> > &matched_mea_rfs){
 //TODO given the relative bet map and base_link how can we adjust the relation bet map and odom(we only know the relationship bet odom ->base_link->scan)
 //这里temp简化为全局位置就是激光头位置（激光相对于base_link无偏差）
   VecPosition abs_mea_rfs;
+  std::vector<VecPosition> cur_map_rfs;
+  {
+     boost::mutex::scoped_lock l(temp_mut);
+     cur_map_rfs= map_rfs;
+  }
   VecPosition v_loc_pos(cur_recking_pos.x,cur_recking_pos.y);
 
   std::vector<int> candidate_rfs;//record candidate rfs index
@@ -307,14 +322,14 @@ void pfLocalize::createTriangleTemplate(){
   matched_mea_rfs.clear();
 
   //小于匹配搜索半径，作为待匹配项(store index)
-  for(int i= 0;i < map_rfs.size();i++){
-    if( v_loc_pos.getDistanceTo(map_rfs[i]) < search_triangle_thread )
+  for(int i= 0;i < cur_map_rfs.size();i++){
+    if( v_loc_pos.getDistanceTo(cur_map_rfs[i]) < search_triangle_thread )
       candidate_rfs.push_back(i);
   }
 
   //rot to relative cord for comparing
   for(int i= 0;i < candidate_rfs.size(); i++){
-    VecPosition p = map_rfs[candidate_rfs[i]]-v_loc_pos;
+    VecPosition p = cur_map_rfs[candidate_rfs[i]]-v_loc_pos;
     p.rotate(-Rad2Deg(cur_recking_pos.theta));
     relative_candidate_rfs.push_back(p);
   }
@@ -409,7 +424,7 @@ void pfLocalize::createTriangleTemplate(){
    }
    return sum;
  }
- //到三个反光板点的距离的方差越小，，越利于减少定位计算误差
+
  int pfLocalize::getMinIndex( std::vector< std::vector<std::pair<int,int> > >& group){
   int k = 0;
   //double var_k,var_i,dist0,dist1,dist2,mean_dist;
@@ -474,6 +489,11 @@ void pfLocalize::createTriangleTemplate(){
   int size = matched_rfs.size();
    //std::pair<set<int>,VecPosition> first:the rfs index in map,second: the measured rfs abs cord
   std::vector<std::vector<std::pair<int,int> > > good_group;
+  std::map<set<int>,comparedata> cur_triangle_template;
+  {
+    boost::mutex::scoped_lock l(temp_mut);
+    cur_triangle_template = _triangle_template;
+  }
     //获得评分超过阈值的若干三角形
   VecPosition v_loc_pos(cur_recking_pos.x,cur_recking_pos.y);
   std::vector<VecPosition > _mea_rfs = mea_rfs;//value transform
@@ -483,7 +503,7 @@ void pfLocalize::createTriangleTemplate(){
        for(int k = j+1; k < size; k++){
          int a[3]={matched_rfs[i].first,matched_rfs[j].first,matched_rfs[k].first};//get the index
          std::set<int> _set(a,a+3);
-         if(_triangle_template.find(_set)!=_triangle_template.end()){
+         if(cur_triangle_template.find(_set)!=cur_triangle_template.end()){
            //计算测量反光板的系数
            VecPosition v_a = _mea_rfs[(matched_rfs[i]).second].rotate(Rad2Deg(cur_recking_angle));
            v_a+=v_loc_pos;
@@ -492,7 +512,7 @@ void pfLocalize::createTriangleTemplate(){
            VecPosition v_c = _mea_rfs[(matched_rfs[k]).second].rotate(Rad2Deg(cur_recking_angle));
            v_c+=v_loc_pos;
            comparedata mea_rfs_triangle = calCoefficient(v_a,v_b,v_c);
-           comparedata comp = mea_rfs_triangle - _triangle_template[_set];
+           comparedata comp = mea_rfs_triangle - cur_triangle_template[_set];
           //超过一定阈值的放入待筛选列表
            //if( getScore(comp) > score_thread)//disable temp
            {
@@ -519,9 +539,10 @@ void pfLocalize::createTriangleTemplate(){
  }
  double pfLocalize::getOptimizeAngle(std::vector<std::pair<int,int> > result,VecPosition cord_result){
    double angle_result;
-   VecPosition v_a = map_rfs[result[0].first];
-   VecPosition v_b = map_rfs[result[1].first];
-   VecPosition v_c = map_rfs[result[2].first];
+    std::vector<VecPosition> cur_map_rfs = map_rfs;
+   VecPosition v_a = cur_map_rfs[result[0].first];
+   VecPosition v_b = cur_map_rfs[result[1].first];
+   VecPosition v_c = cur_map_rfs[result[2].first];
    VecPosition relative_v_a = mea_rfs[result[0].second];
    VecPosition relative_v_b = mea_rfs[result[1].second];
    VecPosition relative_v_c = mea_rfs[result[2].second];
@@ -657,19 +678,26 @@ void pfLocalize::createTriangleTemplate(){
 
 void pfLocalize::calGlobalPosThread(){
   //ros::Rate r(100);
+  if(!_run_loc_thread){
+    ROS_DEBUG("wait for running.do not start cal GlobalPos Thread");
+    return;
+  }
   static CountTime tim;
   tim.begin();
-
-
   double angle_result;
   VecPosition cord_result;
   std::vector<std::pair<int,int> > best ;
   std::vector<std::pair<int,int> > matched_mea_rfs;
+  std::vector<VecPosition> cur_map_rfs;
+  {
+    boost::mutex::scoped_lock l(temp_mut);
+    cur_map_rfs = map_rfs;
+  }
 
   //while(nh.ok()){
     ///update
 
-   // {
+    {
   ///disable lock temp
       boost::mutex::scoped_lock l(cal_mut);
      // best.clear();
@@ -680,24 +708,30 @@ void pfLocalize::calGlobalPosThread(){
       double comp_dt = compensate_timer.getTime()/1000.0;
       ROS_INFO("cal global pos.the rfs used delay time:%.6f(ms)",comp_dt*1000);
       compensateRfsUsedDelay(mea_rfs,comp_dt);
-
-    //}
+    }
     ///get the matched rfs correspond to map rfs
-    getMatchedMeaRfs(matched_mea_rfs);
+    getMatchedMeaRfs(mea_rfs,matched_mea_rfs);
     if(mea_rfs.empty()){
       ROS_ERROR("ERROR!!!pfLocalize::calGlobalPosThread.no measured rfs.Using recking pos!.");
     }
+    geometry_msgs::PoseStamped _pose;
     if( matched_mea_rfs.size() < 3 ){
       ROS_ERROR("WARNING!!!pfLocalize::calGlobalPosThread.matched_mea_rfs size:%d,no enough matched rfs.Using recking pos!.",matched_mea_rfs.size());
-      global_pos_pub.publish(recking_pos);
+      _pose.header.frame_id=map_frame;
+      _pose.header.stamp = ros::Time::now();
+      _pose.pose.position.x = recking_pos.x;
+      _pose.pose.position.y = recking_pos.y;
+      tf::quaternionTFToMsg(tf::createQuaternionFromYaw(recking_pos.theta),
+                            _pose.pose.orientation);
+      global_pos_pub.publish(_pose);
     }
     else{
       int res = getOptimizeTriangle(matched_mea_rfs,best);
       if( res > 0){
         //template rfs cord in map
-         VecPosition v_a = map_rfs[best[0].first];
-         VecPosition v_b = map_rfs[best[1].first];
-         VecPosition v_c = map_rfs[best[2].first];
+         VecPosition v_a = cur_map_rfs[best[0].first];
+         VecPosition v_b = cur_map_rfs[best[1].first];
+         VecPosition v_c = cur_map_rfs[best[2].first];
          //the dist bet template rfs and measured rfs
          double ra = mea_rfs[best[0].second].getMagnitude();
          double rb = mea_rfs[best[1].second].getMagnitude();
@@ -718,13 +752,27 @@ void pfLocalize::calGlobalPosThread(){
            pos.theta = angle_result;
            global_pos = pos;
            _re_deadrecking = true;
-           global_pos_pub.publish(pos);
+           // global_pos_pub.publish(pos);
+           _pose.header.stamp = ros::Time::now();
+           _pose.pose.position.x = cord_result.getX();
+           _pose.pose.position.y = cord_result.getY();
+           tf::quaternionTFToMsg(tf::createQuaternionFromYaw(angle_result),
+                                 _pose.pose.orientation);
+           global_pos_pub.publish(_pose);
+
          }
       }
       else
       {
         ROS_INFO("calGlobalPosThread.no good rfs which score beyond the thread.do not cal.");
-        global_pos_pub.publish(recking_pos);
+        _pose.header.frame_id=map_frame;
+        _pose.header.stamp = ros::Time::now();
+        _pose.pose.position.x = recking_pos.x;
+        _pose.pose.position.y = recking_pos.y;
+        tf::quaternionTFToMsg(tf::createQuaternionFromYaw(recking_pos.theta),
+                              _pose.pose.orientation);
+        global_pos_pub.publish(_pose);
+        //global_pos_pub.publish(recking_pos);
 
       }
     }
@@ -736,5 +784,7 @@ void pfLocalize::calGlobalPosThread(){
   //}
 }
 
+
+}
 
 

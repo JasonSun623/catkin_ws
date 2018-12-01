@@ -75,7 +75,7 @@ Rfs_Filter::Rfs_Filter(){
   nh.param<double>("err_thread",_err,0.0011);
 
   //construct the filter scan object
-  filter(FilterRfsCenter(_judge_by_dist,_rf_radius,_echo,_step,_err));
+  //filter(FilterRfsCenter(_judge_by_dist,_rf_radius,_echo,_step,_err));
 
   odom_sub = nh.subscribe(odom_topic,1,&Rfs_Filter::callbackOdom,this);
   scan_sub = nh.subscribe(scan_topic,1,&Rfs_Filter::callBackScan,this);

@@ -1,3 +1,6 @@
+// Copyright (c) 2018, Pepperl+Fuchs Cal scan localization by rfs  @Houdar Company
+// Copyright (c) 2018-11, @author CaiHuaQiang
+// All rights reserved.
 #ifndef PF_LOCALIZE_
 #define PF_LOCALIZE_
 #include <ros/ros.h>
@@ -13,6 +16,7 @@
 #include <geometry_msgs/Twist.h>
 #include <geometry_msgs/Pose2D.h>
 #include <geometry_msgs/Pose.h>
+#include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/PoseArray.h>
 #include <sensor_msgs/LaserScan.h>
 #include <tf/transform_listener.h>
@@ -21,12 +25,13 @@
 
 // given the three abs cord rfs and their dist to robot,cal the robot abs pos
 #include "calthreearc.h"
-
 #include "Geometry.h"
 #include "CountTime.hpp"
-#include <pf_filtercenter/filter_rfs_center.h>
 
+#include <pf_filtercenter/filter_rfs_center.h>
 using namespace filter_rfs_center_space;
+namespace pf_localization_space {
+
 /**
  * @struct comparedata
  * @brief record the triangle para such as the len of three sides,their variance,and the side ratio bet largest side and the least side
@@ -61,13 +66,30 @@ public:
    */
   pfLocalize();
   /**
-   * @brief call this fun to active loc thread
+   * @brief call this fun to active loc thread given condition that give rfs map
    */
   void localize();
+  /**
+   * @brief call this fun to active loc thread in no condition
+   */
+  void run(){
+    _run_loc_thread = true;
+  }
+  /**
+   * @brief call this fun to inactive loc thread in no condition
+   */
+  void stop(){
+    _run_loc_thread = false;
+    _re_deadrecking = true;
+  }
   /**
    * @brief accoring the excited map,we record them in memory for matching laterly,and according this we will also pre construct the triangles bet them under limit dist lately
    */
   void loadRfsMap(std::string name);
+  /**
+   * @brief construct the triangles template para data under limit dist
+   */
+  void createTriangleTemplate();
   /**
    * @brief the first step to loc  ,given a better init pos to start mathching the rfs in map to the rfs measured
    * @param x,y,a init pos: x,y,theta
@@ -77,6 +99,22 @@ public:
     init_pos.y = y;
     init_pos.theta = a;
     recking_pos = init_pos;
+  }
+  /**
+   * @brief upodate map rfs data if they are actively updating outsidely
+   * @param rfs new map rfs
+   */
+  void setMapRfsData(const std::deque<VecPosition>& rfs){
+    std::vector<VecPosition> temp_rfs;
+    temp_rfs.assign(rfs.begin(),rfs.end() );
+    map_rfs = temp_rfs;
+  }
+  /**
+   * @brief upodate map Triangle Template Data if they are actively updating outsidely
+   * @param tri_data Triangle Template Data
+   */
+  void setTriangleTemplateData(const std::map<set<int>,comparedata>& tri_data){
+    _triangle_template = tri_data;
   }
   double normalizeRad(double angle_rad){
     return atan2(sin(angle_rad),cos(angle_rad));
@@ -122,6 +160,24 @@ public:
    */
   void deadReckingThread();
   /**
+   * @brief return loc pos
+   */
+  geometry_msgs::Pose2D getLocPos(){
+    return global_pos;
+  }
+  /**
+   * @brief return recking pos
+   */
+  geometry_msgs::Pose2D getReckingPos(){
+    return recking_pos;
+  }
+  /**
+   * @brief return measured rfs in scan frmme
+   */
+  std::vector<VecPosition> getMeasuredRfs(){
+    return _rfs;
+  }
+  /**
    * @brief Compensate the delay time from the rfs info be used(in calGlobalPosThread) to the rfs be caled (in callBackScan)
    */
   void compensateRfsUsedDelay(std::vector<VecPosition>& mea_rfs,double dt);
@@ -150,8 +206,10 @@ public:
   double getOptimizeAngle(std::vector<std::pair<int,int> > result,VecPosition cord_result);
   /**
    * @brief 将实测反光板与地图中的反光板进行一一匹配，匹配上的添加到匹配列表，内容包括匹配的地图反光板索引和对应的测量反光板在绝对坐标系下的位置
-   */
-  void getMatchedMeaRfs(std::vector<std::pair<int,int> > & matched_mea_rfs);//loc pos(base_link) ,real measured rfs
+   * @param mea_rfs cur measured rfs
+   * @param matched_mea_rfs pair type: var first map rfs index,second measured rfx index
+  */
+  void getMatchedMeaRfs(std::vector<VecPosition> mea_rfs,std::vector<std::pair<int,int> > & matched_mea_rfs);//loc pos(base_link) ,real measured rfs
   void callbackOdom(const nav_msgs::Odometry::ConstPtr& state_odata);
   //void callBackRelativeRfs(const geometry_msgs::PoseArray::ConstPtr& rfs_data);
   void callBackScan(const sensor_msgs::LaserScan & scan);
@@ -176,6 +234,7 @@ private:
   std::vector<VecPosition> _rfs;
   std::vector<VecPosition> mea_rfs;//cur _rfs
   std::map<set<int>,comparedata> _triangle_template;
+  bool _run_loc_thread;//start loc flag
   bool _re_deadrecking;//when the global pos is caled successfully,set _re_deadrecking be true to force the dead recking restart
   int scan_update_fre;//laser scan frequency(property data not set data)
   double compensate_time;//when cal global pos the delay time bet when the rfs be used and the rfs msg arrived
@@ -196,7 +255,9 @@ private:
   boost::mutex cal_mut;
   boost::mutex mut_recking;
   boost::mutex rfs_mut;
+  boost::mutex temp_mut;
 
+  std::string map_frame;
   std::string map_name ;
   std::string pos_frame ;
   std::string pos_topic ;
@@ -223,4 +284,5 @@ private:
   ///for filter rfs center---end
   FilterRfsCenter filter;
 } ;
+}
 #endif

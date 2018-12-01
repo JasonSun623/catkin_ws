@@ -1,6 +1,6 @@
 #include <ros/ros.h>
 #include "pf_localize.h"
-
+using namespace pf_localization_space;
 int main(int argc, char **argv)
 {
     ros::init(argc, argv, "houdar_pf_localize");
