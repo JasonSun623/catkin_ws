@@ -13,8 +13,8 @@ namespace pf_mapping_space {
     nh.param<double>("triangle_side_min_len",triangle_side_min_len,2);
     nh.param<double>("triangle_grouping_thread",triangle_grouping_thread,20);
 
-    nh.param<double>("new_rfs_dist",new_rfs_dist,2);
-    nh.param<double>("new_rfs_angle_deg",new_rfs_angle_deg,5);
+    nh.param<double>("new_rfs_dist",new_rfs_dist,1);
+    nh.param<double>("new_rfs_angle_deg",new_rfs_angle_deg,10);
     nh.param<int>("history_update_size",history_update_size_thread,10);
     nh.param<double>("history_rfs_reject_dist",history_rfs_reject_dist,0.5);
     nh.param<int>("min_his_rfs_avg_size",min_his_rfs_avg_size,7);
@@ -292,13 +292,14 @@ namespace pf_mapping_space {
    std::deque<VecPosition> cur_abs_rfs = _abs_map_rfs;//
    std::vector<int> cur_candidate_match_rfs;//
    double dist;
-   VecPosition v_pos(loc_pos.x,loc_pos.y);
+   VecPosition v_loc_pos(loc_pos.x,loc_pos.y);
    //filter the map rfs which in cur scan view range
    for(int i = 0;i < cur_abs_rfs.size();i++){
-      if(dist = v_pos.getDistanceTo(cur_abs_rfs[i]) < scan_range_max){
+     // if(dist = v_pos.getDistanceTo(cur_abs_rfs[i]) < scan_range_max){
         cur_candidate_match_rfs.push_back(i);
-      }
+      //}
    }
+  // cur_candidate_match_rfs = cur_abs_rfs;
    int cand_size = cur_candidate_match_rfs.size();
    if( !cand_size ){
      ROS_ERROR("pf_mapping::getNewRfs. cur_candidate_match_rfs is empty.return!");
@@ -306,25 +307,33 @@ namespace pf_mapping_space {
    }
    VecPosition rel_rfs;
    double delta;
-   double cmp_dist,cmp_angle;
+   double cmp_dist[cand_size],cmp_angle[cand_size];
 
    for(int i = 0;i < cur_mea_rfs.size();i++){
      bool matched = false;
      for(int j = 0;j < cand_size;j++){
        rel_rfs = cur_abs_rfs[cur_candidate_match_rfs[j]];
-       rel_rfs -= v_pos;
+       rel_rfs -= v_loc_pos;
        rel_rfs.rotate(-Rad2Deg(loc_pos.theta));
-       cmp_dist = rel_rfs.getDistanceTo(cur_mea_rfs[i]);
+       cmp_dist[i] = rel_rfs.getDistanceTo(cur_mea_rfs[i]);
        delta = Deg2Rad( rel_rfs.getDirection()-cur_mea_rfs[i].getDirection() );
-       cmp_angle = fabs( atan2Deg( sin(delta),cos(delta) ) );
-       if(cmp_dist < new_rfs_dist && cmp_angle  < new_rfs_angle_deg){
+       cmp_angle[i] = fabs( atan2Deg( sin(delta),cos(delta) ) );
+       if(cmp_dist[i] < new_rfs_dist && cmp_angle[i]  < new_rfs_angle_deg){
           matched = true;
           break;
         }
       }
       if(!matched){//no cur measured rfs in map rfs
+        VecPosition abs_mea_pos=cur_mea_rfs[i];
+        abs_mea_pos.rotate(Rad2Deg(loc_pos.theta));
+        abs_mea_pos += v_loc_pos;
+        ROS_INFO("pf_mapping.getNewRfs.no matched.comp data to abs_mea_pos:(%.4f,%.4f).loc_pos:(%.4f,%.4f)",abs_mea_pos.getX(),abs_mea_pos.getY(), loc_pos.x,loc_pos.y );
+        for(int k = 0;k < cand_size;k++ ){
+          rel_rfs = cur_abs_rfs[cur_candidate_match_rfs[k]];
+          ROS_INFO("comp abs_map_pos(%.4f,%.4f).dist:%.4f,angle(deg):%.4f",rel_rfs.getX(),rel_rfs.getY(),cmp_dist[k],cmp_angle[k]);
+        }
         mea_rfs.push_back(cur_mea_rfs[i]);
-        ROS_INFO("pf_mapping::getNewMatchedRfs.measued rfs index:%d,rel pos:(%.3f,%.3f) is new rfs!",i,cur_mea_rfs[i].getX(),cur_mea_rfs[i].getY());
+        //ROS_INFO("pf_mapping::getNewMatchedRfs.measued rfs index:%d,rel pos:(%.3f,%.3f) is new rfs!",i,cur_mea_rfs[i].getX(),cur_mea_rfs[i].getY());
       }
 
    }
