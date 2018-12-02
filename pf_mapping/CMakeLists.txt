@@ -133,6 +133,7 @@ include_directories(
  add_library(${PROJECT_NAME}
    src/Geometry.cpp
    src/pf_mapping.cpp
+   src/pf_slam.cpp
  )
 
 ## Add cmake target dependencies of the library

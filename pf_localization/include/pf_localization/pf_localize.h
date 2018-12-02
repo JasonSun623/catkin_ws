@@ -19,9 +19,14 @@
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/PoseArray.h>
 #include <sensor_msgs/LaserScan.h>
-#include <tf/transform_listener.h>
 #include <visualization_msgs/Marker.h>
-#include <tf/transform_listener.h>
+
+#include <tf/LinearMath/Scalar.h>
+#include <tf/LinearMath/Vector3.h>
+#include "tf/transform_broadcaster.h"
+#include "tf/transform_listener.h"
+#include "tf/message_filter.h"
+#include "tf/tf.h"
 
 // given the three abs cord rfs and their dist to robot,cal the robot abs pos
 #include "calthreearc.h"
@@ -82,6 +87,14 @@ public:
     _run_loc_thread = false;
     _re_deadrecking = true;
   }
+  void compensateTimeStart(){
+    compensate_timer.begin();
+  }
+  double compensateTimeStop(){
+    compensate_timer.end();
+    double dt = compensate_timer.getTime();
+    return dt;
+  }
   /**
    * @brief accoring the excited map,we record them in memory for matching laterly,and according this we will also pre construct the triangles bet them under limit dist lately
    */
@@ -99,6 +112,15 @@ public:
     init_pos.y = y;
     init_pos.theta = a;
     recking_pos = init_pos;
+  }
+  void setGlobalPos(geometry_msgs::Pose2D loc_pos){
+    global_pos =loc_pos;
+  }
+  void setReReckingFlag(bool flag){
+    _re_deadrecking = flag;
+  }
+  void UpdateCurMeaRfs(std::vector<VecPosition> mea_rfs){
+    this->mea_rfs = mea_rfs;
   }
   /**
    * @brief upodate map rfs data if they are actively updating outsidely
@@ -153,7 +175,7 @@ public:
    * use the dead recking pos and the newest measured rfs to cal the loc pos
    * the rfs measured data will be delayed when we used so need to compensate according the delta bet the time rfs measured and the time be used
    */
-  void calGlobalPosThread();
+  virtual void calGlobalPosThread();
   /**
    * @brief odom dead recking thread .we think the  pos will be more accurate in short time (the time bet the global loc thread end and restart)
    * the start pos will be updated when the new cald global pos by calGlobalPosThread is coming
@@ -177,6 +199,16 @@ public:
   std::vector<VecPosition> getMeasuredRfs(){
     return _rfs;
   }
+  std::vector<VecPosition> getCurMapRfs(){
+    return map_rfs;
+  }
+  std::string getMapFrame(){
+    return map_frame;
+  }
+  /**
+   * @brief pub tf from map to cur pos frame
+   */
+  void pubMapToThisTF( geometry_msgs::Pose2D cur_pos );
   /**
    * @brief Compensate the delay time from the rfs info be used(in calGlobalPosThread) to the rfs be caled (in callBackScan)
    */
@@ -209,7 +241,10 @@ public:
    * @param mea_rfs cur measured rfs
    * @param matched_mea_rfs pair type: var first map rfs index,second measured rfx index
   */
-  void getMatchedMeaRfs(std::vector<VecPosition> mea_rfs,std::vector<std::pair<int,int> > & matched_mea_rfs);//loc pos(base_link) ,real measured rfs
+  void getMatchedMeaRfs(geometry_msgs::Pose2D pos,
+                        std::vector<VecPosition> mea_rfs,
+                        std::vector<std::pair<int,int> > & matched_mea_rfs);//loc pos(base_link) ,real measured rfs
+
   void callbackOdom(const nav_msgs::Odometry::ConstPtr& state_odata);
   //void callBackRelativeRfs(const geometry_msgs::PoseArray::ConstPtr& rfs_data);
   void callBackScan(const sensor_msgs::LaserScan & scan);
@@ -245,7 +280,7 @@ private:
   geometry_msgs::Pose2D cur_recking_pos;
 
   ros::NodeHandle nh;
-  ros::Publisher global_pos_pub;
+  ros::Publisher global_pos_pub,global_recking_pos_pub;
   ros::Publisher marker_pos_pub;
   ros::Subscriber rfs_sub ;
   ros::Subscriber odom_sub ;
@@ -257,19 +292,36 @@ private:
   boost::mutex rfs_mut;
   boost::mutex temp_mut;
 
-  std::string map_frame;
+  std::string map_frame,scan_frame,odom_frame;
   std::string map_name ;
   std::string pos_frame ;
-  std::string pos_topic ;
-  std::string rfs_topic ;
-  std::string odom_topic ;
+  std::string pos_topic,recking_pos_topic,pub_rfs_topic,rfs_topic ;
+  std::string scan_topic,odom_topic ;
 
+  ///transform map to scan
+  ///     // Use a child class to get access to tf2::Buffer class inside of tf_
+  struct TransformListenerWrapper : public tf::TransformListener
+  {
+    inline tf2_ros::Buffer &getBuffer() {return tf2_buffer_;}
+  };
+  TransformListenerWrapper* tf_;
+
+  bool sent_first_transform_;
+
+  tf::Transform latest_tf_;
+  bool latest_tf_valid_;
+   bool tf_broadcast_;
+   tf::TransformBroadcaster* tfb_;
+   //time for tolerance on the published transform,
+   //basically defines how long a map->odom transform is good for
+   double tmp_tol;
+   ros::Duration transform_tolerance_;
+
+  ///
   ///for filter rfs center---start
   ros::Publisher pub_rfs_center;
   boost::mutex scan_lock_;
-  std::string scan_topic;
-  std::string scan_frame ;
-  std::string pub_rfs_topic;
+
   geometry_msgs::PoseArray rfs_pos_pub;
   std::vector<sensor_msgs::LaserScan> raw_scan;
   std::vector<VecPositionDir> v_optrfs_center;//the optimized rfs center data

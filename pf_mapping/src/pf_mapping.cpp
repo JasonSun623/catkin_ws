@@ -339,7 +339,7 @@ namespace pf_mapping_space {
    }
 
   }
- void pf_mapping::pubMarkerRfs(){
+  void pf_mapping::pubMarkerRfs(){
 
   visualization_msgs::Marker rfs_marker;
   visualization_msgs::Marker text_marker;
@@ -465,9 +465,9 @@ namespace pf_mapping_space {
       return;
     }
     getNewRfs(loc_pos,cur_mea_rfs);
-    std::deque<order_pair_rfs_para>::iterator itr_d = ordered_pair_rfs_dist.begin();
+    /*std::deque<order_pair_rfs_para>::iterator itr_d = ordered_pair_rfs_dist.begin();
     ROS_INFO("pf_mapping::insertrfs.display orderedpairrfsdist:");
-    /*
+
      for(;itr_d!=ordered_pair_rfs_dist.end();itr_d++){
        std::set<int> temp_set=(*itr_d).pair();
        std::set<int>::iterator itr_set = temp_set.begin();
@@ -499,7 +499,7 @@ namespace pf_mapping_space {
     std::vector<std::pair<int,int> > matched_mea_rfs;//map rfs index<->measured rfs index
     geometry_msgs::Pose2D loc_pos = localization.getReckingPos();
     std::vector<VecPosition> mea_rfs = localization.getMeasuredRfs();
-    localization.getMatchedMeaRfs(mea_rfs,matched_mea_rfs);
+    localization.getMatchedMeaRfs(loc_pos,mea_rfs,matched_mea_rfs);
     int map_rfs_index;
     VecPosition v_pos(loc_pos.x,loc_pos.y);
     for(int i = 0 ; i < matched_mea_rfs.size();i++){

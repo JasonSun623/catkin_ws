@@ -17,6 +17,7 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   geometry_msgs
   pf_filtercenter
+  tf
 )
 
 ## System dependencies are found with CMake's conventions
@@ -111,7 +112,7 @@ find_package(Boost REQUIRED COMPONENTS system thread)
 catkin_package(
   INCLUDE_DIRS include
 #  LIBRARIES pf_filtercenter
-  CATKIN_DEPENDS roscpp std_msgs pf_filtercenter
+  CATKIN_DEPENDS tf roscpp std_msgs pf_filtercenter
   #DEPENDS system_lib
   LIBRARIES pf_filtercenter ${PROJECT_NAME}
 )

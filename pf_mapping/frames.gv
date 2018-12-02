@@ -1,0 +1,12 @@
+digraph G {
+"odom" -> "base_link"[label="Broadcaster: /gazebo\nAverage rate: 50.205 Hz\nMost recent transform: 272238.246 ( 0.001 sec old)\nBuffer length: 4.880 sec\n"];
+"base_link" -> "front_wheel"[label="Broadcaster: /robot_state_publisher\nAverage rate: 38.066 Hz\nMost recent transform: 272238.232 ( 0.015 sec old)\nBuffer length: 4.860 sec\n"];
+"base_link" -> "left_front_wheel"[label="Broadcaster: /robot_state_publisher\nAverage rate: 38.066 Hz\nMost recent transform: 272238.232 ( 0.015 sec old)\nBuffer length: 4.860 sec\n"];
+"base_link" -> "rear_wheel"[label="Broadcaster: /robot_state_publisher\nAverage rate: 38.066 Hz\nMost recent transform: 272238.232 ( 0.015 sec old)\nBuffer length: 4.860 sec\n"];
+"base_link" -> "right_front_wheel"[label="Broadcaster: /robot_state_publisher\nAverage rate: 38.066 Hz\nMost recent transform: 272238.232 ( 0.015 sec old)\nBuffer length: 4.860 sec\n"];
+"base_link" -> "hokuyo_link"[label="Broadcaster: /robot_state_publisher\nAverage rate: 50.237 Hz\nMost recent transform: 272238.736 ( -0.489 sec old)\nBuffer length: 4.857 sec\n"];
+edge [style=invis];
+ subgraph cluster_legend { style=bold; color=black; label ="view_frames Result";
+"Recorded at time: 272238.247"[ shape=plaintext ] ;
+ }->"odom";
+}
