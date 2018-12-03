@@ -3,6 +3,7 @@
 #include <iostream>
 #include <math.h>
 #include "Geometry.h"
+#include <ros/ros.h>
 class CalThreeArc
 {
 public:
@@ -59,6 +60,7 @@ public:
    int getCrossPointByTwoCircles(VecPosition va,VecPosition vb,VecPosition vc,
                                  double r0,double r1, double r2,
                                  VecPosition &result){
+    int value = -1;
     double x0, y0;
     double x1, y1;
     double x2, y2;
@@ -86,12 +88,17 @@ public:
        double c_x = x0+(r0+delta/2)*dx;
        double c_y = y0+(r0+delta/2)*dy;
         result.setVecPosition(c_x,c_y);
+        value = 1;
     }
     //circle有包含关系　返回错误
     else
-      if( d < fabs(r0-r1) )return -1;
-    //否则　返回圆的交点连线与两圆中心点连线的交点
-    else {
+      if( d < fabs(r0-r1) ){
+        ROS_ERROR("cal three arc.getCrossPointByTwoCircles.dist bet va:(%.6f,%.6f) and vb:(%.6f,%.6f) is:%.6f.the radius ra:%.6f,rb:%.6f.one circle is included by anther(dist < fabs(ra-rb)) .return -1",
+                 x0,y0,x1,y1,d,r0,r1 );
+         value = -1;
+      }
+      //否则　返回圆的交点连线与两圆中心点连线的交点
+      else {
       a = (r0*r0 + d*d - r1*r1) / (2.0 * d);
       // h is then a^2 + h^2 = r0^2 ==> h = sqrt( r0^2 - a^2 )
       double arg = r0*r0 - a*a;
@@ -112,8 +119,9 @@ public:
       double dist_c_p2 = fabs(p2.getDistanceTo(vc)-r2);
       result = dist_c_p1<dist_c_p2?p1:p2;//select the cross point which near to vc
       //VecPosition test_reslut = DoABXiangliXiangQieOrXiangjiao(x0,y0,x1,y1,x2,y2,r0,r1,r2);
-      return 1;
+     value = 1;
     }
+    return value;
   }
    //计算由三个交点构成的三角形的内心
    VecPosition getTriangleInnerPoint(VecPosition v_a,VecPosition v_b,VecPosition v_c){
@@ -128,23 +136,31 @@ public:
  }
 
    //get the optimized cross point bet three circles
-   int getCrossPoint(VecPosition&result){
+   int getCrossPoint( VecPosition& result ){
       int v1,v2,v3;
       VecPosition v_c_1,v_c_2,v_c_3;
         v1 = getCrossPointByTwoCircles(_pa,_pb,_pc,_ra,_rb,_rc,v_c_1);
       if( v1 > 0 )
         v2 = getCrossPointByTwoCircles(_pa,_pc,_pb,_ra,_rc,_rb,v_c_2);
-      else
+      else{
+        ROS_ERROR("cal three arc.getCrossPoint happen err bet pa:(%.6f,%.6f) and pb:(%.6f,%.6f)",
+                  _pa.getX(),_pa.getY(),_pb.getX(),_pb.getY());
         return -1;
+      }
       if( v2 > 0 )
         v3 = getCrossPointByTwoCircles(_pb,_pc,_pa,_rb,_rc,_ra,v_c_3);
-      else
+      else{
+        ROS_ERROR("cal three arc.getCrossPoint happen err bet pa:(%.6f,%.6f) and pc:(%.6f,%.6f)",
+                  _pa.getX(),_pa.getY(),_pc.getX(),_pc.getY());
        return -1;
+      }
       if( v3 > 0 )
         result = getTriangleInnerPoint(v_c_1,v_c_2,v_c_3);
-      else
-       return -1;
-
+      else{
+        ROS_ERROR("cal three arc.getCrossPoint happen err bet pb:(%.6f,%.6f) and pc:(%.6f,%.6f)",
+                  _pb.getX(),_pb.getY(),_pc.getX(),_pc.getY());
+        return -1;
+      }
       return 1;
 
   }

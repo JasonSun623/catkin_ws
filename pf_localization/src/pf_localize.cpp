@@ -10,12 +10,7 @@ ros::NodeHandle private_nh("~");
  ///for filter rfs center---start
  private_nh.param<int>("scan_update_fre",scan_update_fre,30);
  private_nh.param<int>("fiter_scan_num", _fiter_scan_num, 1);
- private_nh.param<bool>("if_pub_marker",if_pub_marker,true);
- private_nh.param<bool>("judge_by_dist", _judge_by_dist, true);//直接通过距离判断反光板
- private_nh.param<int>("echo_thread", _echo, 100);
- private_nh.param<double>("reflector_radius",_rf_radius,0.025);
- private_nh.param<double>("step",_step,0.0005);
- private_nh.param<double>("err_thread",_err,0.0011);
+
  private_nh.param<std::string>("pub_rfs_topic", pub_rfs_topic, "pf_reflectors");
  private_nh.param<std::string>("scan_frame", scan_frame, "hokuyo_link");
  private_nh.param<std::string>("odom_frame", odom_frame, "odom");
@@ -88,6 +83,7 @@ odom_sub = nh.subscribe(odom_topic,1,&pfLocalize::callbackOdom,this);
 global_pos_pub = nh.advertise<geometry_msgs::PoseStamped>(pos_topic,1);
 global_recking_pos_pub = nh.advertise<geometry_msgs::PoseStamped>(recking_pos_topic,1);
 
+ROS_INFO_STREAM("pf_Localize.construct.init done!");
 
 }
 
@@ -390,7 +386,7 @@ void pfLocalize::createTriangleTemplate(){
   //小于匹配搜索半径，作为待匹配项(store index)
   for(int i= 0;i < cur_map_rfs.size();i++){
     if( v_loc_pos.getDistanceTo(cur_map_rfs[i]) < search_triangle_thread )
-      candidate_rfs.push_back(i);
+      candidate_rfs.push_back(i);//record index instead of value
   }
 
   //rot to relative cord for comparing
@@ -409,20 +405,21 @@ void pfLocalize::createTriangleTemplate(){
   double rel_angle[mea_rfs.size()][flash_candidate_rfs.size()];
   //try to match every measured rfs
   std::list<std::pair<int,VecPosition>>::iterator itr;
-  for(int i=0;i < mea_rfs.size();i++){
+  for(int i=0; i < mea_rfs.size(); i++){
     itr = flash_candidate_rfs.begin();
     int cnt =0;
     for(;itr != flash_candidate_rfs.end();itr++ ){
+
       rel_dist[i][cnt] = mea_rfs[i].getDistanceTo((*itr).second);
       rel_angle[i][cnt]= fabs(VecPosition::normalizeAngle(mea_rfs[i].getDirection() - ((*itr).second).getDirection()));
 
       dis_match = rel_dist[i][cnt] <= match_dist_thread;
       ang_match = rel_angle[i][cnt] <= match_angle_thread;
       cnt++;
-      if(dis_match && !ang_match ){
+      if( dis_match && !ang_match ){
         ROS_ERROR("pfLocalize::getMatchedMeaRfs.meet error:dis_match but angle not matched!");
       }
-      if( dis_match && ang_match){
+      if( dis_match && ang_match ){
         abs_mea_rfs = mea_rfs[i];
         abs_mea_rfs.rotate(Rad2Deg(pos.theta));
         abs_mea_rfs += v_loc_pos;//convert to abs cord,we will score them later
@@ -432,10 +429,24 @@ void pfLocalize::createTriangleTemplate(){
       }
     }
   }
-  if(matched_mea_rfs.size()&&matched_mea_rfs.size()<3){
-    ROS_ERROR("WARNNING!!pfLocalize::getMatchedMeaRfs size below 3!");
+  if( matched_mea_rfs.size() && matched_mea_rfs.size() < 3 ){
+    ROS_ERROR("WARNNING!!pfLocalize::getMatchedMeaRfs size below 3!loc_pos(%.6f.%.6f).measured rfs size:%d, comp data:",pos.x,pos.y,mea_rfs.size());
+    for(int i=0; i < mea_rfs.size(); i++){
+      abs_mea_rfs = mea_rfs[i];
+      abs_mea_rfs.rotate(Rad2Deg(pos.theta));
+      abs_mea_rfs += v_loc_pos;//convert to abs cord,we will score them later
+      ROS_INFO("abs mea index:%d,pos:(%.6f,%.6f)",i,abs_mea_rfs.getX(),abs_mea_rfs.getY());
+      itr = flash_candidate_rfs.begin();
+      int cnt = 0;
+      for( ;itr != flash_candidate_rfs.end(); itr++ ){
+        VecPosition p = cur_map_rfs[itr->first];
+        ROS_INFO("abs map pos:(%.6f,%.6f),dist:%.6f,angle_deg:%.6f",p.getX(),p.getY(),rel_dist[i][cnt],rel_angle[i][cnt]);
+        cnt++;
+      }
+    }
+
  }
-  if(matched_mea_rfs.empty()){
+  if( matched_mea_rfs.empty() ){
     ROS_ERROR("pfLocalize::getMatchedMeaRfserror to match!");
   }
 }

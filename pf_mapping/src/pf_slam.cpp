@@ -9,7 +9,7 @@ pf_slam::pf_slam(){
   nh.param<double>("new_rfs_dist",new_rfs_dist,1);
   nh.param<double>("new_rfs_angle_deg",new_rfs_angle_deg,10);
   nh.param<int>("history_update_size",history_update_size_thread,10);
-  nh.param<double>("history_rfs_reject_dist",history_rfs_reject_dist,0.5);
+  nh.param<double>("history_rfs_reject_dist",history_rfs_reject_dist,0.2);
   nh.param<int>("min_his_rfs_avg_size",min_his_rfs_avg_size,7);
   nh.param<double>("min_his_rfs_update_dist",his_rfs_update_thread,0.001);
   mapping_start = false;
@@ -20,6 +20,7 @@ pf_slam::pf_slam(){
   sub_mapping_task_stop = nh.subscribe("pf_mapping_stop",1,&pf_slam::callBackMappingStop,this);
   map_marker_pub = nh.advertise<visualization_msgs::MarkerArray>("pf_map",1);
   global_pos_pub = nh.advertise< geometry_msgs::PoseStamped >("pf_slam_pose",1);
+  ROS_INFO_STREAM("pf_slam.construct.init done!");
 
 
 }
@@ -533,14 +534,14 @@ void pf_slam::calGlobalPosThread(){
          getNewRfs(loc_pos,cur_mea_rfs_mapping);///!!!只有初始和有全局定位结果时，ｓｌａｍ才是准确的!!!!
          if(cur_mea_rfs_mapping.size())
          {
-         boost::mutex::scoped_lock l(addrfs_mut);
-         addingNewRfs(loc_pos,cur_mea_rfs_mapping);
-         insertSortRfs(cur_mea_rfs_mapping);
+           boost::mutex::scoped_lock l(addrfs_mut);
+           addingNewRfs(loc_pos,cur_mea_rfs_mapping);
+           insertSortRfs(cur_mea_rfs_mapping);
+         }
          /// update history
-         ///
          updateHistoryRfsThread(loc_pos,cur_mea_rfs,matched_mea_rfs);
          ///
-         }
+
        }else{
          pubGlobalPos(loc_pos);
          ROS_ERROR("pf_slam.cal cross point error!pre recking pos(%.6f,%.6f,%.6f)",cur_recking_pos.x,cur_recking_pos.y,cur_recking_pos.theta);
@@ -555,7 +556,7 @@ void pf_slam::calGlobalPosThread(){
 
   tim.end();
   double dt = tim.getTime();
-  //ROS_INFO("pf_slam.calGolbalPosThread.waster time(ms):%.6f",dt);
+  ROS_INFO("pf_slam.calGolbalPosThread.waster time(ms):%.6f",dt);
   ros::spinOnce();
   //}
 }
