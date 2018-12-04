@@ -35,7 +35,7 @@ void pf_slam::callBackMappingStart(const std_msgs::Int16 if_start){
     mapping_start = true;
   }
   else{
-    ROS_WARN_STREAM("pf_mapping::callBackMappingStart.the callback value is: " <<if_start.data <<"do not start mapping!" );
+    ROS_WARN_STREAM("pf_slam::callBackMappingStart.the callback value is: " <<if_start.data <<"do not start mapping!" );
   }
 }
 
@@ -97,7 +97,7 @@ void pf_slam::addingNewRfs(geometry_msgs::Pose2D loc_pos, std::vector<VecPositio
       i_j_dist = v_i.getDistanceTo(cur_abs_rfs[j]);
       if( i_j_dist > triangle_grouping_thread || i_j_dist < triangle_side_min_len  ){
         if(i_j_dist < triangle_side_min_len)
-          ROS_WARN_STREAM("WARNIGN! pf_mapping::updateTriangleTemplate.dist bet rfs index " << i << " and " << j << " do not fit in thread.continue");
+          ROS_WARN_STREAM("WARNIGN! pf_slam::updateTriangleTemplate.dist bet rfs index " << i << " and " << j << " do not fit in thread.continue");
         continue;
       }
       for(int k = j+1; k < i; k++ ){//from [i+1 -> i)
@@ -195,7 +195,7 @@ void pf_slam::updateRfsPara(int avg_rfs_index,VecPosition avg_rfs){
      p = max_side/min_side;
      comparedata cp(len,dx,p);
      comparedata pre_cp = _triangle_template[temp_set];
-     ROS_INFO("pf_mapping::updateRfsPara.update index:%d pre compdata(%.4f,%.4f,%.4f) new(%.4f,%.4f,%.4f)",avg_rfs_index,pre_cp.getLen(),pre_cp.getDx(),pre_cp.getP(),cp.getLen(),cp.getDx(),cp.getP());
+     ROS_INFO("pf_slam::updateRfsPara.update index:%d pre compdata(%.4f,%.4f,%.4f) new(%.4f,%.4f,%.4f)",avg_rfs_index,pre_cp.getLen(),pre_cp.getDx(),pre_cp.getP(),cp.getLen(),cp.getDx(),cp.getP());
      _triangle_template[temp_set] = cp;//update para
    }
    else{
@@ -225,7 +225,7 @@ void pf_slam::updateRfsPara(int avg_rfs_index,VecPosition avg_rfs){
      i_j_dist = v_pos[0].getDistanceTo(v_pos[1]);
      order_pair_rfs_para cur_rfs_pair_temp(temp_set,i_j_dist);
      order_pair_rfs_para pre_pair = ordered_pair_rfs_dist[i];
-     ROS_INFO("pf_mapping::updateRfsPara.update index:%d pre pair dist(%.4) new(%.4f)",avg_rfs_index,pre_pair.dist(),cur_rfs_pair_temp.dist());
+     ROS_INFO("pf_slam::updateRfsPara.update index:%d pre pair dist(%.4f) new(%.4f)",avg_rfs_index,pre_pair.dist(),cur_rfs_pair_temp.dist());
 
      ordered_pair_rfs_dist[i] = cur_rfs_pair_temp;
    }else{
@@ -247,8 +247,8 @@ void pf_slam::sortPairRfsDist(){
         cur_rfs_pair = cur_order_pair_deque[j];
         cur_order_pair_deque[j] = cur_order_pair_deque[j-1];
         cur_order_pair_deque[j-1] = cur_rfs_pair;
-        //ROS_WARN_STREAM("pf_mapping.sortPairRfsDist:cur_order_pair_deque(j)["<<j<<"] dist:" <<cur_order_pair_deque[j].dist() );
-        //ROS_WARN_STREAM("pf_mapping.sortPairRfsDist:cur_order_pair_deque(j-1)["<<j-1<<"] dist:" <<cur_order_pair_deque[j-1].dist() );
+        //ROS_WARN_STREAM("pf_slam.sortPairRfsDist:cur_order_pair_deque(j)["<<j<<"] dist:" <<cur_order_pair_deque[j].dist() );
+        //ROS_WARN_STREAM("pf_slam.sortPairRfsDist:cur_order_pair_deque(j-1)["<<j-1<<"] dist:" <<cur_order_pair_deque[j-1].dist() );
       }
 
     }
@@ -269,7 +269,7 @@ void pf_slam::insertSortRfs(std::vector<VecPosition> new_rfs){
         std::set<int> set_index(arr,arr+2);//The range used is [first,last)
         order_pair_rfs_para cur_rfs_pair(set_index,i_j_dist);
        //comment temp --s
-       // std::cout << "pf_mapping::insertSortRfs.insert pair set:(";
+       // std::cout << "pf_slam::insertSortRfs.insert pair set:(";
        // for (std::set<int>::iterator it=set_index.begin(); it!=set_index.end(); ++it)
        //   std::cout << *it << ',';
        // std::cout << ")\n dist: " << i_j_dist;
@@ -287,10 +287,11 @@ void pf_slam::insertSortRfs(std::vector<VecPosition> new_rfs){
 
 void pf_slam::getNewRfs(geometry_msgs::Pose2D loc_pos, std::vector<VecPosition>& mea_rfs){
  std::vector<VecPosition> cur_mea_rfs = mea_rfs;
- mea_rfs.clear();
  std::deque<VecPosition> cur_abs_rfs = _abs_map_rfs;//
  std::vector<int> cur_candidate_match_rfs;//
  double dist;
+ bool dis_match,ang_match;
+ mea_rfs.clear();
  VecPosition v_loc_pos(loc_pos.x,loc_pos.y);
  //filter the map rfs which in cur scan view range
  for(int i = 0;i < cur_abs_rfs.size();i++){
@@ -299,40 +300,43 @@ void pf_slam::getNewRfs(geometry_msgs::Pose2D loc_pos, std::vector<VecPosition>&
     //}
  }
 // cur_candidate_match_rfs = cur_abs_rfs;
+ int mea_size = cur_mea_rfs.size();
  int cand_size = cur_candidate_match_rfs.size();
  if( !cand_size ){
-   ROS_ERROR("pf_mapping::getNewRfs. cur_candidate_match_rfs is empty.return!");
+   ROS_ERROR("pf_slam::getNewRfs. cur_candidate_match_rfs is empty.return!");
    return;
  }
  VecPosition rel_rfs;
  double delta;
- double cmp_dist[cand_size],cmp_angle[cand_size];
+ double cmp_dist[mea_size][cand_size],cmp_angle[mea_size][cand_size];
 
- for(int i = 0;i < cur_mea_rfs.size();i++){
+ for(int i = 0; i < mea_size; i++){
    bool matched = false;
-   for(int j = 0;j < cand_size;j++){
+   for(int j = 0; j < cand_size; j++){
      rel_rfs = cur_abs_rfs[cur_candidate_match_rfs[j]];
      rel_rfs -= v_loc_pos;
      rel_rfs.rotate(-Rad2Deg(loc_pos.theta));
-     cmp_dist[i] = rel_rfs.getDistanceTo(cur_mea_rfs[i]);
+     cmp_dist[i][j] = rel_rfs.getDistanceTo(cur_mea_rfs[i]);
      delta = Deg2Rad( rel_rfs.getDirection()-cur_mea_rfs[i].getDirection() );
-     cmp_angle[i] = fabs( atan2Deg( sin(delta),cos(delta) ) );
-     if(cmp_dist[i] < new_rfs_dist && cmp_angle[i]  < new_rfs_angle_deg){
+     cmp_angle[i][j] = fabs( atan2Deg( sin(delta),cos(delta) ) );
+     dis_match = cmp_dist[i][j] <= new_rfs_dist;
+     ang_match = cmp_angle[i][j] <= new_rfs_angle_deg;
+     if( dis_match && ang_match ){
         matched = true;
         break;
       }
     }
-    if(!matched){//no cur measured rfs in map rfs
-      VecPosition abs_mea_pos=cur_mea_rfs[i];
+    if( !matched ){//no cur measured rfs in map rfs
+      VecPosition abs_mea_pos = cur_mea_rfs[i];
       abs_mea_pos.rotate(Rad2Deg(loc_pos.theta));
       abs_mea_pos += v_loc_pos;
-      ROS_INFO("pf_mapping.getNewRfs.no matched.comp data to abs_mea_pos:(%.4f,%.4f).loc_pos:(%.4f,%.4f)",abs_mea_pos.getX(),abs_mea_pos.getY(), loc_pos.x,loc_pos.y );
-      for(int k = 0;k < cand_size;k++ ){
+      ROS_INFO("pf_slam.getNewRfs.no matched map rfs to cur mea rfs.abs_mea_pos:(%.4f,%.4f).loc_pos:(%.4f,%.4f)",abs_mea_pos.getX(),abs_mea_pos.getY(), loc_pos.x,loc_pos.y );
+      for(int k = 0; k < cand_size; k++ ){
         rel_rfs = cur_abs_rfs[cur_candidate_match_rfs[k]];
-        ROS_INFO("comp abs_map_pos(%.4f,%.4f).dist:%.4f,angle(deg):%.4f",rel_rfs.getX(),rel_rfs.getY(),cmp_dist[k],cmp_angle[k]);
+        ROS_INFO("comp abs_map_pos(%.4f,%.4f).dist:%.4f,angle(deg):%.4f",rel_rfs.getX(),rel_rfs.getY(),cmp_dist[i][k],cmp_angle[i][k]);
       }
       mea_rfs.push_back(cur_mea_rfs[i]);
-      //ROS_INFO("pf_mapping::getNewMatchedRfs.measued rfs index:%d,rel pos:(%.3f,%.3f) is new rfs!",i,cur_mea_rfs[i].getX(),cur_mea_rfs[i].getY());
+      //ROS_INFO("pf_slam::getNewMatchedRfs.measued rfs index:%d,rel pos:(%.3f,%.3f) is new rfs!",i,cur_mea_rfs[i].getX(),cur_mea_rfs[i].getY());
     }
 
  }
@@ -457,7 +461,7 @@ void pf_slam::calGlobalPosThread(){
     cur_recking_pos = getReckingPos();
     loc_pos = cur_recking_pos;//update cur recking pos for calculating
     if(loc_pos.x != loc_pos.x){//check nan
-      ROS_ERROR("pf_mapping::slamThread.loc data invalid.return!");
+      ROS_ERROR("pf_slam::slamThread.loc data invalid.return!");
       return;
     }
   }
@@ -466,7 +470,7 @@ void pf_slam::calGlobalPosThread(){
     boost::mutex::scoped_lock l(cal_mut);
     comp_dt = compensateTimeStop();//the compensate_timer will be restarted by callBackScan fun when the new rfs be caled
     comp_dt /= 1000.0;
-    ROS_INFO("pf_mapping::slamThread.the rfs used delay time:%.3f(ms)",comp_dt*1000);
+    ROS_INFO("pf_slam::slamThread.the rfs used delay time:%.3f(ms)",comp_dt*1000);
     compensateRfsUsedDelay(cur_mea_rfs,comp_dt);
     UpdateCurMeaRfs(cur_mea_rfs);
     cur_mea_rfs_mapping = cur_mea_rfs;
@@ -520,18 +524,24 @@ void pf_slam::calGlobalPosThread(){
          // 又知道反光板绝对位置与定位位置关系，可以测得反光板在绝对坐标系下的角度，
          // 从而反推出车子角度（反光板绝对角度－相对夹角　＝　车子绝对角度　）
          angle_result = getOptimizeAngle(best,cord_result);
-
-         loc_pos.x = cord_result.getX();
-         loc_pos.y = cord_result.getY();
-         loc_pos.theta = angle_result;
-
+         //在建图模式下，定位误差较大，在全局定位发生较大跳跃时，不使用全局定位结果
+         double de_x = fabs(cord_result.getX() - loc_pos.x);
+         double de_y = fabs(cord_result.getY() - loc_pos.y);
+         if(de_x> 0.04 || de_y > 0.04){
+           ROS_INFO("pf_slam.calGlobalPos.big delta happened!");
+         }
+         else{
+           loc_pos.x = cord_result.getX();
+           loc_pos.y = cord_result.getY();
+           loc_pos.theta = angle_result;
+         }
          setGlobalPos(loc_pos);
          setReReckingFlag(true);
          pubGlobalPos(loc_pos);
          ROS_INFO("pf_slam cal global pos suc!global pos(%.6f,%.6f,%.6f),pre recking pos(%.6f,%.6f,%.6f)",
                   loc_pos.x,loc_pos.y,loc_pos.theta,cur_recking_pos.x,cur_recking_pos.y,cur_recking_pos.theta);
          ///for slam mapping
-         getNewRfs(loc_pos,cur_mea_rfs_mapping);///!!!只有初始和有全局定位结果时，ｓｌａｍ才是准确的!!!!
+         getNewRfs(loc_pos,cur_mea_rfs_mapping);///!!!只有初始和有全局定位结果时，slam才是准确的!!!!
          if(cur_mea_rfs_mapping.size())
          {
            boost::mutex::scoped_lock l(addrfs_mut);
@@ -563,7 +573,7 @@ void pf_slam::calGlobalPosThread(){
 void pf_slam::updateHistoryRfsThread( geometry_msgs::Pose2D loc_pos,std::vector<VecPosition> mea_rfs,std::vector<std::pair<int,int> > matched_mea_rfs){
   //moving average!!!
   if( !mapping_start ){
-    ROS_INFO("pf_mapping::updateHistoryRfsThread.mapping not start.return");
+    ROS_INFO("pf_slam::updateHistoryRfsThread.mapping not start.return");
     return;
   }
  ///std::vector<std::pair<int,int> > matched_mea_rfs;//map rfs index<->measured rfs index
@@ -631,6 +641,7 @@ void pf_slam::updateHistoryRfsThread( geometry_msgs::Pose2D loc_pos,std::vector<
           var += pow(delta.getX(),2)+pow(delta.getY(),2);
         }
         var/=filter_his_rfs.size();
+        cur_his_rfs_cord->setCurDx(var);//record cur newest dx
         double cur_dx = cur_his_rfs_cord->dx();
         double delta_dx = cur_dx - var;
         if( delta_dx > his_rfs_update_thread*his_rfs_update_thread ){

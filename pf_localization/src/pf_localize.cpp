@@ -250,7 +250,7 @@ void pfLocalize::deadReckingThread(){
     double dec = last_angle_result-temp_angle;
     dec =atan2(sin(dec),cos(dec));
     if(fabs(dec) > M_PI/3  ){
-      ROS_INFO("may be meet error!");
+      ROS_INFO("pfLocalize::deadReckingThrea.angle delta is beyond thread.may be meet error!");
     }
     else{
       last_angle_result= temp_angle;
@@ -326,12 +326,12 @@ void pfLocalize::createTriangleTemplate(){
       i_j_dist = map_rfs[j].getDistanceTo(map_rfs[i]);
       if( i_j_dist > triangle_grouping_thread || i_j_dist < triangle_side_min_len  ){
         if(i_j_dist < triangle_side_min_len)
-          ROS_WARN_STREAM("WARNIGN! pfLocalize::createTriangleTemplate.dist bet rfs index " << i << " and " << j << " do not fit in thread.continue");
+          ROS_WARN_STREAM("WARNIGN! pfLocalize::createTriangleTemplate.dist bet rfs index i:" << i << " and j:" << j << " dist:" << i_j_dist << " do not fit in thread.continue");
         continue;
       }
       for(int k = j+1; k < map_rfs_size; k++ ){
         i_k_dist = map_rfs[k].getDistanceTo(map_rfs[i]);
-        if( i_k_dist < triangle_grouping_thread &&i_k_dist >= triangle_side_min_len ){
+        if( i_k_dist <= triangle_grouping_thread &&i_k_dist >= triangle_side_min_len ){
           a = Line::makeLineFromTwoPoints(map_rfs[i],map_rfs[j]);
           double dist = a.getDistanceWithPoint(map_rfs[k]);
           if( dist > EPSILON ){//如果不共线，则可以构成三角形
@@ -339,7 +339,7 @@ void pfLocalize::createTriangleTemplate(){
             set<int> set_index(arr,arr+3);
              j_k_dist = map_rfs[j].getDistanceTo(map_rfs[k]);
              if(j_k_dist < triangle_side_min_len ){
-               ROS_WARN_STREAM("WARIGN! pfLocalize::createTriangleTemplate.dist bet rfs index " << j << " and " << k << " do not fit in thread.continue");
+               ROS_WARN_STREAM("WARIGN! pfLocalize::createTriangleTemplate.dist bet rfs index j: " << j << " and k: " << k << " dist:" << j_k_dist << " do not fit in thread.continue");
                continue;
              }
               len = i_j_dist+i_k_dist+j_k_dist;
@@ -352,10 +352,10 @@ void pfLocalize::createTriangleTemplate(){
              _triangle_template.insert(std::pair<set<int>,comparedata>(set_index,cp) );
           }
       }
-      else{
-        if(i_k_dist < triangle_side_min_len)
-          ROS_WARN_STREAM("WARIGN! pfLocalize::createTriangleTemplate.dist bet rfs index " << i << " and " << k << " do not fit in thread.continue");
-      }
+        else{
+          if(i_k_dist < triangle_side_min_len)
+            ROS_WARN_STREAM("WARIGN! pfLocalize::createTriangleTemplate.dist bet rfs index i:" << i << " and k:" << k << " dist:" << i_k_dist << " do not fit in thread.continue");
+        }
       }
 
     }
@@ -676,7 +676,7 @@ void pfLocalize::createTriangleTemplate(){
    double dec = last_angle_result-temp_angle;
    dec =atan2(sin(dec),cos(dec));
    if(fabs(dec) > M_PI/3  ){
-     ROS_INFO("may be meet error!");
+     ROS_INFO("pfLocalize::getOptimizeAngle.the delta bet last angle and this angle is beyond thread,may be meet error!");
    }
    else{
      last_angle_result= temp_angle;

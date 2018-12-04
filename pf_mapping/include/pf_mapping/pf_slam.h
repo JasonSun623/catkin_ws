@@ -22,6 +22,7 @@ struct rfs_history_cord
 {
   rfs_history_cord() {
     _dx = 1/(EPSILON);//large
+    _cur_dx = 1/(EPSILON);//large
     _use_num= 0;
     pos_array = new  std::list<VecPosition>;
   }
@@ -43,8 +44,14 @@ struct rfs_history_cord
   double dx(){
     return _dx;
   }
+  double getCurDx(){
+    return _cur_dx;
+  }
   void setDx(double dx){
     _dx=dx;
+  }
+  void setCurDx(double dx){
+    _cur_dx=dx;
   }
   void setAvgPos(VecPosition pos){
     avg_pos = pos;
@@ -55,6 +62,7 @@ struct rfs_history_cord
   void operator= ( rfs_history_cord & b){
     pos_array = b.pos_array;
     _dx = b.dx();
+    _cur_dx = b.getCurDx();
     _use_num = b.size();
 
   }
@@ -64,7 +72,8 @@ struct rfs_history_cord
   std::list<VecPosition> * pos_array;
 
   VecPosition avg_pos;
-  double _dx;
+  double _dx;//history best dx
+  double _cur_dx;//newest dx
   double _use_num;
 };
 class pf_slam:public pfLocalize{
