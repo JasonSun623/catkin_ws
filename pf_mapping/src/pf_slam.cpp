@@ -60,10 +60,59 @@ void pf_slam::callBackMappingStop(const std_msgs::String fname){
   fstream out;
   std::string str_name = fname.data;
   out.open(str_name.c_str(), ios::out|ios::trunc);
-
-
   mapping_start = false;
+  ///1 out history_rfs
+  out<<"[landmarks]\n";
+  out <<"index\tx(mm)\ty(mm)\tvariance(mm^2)\thistory_use_num\n";
+  for(int i =0 ;i < history_rfs.size();i++){
+    rfs_history_cord* &cur_his_rfs_cord = history_rfs[i];
+    VecPosition cur_p;
+    cur_his_rfs_cord->getAgvPos(cur_p);
+    out <<i<<"\t"<< (int)(cur_p.getX()*1000) << "\t" << (int)(cur_p.getY()*1000)  <<"\t"<< (int)(cur_his_rfs_cord->dx()*1e6)<<"\t" <<cur_his_rfs_cord->size()<<"\n";
+  }
+  ///2 out _triangle_template
+  std::map<std::set<int>,comparedata> temp_triangle_rfs = _triangle_template;
+  std::map<std::set<int>,comparedata>::iterator itr = temp_triangle_rfs.begin();
+  out<<"[triangle_template_data]\n";
+  out <<"index1\tindex2\tindex3\tlength(mm)\tvariance(mm^2)\tpi\n";
+  for(;itr != temp_triangle_rfs.end(); itr++){
+    std::set<int> temp_set = (*itr).first;
+    std::set<int>::iterator itr_set_index = temp_set.begin();//in the set contained the avg_rfs_index then we do next
 
+    if(itr_set_index != temp_set.end() && temp_set.size() == 3){
+      for( std::set<int>::iterator itr_set = temp_set.begin();itr_set != temp_set.end(); itr_set++){
+        out<<*itr_set<<"\t";
+      }
+      comparedata pre_cp = itr->second;
+      out<<(int)(pre_cp.getLen()*1e3)<<"\t"<<(int)(pre_cp.getDx()*1e6)<<"\t"<<pre_cp.getP()<<"\n";
+    }
+    else{
+      continue;
+    }
+  }
+
+  ///3 out ordered_pair_rfs_dist
+  std::deque<order_pair_rfs_para> cur_order_pair_deque=ordered_pair_rfs_dist;//all the pair rfs ordered by largest to smallest
+  order_pair_rfs_para cur_rfs_pair;
+  std::set<int> temp_set;
+  out<<"[ordered_pair_lmks_dist_data]\n";
+  out <<"index1\tindex2\tdist(mm)\n";
+  //std::deque<order_pair_rfs_para>::iterator itr_pair = cur_order_pair_deque.begin();
+   for(int i = 0 ;i < cur_order_pair_deque.size();i++){
+    cur_rfs_pair = cur_order_pair_deque[i];
+    temp_set = cur_rfs_pair.pair();
+    std::set<int>::iterator itr_index = temp_set.begin();
+    if(itr_index!=temp_set.end() && temp_set.size() == 2){
+      for( std::set<int>::iterator itr_set = temp_set.begin();itr_set != temp_set.end(); itr_set++){
+        out << *itr_set<<"\t";
+      }
+      out <<(int)(cur_rfs_pair.dist()*1e3)<<"\n";
+    }
+
+   }
+
+   out.close();
+   ROS_INFO("pf_slam.save map done!");
 }
 
 void pf_slam::addingNewRfs(geometry_msgs::Pose2D loc_pos, std::vector<VecPosition> new_rfs){
@@ -205,6 +254,7 @@ void pf_slam::updateRfsPara(int avg_rfs_index,VecPosition avg_rfs){
  }
 
  ///second to update the pair rfs data
+
  std::deque<order_pair_rfs_para> cur_order_pair_deque=ordered_pair_rfs_dist;//all the pair rfs ordered by largest to smallest
  order_pair_rfs_para cur_rfs_pair;
  std::set<int> temp_set;
@@ -231,6 +281,7 @@ void pf_slam::updateRfsPara(int avg_rfs_index,VecPosition avg_rfs){
    }else{
      continue;
    }
+
  }
 
   setMapRfsData(_abs_map_rfs);
@@ -242,16 +293,29 @@ void pf_slam::updateRfsPara(int avg_rfs_index,VecPosition avg_rfs){
 void pf_slam::sortPairRfsDist(){
     std::deque<order_pair_rfs_para> cur_order_pair_deque=ordered_pair_rfs_dist;//all the pair rfs ordered by largest to smallest
     order_pair_rfs_para cur_rfs_pair;
+
+    ///插入排序1
     for(int i = 1 ;i < cur_order_pair_deque.size();i++){
       for(int j = i; j > 0 && cur_order_pair_deque[j-1].dist() < cur_order_pair_deque[j].dist();j--){
         cur_rfs_pair = cur_order_pair_deque[j];
         cur_order_pair_deque[j] = cur_order_pair_deque[j-1];
         cur_order_pair_deque[j-1] = cur_rfs_pair;
-        //ROS_WARN_STREAM("pf_slam.sortPairRfsDist:cur_order_pair_deque(j)["<<j<<"] dist:" <<cur_order_pair_deque[j].dist() );
-        //ROS_WARN_STREAM("pf_slam.sortPairRfsDist:cur_order_pair_deque(j-1)["<<j-1<<"] dist:" <<cur_order_pair_deque[j-1].dist() );
+        //ROS_WARN_STREAM("pf_mapping.sortPairRfsDist:cur_order_pair_deque(j)["<<j<<"] dist:" <<cur_order_pair_deque[j].dist() );
+        //ROS_WARN_STREAM("pf_mapping.sortPairRfsDist:cur_order_pair_deque(j-1)["<<j-1<<"] dist:" <<cur_order_pair_deque[j-1].dist() );
       }
 
     }
+    #if 0
+    ///插入排序2 more fast
+      for(int i = 1 ;i < cur_order_pair_deque.size();i++){
+        int j = i;
+        cur_rfs_pair = cur_order_pair_deque[j];
+        for(; j > 0 && cur_order_pair_deque[j-1].dist() < cur_rfs_pair.dist();j--){
+          cur_order_pair_deque[j] = cur_order_pair_deque[j-1];
+         }
+        cur_order_pair_deque[j] = cur_rfs_pair;
+      }
+   #endif
     ordered_pair_rfs_dist = cur_order_pair_deque;
 }
 
@@ -264,22 +328,15 @@ void pf_slam::insertSortRfs(std::vector<VecPosition> new_rfs){
     VecPosition add = cur_abs_rfs[i];
     for(int j = 0 ; j < i;j++){//只yu比其索引低的做比较，这样下一个新的自然会 comp to cur 索引
       i_j_dist = add.getDistanceTo(cur_abs_rfs[j]);
-      if( i_j_dist < triangle_grouping_thread && i_j_dist >= triangle_side_min_len  ){
+      if( i_j_dist <= triangle_grouping_thread && i_j_dist >= triangle_side_min_len  ){
         int arr[2]={i,j};
         std::set<int> set_index(arr,arr+2);//The range used is [first,last)
         order_pair_rfs_para cur_rfs_pair(set_index,i_j_dist);
-       //comment temp --s
-       // std::cout << "pf_slam::insertSortRfs.insert pair set:(";
-       // for (std::set<int>::iterator it=set_index.begin(); it!=set_index.end(); ++it)
-       //   std::cout << *it << ',';
-       // std::cout << ")\n dist: " << i_j_dist;
-
         ordered_pair_rfs_dist.push_back(cur_rfs_pair);
-
+        //std::cout << "pf_slam::insertSortRfs.ordered_pair_rfs_dist: i: " <<i <<" j"<< j << cur_rfs_pair;
       }
     }
   }
-
   //secondly to sort
   sortPairRfsDist();
 
@@ -404,10 +461,11 @@ if(_abs_map_rfs.size() ){
   pose.position.x = loc_pos.x;
   pose.position.y = loc_pos.y;
   pose.position.z = 0;
-  tf::Quaternion qua = tf::createQuaternionFromRPY(0,0,loc_pos.theta);
-  geometry_msgs::Quaternion geo_qua;
-  tf::quaternionTFToMsg(qua,geo_qua);
-  pose.orientation = geo_qua;
+  //tf::Quaternion qua = tf::createQuaternionFromRPY(0,0,loc_pos.theta);
+  //geometry_msgs::Quaternion geo_qua;
+  //tf::quaternionTFToMsg(qua,geo_qua);
+  //pose.orientation = geo_qua;
+  pose.orientation =tf::createQuaternionMsgFromYaw(loc_pos.theta);
 
 
   loc_pos_marker.color.r = 153;

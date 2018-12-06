@@ -2,6 +2,7 @@
 #define PF_SLAM_H_
 #include <deque>
 #include <fstream>
+#include <iostream>
 #include <tf/transform_datatypes.h>
 #include <pf_localization/pf_localize.h>
 #include <visualization_msgs/MarkerArray.h>
@@ -12,12 +13,23 @@ namespace pf_slam_space {
 using namespace pf_localization_space;
 struct order_pair_rfs_para{
   order_pair_rfs_para(){}
-  order_pair_rfs_para(std::set<int> pa,double dist):_pair(pa),_dist(dist){}
+  order_pair_rfs_para(std::set<int> pa,double dist):_dist(dist){
+    _pair=pa;//使用赋值运算符正确，如何使用拷贝构造会导致初始化错误，参见set拷贝构建函数
+  }
   double dist(){return _dist;}
   std::set<int> pair(){return _pair;}
+  friend std::ostream& operator <<(std::ostream &os,  order_pair_rfs_para p);
   double _dist;
   std::set<int> _pair;
 };
+ std::ostream& operator <<(std::ostream &os, order_pair_rfs_para p)
+{
+   std::set<int>::iterator itr = p.pair().begin();
+   int d1 = *(itr++);
+   int d2 = *(itr++);
+   os << "set:("<< d1 <<","<< d2 <<")dist: " << p.dist() <<"\n";
+   return os;
+}
 struct rfs_history_cord
 {
   rfs_history_cord() {
