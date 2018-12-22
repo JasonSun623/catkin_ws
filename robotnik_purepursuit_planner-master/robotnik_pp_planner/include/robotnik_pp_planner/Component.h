@@ -25,9 +25,9 @@
 #define DEFAULT_THREAD_DESIRED_HZ	40.0
 #define DEFAULT_THREAD_PRIORITY     25
 
-#define USEC_PER_SEC			1000000
-#define NSEC_PER_SEC			1000000000
-#define Pi                      3.141592654
+#define USEC_PER_SEC      1000000
+#define NSEC_PER_SEC      1000000000
+#define Pi                3.141592654
 
 //! Defines return values for methods and functions
 enum ReturnValue{
