@@ -16,8 +16,9 @@ def purepursuit_client():
 	client = actionlib.SimpleActionClient('purepursuit_planner', GoToAction)
 
 	# Waits until the action server has started up and started listening for goals.
+	rospy.loginfo("planner_test_client.wait_for_server...")
 	client.wait_for_server()
-	
+	rospy.loginfo("planner_test_client.wait_for_server suc!") #chq
 	g = GoToGoal(target = [goal(pose = Pose2D(-2.0, 0.86, 0.0), speed = 0.2), goal(pose = Pose2D(-1.0, 0.46, 0.0), speed = 0.2), 
 	goal(pose = Pose2D(0.0, 0.0, 0.0), speed = 0.2), goal(pose = Pose2D(1.0, 0.0, 0.0), speed = 0.2), goal(pose = Pose2D(2.54, 1.0, 0.0), speed = 0.2),
 	goal(pose = Pose2D(4.96, 2.18, 0.0), speed = 0.2), goal(pose = Pose2D(8.54, 2.22, 0.0), speed = 0.2)])
@@ -39,7 +40,9 @@ if __name__ == '__main__':
 	try:
 		# Initializes a rospy node so that the SimpleActionClient can
 		# publish and subscribe over ROS.
+		rospy.loginfo('planner_test_client.main.init... ')
 		rospy.init_node('planner_test_client')
+		rospy.loginfo('planner_test_client.main.do purepursuit_client... ')
 		result = purepursuit_client()
 		rospy.loginfo( 'Result: %d'%(result.route_result))
 	except rospy.ROSInterruptException:

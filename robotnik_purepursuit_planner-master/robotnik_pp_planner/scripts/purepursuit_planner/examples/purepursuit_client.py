@@ -19,7 +19,9 @@ def purepursuit_client():
 
 	# Waits until the action server has started up and started
 	# listening for goals.
+	rospy.loginfo("purepursuit_client_py.purepursuit_client. wait_for_server... ")
 	client.wait_for_server()
+	rospy.loginfo("purepursuit_client_py.purepursuit_client. wait_for_server done ")
 	#g = GoToGoal(target = [goal(pose = Pose2D(0.0, 0.0, 0.0), speed = 0.2), goal(pose = Pose2D(2.0, 0.0, 0.0), speed = 0.2), goal(pose = Pose2D(3.0, -1.0, 0.0), speed = 0.2), goal(pose = Pose2D(4.0, -1.0, 0.0), speed = 0.2)])
 	g1 = GoToGoal(target = [goal(pose = Pose2D(1.274, 0.097, 0.0), speed = 0.2), goal(pose = Pose2D(3.785, 0.048, 0.0), speed = 0.2)])
 	# Creates a goal to send to the action server.
@@ -32,11 +34,15 @@ def purepursuit_client():
 	g2 = GoToGoal(target = [goal(pose = Pose2D(6.599, 0.381, 0.0), speed = 0.2), goal(pose = Pose2D(7.623, -0.34, 0.0), speed = 0.2)])
 	print 'Sending goal 3 and 4'
 	client.send_goal(g2)
+	print 'Sending goal 5'
+	#g3 = GoToGoal(target = [goal(pose = Pose2D(0, 0, 0.0), speed = 0.2)])
+	#client.send_goal(g3)
 	#print 'Canceling goal'
 	#client.cancel_goal()
 	# Waits for the server to finish performing the action.
+	rospy.loginfo("purepursuit_client_py.purepursuit_client.wait_for_result.. ")
 	client.wait_for_result()
-
+	rospy.loginfo("purepursuit_client_py.purepursuit_client.wait_for_result done ")
 	# Prints out the result of executing the action
 	return client.get_result()  # A FibonacciResult
 

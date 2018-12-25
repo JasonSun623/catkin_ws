@@ -1,0 +1,312 @@
+<?xml version="1.0"?>
+<robot name="R2D2_base" xmlns:xacro="http://ros.org/wiki/xacro">
+<material name="blue">
+  <color rgba="0 0 0.8 1"/>
+</material>
+
+<material name="black">
+  <color rgba="0 0 0 1"/>
+</material>
+
+<material name="white">
+  <color rgba="1 1 1 1"/>
+</material>
+
+<!-- !!!
+  the wheel_separation and  wheel_radius  used for diff_wheel_controller(ros wheel_diff_controller will read them !! ) and urdf
+  if we do not specify it in urdf or yaml conf file ,the odo data published  by diffed controller will get be wrong
+!!!!-->
+
+<xacro:property name="wheel_cylinder_length" value="0.05" />
+<xacro:property name="wheel_separation" value="0.658" />
+<xacro:property name="wheel_radius" value="0.075" />
+
+<xacro:property name="car_body_length" value="1" />
+<xacro:property name="car_body_width" value="0.6" />
+<xacro:property name="car_body_height" value="0.38" />
+
+<xacro:property name="load_length" value="0.2" />
+<xacro:property name="load_width" value="0.2" />
+<xacro:property name="load_height" value="0.2" />
+
+
+<!-- the z dist from baselink to  basefoot in Z axis-->
+<xacro:property name="base_link_to_basefootprint_z" value="${wheel_radius}" />
+
+
+<!-- the dist from body center to base_link in x dir -->
+<xacro:property name="bodycenter_to_base_link_x" value="0.36" />
+<!-- the dist from body center to base_link in y dir -->
+<xacro:property name="bodycenter_to_base_link_y" value="0" />
+<!-- the dist from body center to base_link in z dir -->
+<xacro:property name="bodycenter_to_base_link_z" value="${wheel_radius+car_body_height/2}" />
+
+<!-- the dist from load center to base_link in x dir -->
+<xacro:property name="load_to_base_link_x" value="0.36" />
+<!-- the dist from load center to base_link in y dir -->
+<xacro:property name="load_to_base_link_y" value="0" />
+<!-- the dist from load center to base_link in z dir -->
+<xacro:property name="load_to_base_link_z" value="${bodycenter_to_base_link_z+car_body_height/2}" />
+
+<!-- the dist from drivingwheel center to base_link in x dir -->
+<xacro:property name="rearwheelcenter_to_baselink_x" value="0" />
+<!-- the dist from drivingwheel center to base_link in y dir -->
+<xacro:property name="rearwheelcenter_to_baselink_y" value="${wheel_separation/2.0}" />
+<!-- the dist from drivingwheel center to base_link in z dir -->
+<xacro:property name="rearwheelcenter_to_baselink_z" value="0" />
+
+<!-- the dist from driven wheel center to base_link in x dir -->
+<xacro:property name="frontwheelcenter_to_baselink_x" value="0.74" />
+<!-- the dist from driven wheel center to base_link in y dir -->
+<xacro:property name="frontwheelcenter_to_baselink_y" value="${wheel_separation/2.0}" />
+<!-- the dist from driven wheel center to base_link in z dir -->
+<xacro:property name="frontwheelcenter_to_baselink_z" value="0" />
+
+<!-- the dist from laser center to base_link in x dir -->
+<xacro:property name="lasercenter_to_baselink_x" value="0.42" />
+<!-- the dist from laser center to base_link in y dir -->
+<xacro:property name="lasercenter_to_baselink_y" value="0" />
+<!-- the dist from laser center to base_link in z dir -->
+<xacro:property name="lasercenter_to_baselink_z" value="${load_to_base_link_z+load_height/2+0.05}" />
+
+
+  <xacro:macro name="default_inertial" params="mass">
+    <inertial>
+      <mass value="${mass}" />
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0" />
+    </inertial>
+  </xacro:macro>
+
+<link name="base_footprint">
+</link>
+  
+<link name="base_link">
+    <visual>
+      <geometry>
+         <box size="${car_body_length} ${car_body_width} ${car_body_height}"/>
+      </geometry>
+     <origin xyz="${bodycenter_to_base_link_x} ${bodycenter_to_base_link_y} ${bodycenter_to_base_link_z}" rpy="0 0 0"/>
+     <material name="blue"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="${car_body_length} ${car_body_width} ${car_body_height}"/>
+      </geometry>
+     <origin xyz="${bodycenter_to_base_link_x} ${bodycenter_to_base_link_y} ${bodycenter_to_base_link_z}" rpy="0 0 0"/>
+    </collision>
+    <xacro:default_inertial mass="100"/>
+  </link>
+
+<link name="load">
+    <visual>
+      <geometry>
+         <box size="${load_length} ${load_width} ${load_height}"/>
+      </geometry>
+     <origin xyz="0 0 0" rpy="0 0 0"/>
+     <material name="blue"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="${load_length} ${load_width} ${load_height}"/>
+      </geometry>
+     <origin xyz="0 0 0" rpy="0 0 0"/>
+    </collision>
+    <xacro:default_inertial mass="50"/>
+  </link>
+
+  <link name="left_front_wheel">
+    <visual>
+      <geometry>
+        <cylinder length="${wheel_cylinder_length}" radius="${wheel_radius}"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="1.57 0 0"/>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder length="${wheel_cylinder_length}" radius="${wheel_radius}"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="1.57 0 0"/>
+    </collision>
+    <xacro:default_inertial mass="1"/>
+  </link>
+
+
+<link name="right_front_wheel">
+    <visual>
+      <geometry>
+        <cylinder length="${wheel_cylinder_length}" radius="${wheel_radius}"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="1.57 0 0"/>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder length="${wheel_cylinder_length}" radius="${wheel_radius}"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="1.57 0 0"/>
+    </collision>
+    <xacro:default_inertial mass="1"/>
+  </link>
+
+<link name="left_rear_wheel">
+    <visual>
+      <geometry>
+        <cylinder length="${wheel_cylinder_length}" radius="${wheel_radius}"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="1.57 0 0"/>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder length="${wheel_cylinder_length}" radius="${wheel_radius}"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="1.57 0 0"/>
+    </collision>
+    <xacro:default_inertial mass="0.01"/>
+  </link>
+
+<link name="right_rear_wheel">
+    <visual>
+      <geometry>
+        <cylinder length="${wheel_cylinder_length}" radius="${wheel_radius}"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="1.57 0 0"/>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder length="${wheel_cylinder_length}" radius="${wheel_radius}"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="1.57 0 0"/>
+    </collision>
+    <xacro:default_inertial mass="0.01"/>
+  </link>
+
+
+
+  <!-- published int launch file -->
+  <!-- if published in here the tf time will too fast than other link ,it will display error in rviz-->
+  <joint name="base_footprint_to_base_link" type="fixed">
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+    <origin xyz="0 0 ${base_link_to_basefootprint_z}" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+  </joint>
+
+  <joint name="load_to_base_link" type="fixed">
+    <parent link="base_link"/>
+    <child link="load"/>
+    <origin xyz="${load_to_base_link_x} ${load_to_base_link_y} ${load_to_base_link_z}" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+  </joint>
+
+  <joint name="left_front_wheel_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="left_front_wheel"/>
+    <origin xyz="${frontwheelcenter_to_baselink_x} ${frontwheelcenter_to_baselink_y} ${frontwheelcenter_to_baselink_z}" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+  </joint>
+
+  <joint name="right_front_wheel_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="right_front_wheel"/>
+    <origin xyz="${frontwheelcenter_to_baselink_x} ${-frontwheelcenter_to_baselink_y} ${frontwheelcenter_to_baselink_z}" rpy="0 0 0" />
+    <axis xyz="0 1 0"/>
+  </joint>
+
+ 
+  <joint name="left_rear_wheel_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="left_rear_wheel"/>
+    <origin xyz="${rearwheelcenter_to_baselink_x} ${rearwheelcenter_to_baselink_y} ${rearwheelcenter_to_baselink_z}" rpy="0 0 0" />
+    <axis xyz="0 1 0"/>
+  </joint>
+
+ 
+  <joint name="right_rear_wheel_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="right_rear_wheel"/>
+    <origin xyz="${rearwheelcenter_to_baselink_x} ${-rearwheelcenter_to_baselink_y} ${rearwheelcenter_to_baselink_z}"  rpy="0 0 0" />
+    <axis xyz="0 1 0"/>
+  </joint>
+
+  <xacro:include filename="$(find robotnik_pp_planner)/urdf/hokuyolaser_base.xacro" />
+  <xacro:hokuyolaser parent_link="base_link">
+    <origin xyz="${lasercenter_to_baselink_x} ${lasercenter_to_baselink_y} ${lasercenter_to_baselink_z}" rpy="0 0 0" />
+  </xacro:hokuyolaser>
+
+<transmission name="left_rear_wheel_trans">
+  <type>transmission_interface/SimpleTransmission</type>
+  <actuator name="$left_rear_wheel_motor">
+    <mechanicalReduction>20</mechanicalReduction>
+  </actuator>
+  <joint name="left_rear_wheel_joint">
+   <hardwareInterface>VelocityJointInterface</hardwareInterface>
+  </joint>
+</transmission>
+
+<transmission name="right_rear_wheel_trans">
+  <type>transmission_interface/SimpleTransmission</type>
+  <actuator name="$right_rear_wheel_motor">
+    <mechanicalReduction>20</mechanicalReduction>
+  </actuator>
+  <joint name="right_rear_wheel_joint">
+   <hardwareInterface>VelocityJointInterface</hardwareInterface>
+  </joint>
+</transmission>
+
+<transmission name="left_front_wheel_trans">
+  <type>transmission_interface/SimpleTransmission</type>
+  <actuator name="$left_front_wheel_motor">
+    <mechanicalReduction>1</mechanicalReduction>
+  </actuator>
+  <joint name="left_front_wheel_joint">
+   <hardwareInterface>VelocityJointInterface</hardwareInterface>
+  </joint>
+</transmission>
+
+<transmission name="right_front_wheel_trans">
+  <type>transmission_interface/SimpleTransmission</type>
+  <actuator name="$right_front_wheel_motor">
+    <mechanicalReduction>1</mechanicalReduction>
+  </actuator>
+  <joint name="right_front_wheel_joint">
+   <hardwareInterface>VelocityJointInterface</hardwareInterface>
+  </joint>
+</transmission>
+<!--transmission name="front_wheel_trans">
+  <type>transmission_interface/SimpleTransmission</type>
+  <actuator name="$front_wheel_motor">
+    <mechanicalReduction>1</mechanicalReduction>
+  </actuator>
+  <joint name="front_wheel_joint">
+   <hardwareInterface>PositionJointInterface</hardwareInterface>
+  </joint>
+</transmission-->
+
+<!--gazebo>                                                       
+  <plugin name="differential_drive_controller" filename="libgazebo_ros_diff_drive.so">
+    <robotNamespace>/</robotNamespace>
+    <alwaysOn>true</alwaysOn>
+    <updateRate>50</updateRate>
+    <leftJoint>left_front_wheel_joint</leftJoint>
+    <rightJoint>right_front_wheel_joint</rightJoint>
+    <wheelSeparation>${wheel_separation}</wheelSeparation>
+    <wheelDiameter>${2*wheel_radius}</wheelDiameter>
+    <torque>20</torque>
+    <commandTopic>cmd_vel</commandTopic>
+    <odometryTopic>odom</odometryTopic>
+    <odometryFrame>odom</odometryFrame>
+    <robotBaseFrame>base_link</robotBaseFrame>
+  </plugin>
+</gazebo-->
+
+ <gazebo>
+  <plugin name="gazebo_ros_control" filename="libgazebo_ros_control.so">
+  <robotNamespace>/</robotNamespace>
+  </plugin>
+</gazebo>
+
+
+</robot>

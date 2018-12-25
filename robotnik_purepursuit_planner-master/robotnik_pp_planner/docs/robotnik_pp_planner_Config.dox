@@ -1,0 +1,15 @@
+\subsubsection parameters ROS parameters
+
+Reads and maintains the following parameters on the ROS server
+
+- \b "~max_w" : \b [double] max rotate speed min: 0.0, default: 3.14159265359, max: 6.28318530718
+- \b "~min_w" : \b [double] min rotate speed min: -3.14159265359, default: -3.14159265359, max: 1.57079632679
+- \b "~kp_w" : \b [double] kp for rotate speed min: 0.0, default: 0.5, max: 2.0
+- \b "~ki_w" : \b [double] ki for rotate speed min: 0.0, default: 0.05, max: 0.5
+- \b "~kd_w" : \b [double] kd for rotate speed min: 0.0, default: 0.005, max: 0.5
+- \b "~max_v" : \b [double] max translate speed min: 0.0, default: 1.0, max: 2.0
+- \b "~min_v" : \b [double] min translate speed min: 0.0, default: 0.0, max: 0.1
+- \b "~kp_v" : \b [double] kp for translate speed min: 0.0, default: 0.5, max: 2.0
+- \b "~ki_v" : \b [double] ki for translate speed min: 0.0, default: 0.05, max: 0.5
+- \b "~kd_v" : \b [double] kd for translate speed min: 0.0, default: 0.005, max: 0.5
+

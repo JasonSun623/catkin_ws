@@ -184,7 +184,7 @@ class PointPathManager(InteractiveMarkerServer):
 		# Locates and loads the UI file into the widget
 		rp = rospkg.RosPack()		
 		# loads a ui file for the dialog
-		self.points_file_path = os.path.join(rp.get_path('robotnik_pp_planner'), 'config', 'coveragespace_test.txt')
+		self.points_file_path = os.path.join(rp.get_path('robotnik_pp_planner'), 'config', 'coveragespace_conspeed.txt')
 		
 		#rospy.Timer(rospy.Duration(5), self.createNewPoint)
 		self._go_service = rospy.Service('%s/go'%rospy.get_name(), Empty, self.goService)
@@ -296,9 +296,8 @@ class PointPathManager(InteractiveMarkerServer):
 		# Reads and extracts the information of every line
 		line = file_points.readline().replace('\n', '')
 		while line != '':
-			# line format = 'p1;p1->0.4;0.5;5.2;0.4'
+			# line format = 'p1;0.5;5.2;0.1;0.4' //[ ID, X, Y,,angle, SPEED]
 			a = line.split(';')
-			# a = ['p1', 'p1->0.4', '0.5', '0.4', '0.4'] // [ ID, DESCRIPTION, X, Y, SPEED]
 			if len(a) == 5:
 				
 				new_point = PointPath(self.frame_id, a[0], a[1], speed = float(a[4]))

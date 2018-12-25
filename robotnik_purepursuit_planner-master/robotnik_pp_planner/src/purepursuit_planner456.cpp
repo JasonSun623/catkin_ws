@@ -10,14 +10,13 @@
 #include <string.h>
 #include <vector>
 #include <queue>
-#include <stdint.h>//<stdint.h>中定义了几种扩展的整数类型和宏
+#include <stdint.h>
 #include <ros/ros.h>
 #include <math.h>
 #include <cstdlib>
-#include "robotnik_pp_planner/pid.h"
-#include "robotnik_pp_planner/Geometry.h"
+
 #include <robotnik_pp_planner/Component.h>
-#include <ackermann_msgs/AckermannDriveStamped.h>//disable by chq
+#include <ackermann_msgs/AckermannDriveStamped.h>
 #include <nav_msgs/Odometry.h>
 #include <tf/transform_broadcaster.h>
 #include <tf/transform_listener.h>
@@ -31,60 +30,44 @@
 #include <robotnik_pp_msgs/goal.h>
 #include <geometry_msgs/Pose2D.h>
 #include <geometry_msgs/Twist.h>
-#include <nav_msgs/Path.h>///added for display path
-#include <visualization_msgs/Marker.h>
-#include <visualization_msgs/MarkerArray.h>
 
-#include <dynamic_reconfigure/server.h>
-#include <robotnik_pp_planner/robotnik_pp_plannerConfig.h>
 //#include <s3000_laser/enable_disable.h>
 
 
-#define ODOM_TIMEOUT_ERROR          0.2        // max num. of seconds without receiving odom values
-#define MAP_TIMEOUT_ERROR          0.2        // max num. of seconds without receiving map transformations
-#define AGVS_TURN_RADIUS          0.20      // distancia en la que empieza a girar el robot cuando llega a una esquina
-#define MIN_ANGLE_BEZIER          0.261799388    // ángulo (radianes) mínimo entre segmentos de la recta para los que ajustaremos a una curva de BEZIER//我们将调整为BEZIER曲线的线段之间的最小角度（弧度）
+#define ODOM_TIMEOUT_ERROR					0.2				// max num. of seconds without receiving odom values
+#define MAP_TIMEOUT_ERROR					0.2				// max num. of seconds without receiving map transformations
+#define AGVS_TURN_RADIUS					0.20			// distancia en la que empieza a girar el robot cuando llega a una esquina
+#define MIN_ANGLE_BEZIER					0.261799388		// ángulo (radianes) mínimo entre segmentos de la recta para los que ajustaremos a una curva de BEZIER
 #define MIN_ANGLE_BSPLINE          0.261799388    // ángulo (radianes) mínimo entre segmentos de la recta para los que ajustaremos a una curva de BEZIER//我们将调整为BEZIER曲线的线段之间的最小角度（弧度）
-
-#define BEZIER_CONTROL_POINTS        5
+#define BEZIER_CONTROL_POINTS				5
 #define BSPLINE_CONTROL_POINTS       5
-#define D_LOOKVERTICAL_MIN            0.3    // heading to vertical point limit dist chq
-#define D_LOOKAHEAD_INC            0.01
-#define D_LOOKAHEAD_MIN            0.3    // Minima distancia del punto objetivo en m (PurePursuit con lookahead dinámico)
-#define D_LOOKAHEAD_MAX            1.1    // Maxima distancia del punto objetivo
-#define D_WHEEL_ROBOT_CENTER          0.478   // Distance from the motor wheel to the robot center
+#define D_LOOKAHEAD_MIN						0.3		// Minima distancia del punto objetivo en m (PurePursuit con lookahead dinámico)
+#define D_LOOKAHEAD_MAX						1.1		// Maxima distancia del punto objetivo
+#define D_WHEEL_ROBOT_CENTER    			0.478   // Distance from the motor wheel to the robot center
 
-//#define MAX_SPEED_LVL1            0.5
-//#define MAX_SPEED_LVL2            0.3
-#define MAX_SPEED_LVL1            0.3
-#define MAX_SPEED_LVL2            0.2
-#define MAX_SPEED                 1.2
+#define MAX_SPEED_LVL1						0.5
+#define MAX_SPEED_LVL2						0.3
+#define MAX_SPEED							1.2
 
-#define WAYPOINT_POP_DISTANCE_M        0.10    //Distancia mínima para alcanzar punto objetivo m (PurePursuit)
+#define WAYPOINT_POP_DISTANCE_M				0.10		//Distancia mínima para alcanzar punto objetivo m (PurePursuit)
 
-#define AGVS_FIRST_DECELERATION_DISTANCE   0.5   // meters -> when the vehicle is arriving to the goal, it has to decelarate at this distance
-#define AGVS_FIRST_DECELERATION_MAXSPEED  0.15  // m/s
-#define AGVS_SECOND_DECELERATION_DISTANCE   0.25   // meters -> when the vehicle is arriving to the goal, it has to decelarate another time at this distance
-#define AGVS_SECOND_DECELERATION_MAXSPEED  0.1   // m/s
-#define AGVS_DEFAULT_KR  0.20            //
+#define AGVS_FIRST_DECELERATION_DISTANCE 	0.5 	// meters -> when the vehicle is arriving to the goal, it has to decelarate at this distance
+#define AGVS_FIRST_DECELERATION_MAXSPEED	0.15	// m/s
+#define AGVS_SECOND_DECELERATION_DISTANCE   0.25 	// meters -> when the vehicle is arriving to the goal, it has to decelarate another time at this distance
+#define AGVS_SECOND_DECELERATION_MAXSPEED	0.1 	// m/s
+#define AGVS_DEFAULT_KR	0.20						//
 
 
-#define COMMAND_ACKERMANN          100
-#define COMMAND_TWIST            200
-#define COMMAND_ACKERMANN_STRING      "Ackermann"
-#define COMMAND_TWIST_STRING        "Twist"
-//chq 切换算法rviz显示
-enum look_dir{
-  look_back = 0,//瞄准起点后方
-  lool_ahead =1 //瞄准起点前方
-};
+#define COMMAND_ACKERMANN					100
+#define COMMAND_TWIST						200
+#define COMMAND_ACKERMANN_STRING			"Ackermann"
+#define COMMAND_TWIST_STRING				"Twist"
+
 
 enum{
   ODOM_SOURCE = 1,
   MAP_SOURCE = 2
 };
-
-look_dir g_dir = look_back;
 
 using namespace std;
 
@@ -208,10 +191,10 @@ class Path{
   //! Adds a new magnet
   ReturnValue AddMagnet(MagnetStruct magnet){
     pthread_mutex_lock(&mutexPath);
-    if(iCurrentMagnet < 0){ //First point
-      iCurrentMagnet = 0;
-    }
-    vMagnets.push_back(magnet);
+      if(iCurrentMagnet < 0){ //First point
+        iCurrentMagnet = 0;
+      }
+      vMagnets.push_back(magnet);
     pthread_mutex_unlock(&mutexPath);
 
     return OK;
@@ -307,13 +290,12 @@ class Path{
   std::vector <Waypoint> GetWaypoints(){
     return vPoints;
   }
-
   //! Gets the current Waypoint in the path
   int GetCurrentWaypointIndex(){
     return iCurrentWaypoint;
   }
 
-  //!  Sets the current Waypoint to index
+  //!	Sets the current Waypoint to index
   ReturnValue SetCurrentWaypoint(int index){
     ReturnValue ret = ERROR;
 
@@ -402,7 +384,7 @@ class Path{
     return iCurrentMagnet;
   }
 
-  //!  Sets the current magnet to index
+  //!	Sets the current magnet to index
   ReturnValue SetCurrentMagnet(int index){
     ReturnValue ret = ERROR;
 
@@ -455,13 +437,13 @@ class Path{
 
   //! Obtains the points for a quadratic Bezier's curve
   //! \param cp0 as player_pose2d_t, control point 0
-  //!  \param cp1 as player_pose2d_t, control point 1
-  //!  \param cp2 as player_pose2d_t, control point 2
-  //!  \param t as float, [0 ... 1]
-  //!  \return Point over the curve
+  //!	\param cp1 as player_pose2d_t, control point 1
+  //!	\param cp2 as player_pose2d_t, control point 2
+  //!	\param t as float, [0 ... 1]
+  //!	\return Point over the curve
   Waypoint PosOnQuadraticBezier(Waypoint cp0, Waypoint cp1, Waypoint cp2, float t){
     Waypoint aux;
-    ///chq 二次Bezier曲线
+
     //B(t)= (1-t)^2 * cp0 + 2*t*(1-t)*cp1 + t^2 * cp2;
     //Bx(t)
     aux.dX = (1.0-t)*(1.0-t)*cp0.dX + 2*t*(1.0-t)*cp1.dX + t*t*cp2.dX;
@@ -471,7 +453,7 @@ class Path{
     return aux;
   }
 
-  //! Obtains the points for a B spline curve
+//! Obtains the points for a B spline curve
   //!  \param cp0 as player_pose2d_t, control point 0
   //!  \param cp1 as player_pose2d_t, control point 1
   //!  \param cp2 as player_pose2d_t, control point 2
@@ -530,24 +512,22 @@ class Path{
     Waypoint A, B, C;
     double Kt = 1.0 / BEZIER_CONTROL_POINTS;
     double dAuxSpeed = 0.0;
-    double dMinDist = 0.0;  // Minica distancia a la que hay q frenar en funcion de la velocidad
+    double dMinDist = 0.0;	// Minica distancia a la que hay q frenar en funcion de la velocidad
 
-    if(bOptimized){  //Already optimized
+    if(bOptimized){	//Already optimized
       return OK;
     }
 
-    if((vPoints.size() < 2) || (distance <= 0.0)){  //Minimo 3 puntos en la ruta
+    if((vPoints.size() < 2) || (distance <= 0.0)){	//Minimo 3 puntos en la ruta
       //printf("WaypointRoute::Optimize: Error: not enought points (%d)\n",Size());
       return ERROR;
     }
     pthread_mutex_lock(&mutexPath);
       //
       // Si solo hay dos puntos, interpolamos y creamos un punto intermedio
-    //if only have 2 points then we create a mid point
       if(vPoints.size() == 2){
         aux = vPoints[1];
-        vPoints.push_back(aux); // Añadimos un punto al final y modificamos el del medio  //we add a point in the end and change the mid point
-
+        vPoints.push_back(aux); // Añadimos un punto al final y modificamos el del medio
         if((vPoints[0].dX - aux.dX) == 0.0){// Punto en el mismo eje X
           vPoints[1].dX = vPoints[0].dX;    // Mantenemos la coordenada en X
           vPoints[1].dY = vPoints[0].dY + (aux.dY - vPoints[0].dY) / 2.0; // La coordenada en Y será igual a la del primer punto más la mitada de distancia entre el punto final e inicial
@@ -563,7 +543,7 @@ class Path{
       new_points.push_back(vPoints[0]);
       new_points.push_back(vPoints[1]);
 
-      for(i=2; i < vPoints.size(); i++){  // Primera pasada, añadimos puntos para los giros en curvas
+      for(i=2; i < vPoints.size(); i++){	// Primera pasada, añadimos puntos para los giros en curvas
         //cout << " Partiendo de punto " << i << endl;
         a = i-2;
         b = i-1;
@@ -590,7 +570,7 @@ class Path{
           // siendo ba vector director de b->a y bc el vector director b->c
           // Calculamos un punto a una distancia 'd' desde 'b' hacia 'a' y otro punto desde 'b' hacia 'c'
           // Estos puntos serán los que se añadirán a la lista de waypoints para poder trazar una curva de bezier
-          //1和２之间要插入新点，所以第二个点要先pop
+
           new_points.pop_back();
 
           // Calcula velocidad maxima en funcion del giro de la curva
@@ -602,21 +582,20 @@ class Path{
           // Si la velocidad en ese waypoint supera el máximo establecido para un giro así
           if(fabs(vPoints[b].dSpeed) > dAuxSpeed){
 
-            if(vPoints[b].dSpeed < 0.0)  // Cambiamos sentido de avance
+            if(vPoints[b].dSpeed < 0.0)	// Cambiamos sentido de avance
               dAuxSpeed = -dAuxSpeed;
 
-            dMinDist = DistForSpeed(fabs(vPoints[b].dSpeed));//根据速度确定最小限定距离
+            dMinDist = DistForSpeed(fabs(vPoints[b].dSpeed));
             //cout << "Min dist = " << dMinDist  << endl;
             // Si el punto antes del giro esta a una distancia menor a la mínima, añadimos nuevo punto a un metro
-            if( mod_ab > dMinDist){//如果两点距离超过了速度决定的限定距离，可以再插入点
-              //Lo creamos//we create
-              /// chq if the dist bett a and b is much more bigger, then we  create a mid point after a
+            if( mod_ab > dMinDist){
+              //Lo creamos
               ba.dX = -ab.dX;
               ba.dY = -ab.dY;
-              K = dMinDist / mod_ab;
-              //似乎是简单的线性插值
-              aux.dX = Bx + K * ba.dX;  // x = x' + K*Vx
-              aux.dY = By + K * ba.dY;  // y = y' + K*Vy  //(Vx, Vy) vector director
+              K = dMinDist / sqrt(ba.dX * ba.dX + ba.dY * ba.dY);
+
+              aux.dX = Bx + K * ba.dX;	// x = x' + K*Vx
+              aux.dY = By + K * ba.dY;	// y = y' + K*Vy	//(Vx, Vy) vector director
               aux.dSpeed = vPoints[b].dSpeed;
               //cout << "Nuevo punto en " << aux.dX << ", " << aux.dY << endl;
               new_points.push_back(aux);
@@ -625,17 +604,15 @@ class Path{
             vPoints[b].dSpeed = dAuxSpeed;
 
           }
-          // El primer waypoint no se modifica//第一个航点不会被修改
-          //大于最小间隔距离，插入点
+          // El primer waypoint no se modifica
           if(mod_ab > distance){ // si la distancia entre ab es MAYOR a la distancia del punto que pretendemos crear, creamos un punto intermedio
-            ///Lo creamos
-            /// chq if the dist bet a and b is beyond the limit dist then we create a mid point
+            //Lo creamos
             ba.dX = -ab.dX;
             ba.dY = -ab.dY;
-            K = distance / mod_ab;
+            K = distance / sqrt(ba.dX * ba.dX + ba.dY * ba.dY);
 
-            aux.dX = Bx + K * ba.dX;  // x = x' + K*Vx
-            aux.dY = By + K * ba.dY;  // y = y' + K*Vy  //(Vx, Vy) vector director
+            aux.dX = Bx + K * ba.dX;	// x = x' + K*Vx
+            aux.dY = By + K * ba.dY;	// y = y' + K*Vy	//(Vx, Vy) vector director
             aux.dSpeed = vPoints[b].dSpeed;
             //cout << "Nuevo punto en " << aux.dX << ", " << aux.dY << endl;
             new_points.push_back(aux);
@@ -645,11 +622,10 @@ class Path{
           new_points.push_back(vPoints[b]);
 
           if(mod_bc > distance){ // si la distancia entre ab es menor a la distancia del punto que pretendemos crear, lo dejamos como está
-            ///Lo creamos// chq if the dist bet b and c is beyond the limit dist then we create a mid point
-            K = distance / mod_bc;
-            //K = distance / sqrt(bc.dX * bc.dX + bc.dY * bc.dY);
-            aux.dX = Bx + K * bc.dX;  // x = x' + K*Vx
-            aux.dY = By + K * bc.dY;  // y = y' + K*Vy  //(Vx, Vy) vector director
+            //Lo creamos
+            K = distance / sqrt(bc.dX * bc.dX + bc.dY * bc.dY);
+            aux.dX = Bx + K * bc.dX;	// x = x' + K*Vx
+            aux.dY = By + K * bc.dY;	// y = y' + K*Vy	//(Vx, Vy) vector director
             aux.dSpeed = vPoints[b].dSpeed;
             //j++;
             //cout << "Nuevo punto en " << aux.dX << ", " << aux.dY << endl;
@@ -658,13 +634,12 @@ class Path{
 
           // Creamos punto para después del giro
           if(dMinDist > 0.0) {
-            if(mod_bc > 1.0){  // si la distancia al punto C es mayor que 1 metro, después del giro
-              /// chq if the dist bet b and c is beyond 1 m then we create a mid point
+            if(mod_bc > 1.0){	// si la distancia al punto C es mayor que 1 metro, después del giro
               // Creamos un nuevo punto
               //Lo creamos
               K = 1.0 / sqrt(bc.dX * bc.dX + bc.dY * bc.dY);
-              aux.dX = Bx + K * bc.dX;  // x = x' + K*Vx
-              aux.dY = By + K * bc.dY;  // y = y' + K*Vy  //(Vx, Vy) vector director
+              aux.dX = Bx + K * bc.dX;	// x = x' + K*Vx
+              aux.dY = By + K * bc.dY;	// y = y' + K*Vy	//(Vx, Vy) vector director
               aux.dSpeed = vPoints[b].dSpeed;
               new_points.push_back(aux);
             }else{
@@ -676,7 +651,7 @@ class Path{
 
           new_points.push_back(vPoints[c]);
           //j++;
-        }else{  //Se queda como está
+        }else{	//Se queda como está
 
           new_points.push_back(vPoints[c]);
 
@@ -685,10 +660,11 @@ class Path{
 
       // Borramos antiguos waypoints e insertamos los nuevos
       vPoints.clear();
+
       // BEZIER
       vPoints.push_back(new_points[0]);
       vPoints.push_back(new_points[1]);
-      for(i=2; i < new_points.size(); i++){  // Segunda pasada, aproximamos los giros a curvas de Bezier
+      for(i=2; i < new_points.size(); i++){	// Segunda pasada, aproximamos los giros a curvas de Bezier
         a = i-2;
         b = i-1;
         c = i;
@@ -721,18 +697,17 @@ class Path{
           C = new_points[c];
 
           aux_speed = new_points[b].dSpeed; //takes speed of the waypoint in the middle
-          vPoints.pop_back();      // Eliminamos el waypoint del medio. El primer waypoint no se modifica
+          vPoints.pop_back();			// Eliminamos el waypoint del medio. El primer waypoint no se modifica
 
           for(int j=1; j <= BEZIER_CONTROL_POINTS; j++) {
             t = (double) j * Kt;
             aux_wp = PosOnQuadraticBezier(A, B, C,  t);
             aux_wp.dSpeed = aux_speed;
             vPoints.push_back(aux_wp);
-          //  std::cout << "\tWaypointRoute::Optimize: (Bezier) Waypoint,X= " << aux_wp.dX << " Y= " << aux_wp.dY
-          //        << " size= " << (int)points.size() << endl;
+          //	std::cout << "\tWaypointRoute::Optimize: (Bezier) Waypoint,X= " << aux_wp.dX << " Y= " << aux_wp.dY
+          //				<< " size= " << (int)points.size() << endl;
           }
-        }
-        else{  //Se queda como está
+        }else{	//Se queda como está
 
           vPoints.push_back(new_points[c]);
         }
@@ -740,9 +715,9 @@ class Path{
 
       iCurrentWaypoint = 0;
 
-    //  for(int i = 0; i < new_points.size(); i++){
-    //  points.push_back(new_points[i]);
-    //  }
+    //	for(int i = 0; i < new_points.size(); i++){
+    //	points.push_back(new_points[i]);
+    //	}
 
     pthread_mutex_unlock(&mutexPath);
 
@@ -751,8 +726,7 @@ class Path{
 
     return OK;
   }
-
-  //! Modifies and adds new waypoints to the route for improving the path
+//! Modifies and adds new waypoints to the route for improving the path
   //! \param distance as double, used for the calculation of the new points
   //! \return ERROR if Size is lower than 4, distance <= 0 or the waypoints has already been optimized
   //! \return OK
@@ -771,7 +745,7 @@ class Path{
     double Kt = 1.0 / BSPLINE_CONTROL_POINTS;
     double dAuxSpeed = 0.0;
     double dMinDist = 0.0;  // Minica distancia a la que hay q frenar en funcion de la velocidad
-    int have_beyond_onemeter = false;
+
     if(bOptimized){  //Already optimized
       return OK;
     }
@@ -782,19 +756,6 @@ class Path{
     }
 
     pthread_mutex_lock(&mutexPath);
-    ///added by chq -s
-
-    if(vPoints[0].dSpeed>MAX_SPEED_LVL1)
-      vPoints[0].dSpeed = MAX_SPEED_LVL1;
-    if(vPoints[0].dSpeed<-MAX_SPEED_LVL1)
-      vPoints[0].dSpeed = -MAX_SPEED_LVL1;
-
-    if(vPoints[1].dSpeed>MAX_SPEED_LVL1)
-      vPoints[1].dSpeed = MAX_SPEED_LVL1;
-    if(vPoints[1].dSpeed<-MAX_SPEED_LVL1)
-      vPoints[1].dSpeed =- MAX_SPEED_LVL1;
-
-    ///added by chq -e
     new_points.push_back(vPoints[0]);
     new_points.push_back(vPoints[1]);
     for(i=2; i < vPoints.size(); i++){  // Primera pasada, añadimos puntos para los giros en curvas
@@ -818,28 +779,8 @@ class Path{
       bc.dY = Cy - By;
       mod_bc = sqrt(bc.dX * bc.dX + bc.dY * bc.dY);
 
-      dAngle= acos(dot2(ab,bc)/(mod_ab*mod_bc));
-      ///add by chq ---s-----
-      /// //force limit start speed in two meter
-      double dist;
-     if( !have_beyond_onemeter ){
-       dist = pow(vPoints[c].dX-vPoints[0].dX,2)+pow(vPoints[c].dY-vPoints[0].dY,2);
-       if(dist>2*2)
-         have_beyond_onemeter = true;
-     }
-     if(!have_beyond_onemeter){
-       double sp = new_points[c].dSpeed;
-       if(sp>MAX_SPEED_LVL1)vPoints[c].dSpeed=MAX_SPEED_LVL1;
-       if(sp<-MAX_SPEED_LVL1)vPoints[c].dSpeed=-MAX_SPEED_LVL1;
-     }
-/// //force limit end speed at the last two meter
-     double dist_end = pow(vPoints[c].dX-vPoints[vPoints.size()-1].dX,2)+pow(vPoints[c].dY-vPoints[vPoints.size()-1].dY,2);
-     if(dist_end < 2*2 ){
-       double sp = new_points[c].dSpeed;
-       if(sp>MAX_SPEED_LVL1)vPoints[c].dSpeed=MAX_SPEED_LVL1;
-       if(sp<-MAX_SPEED_LVL1)vPoints[c].dSpeed=-MAX_SPEED_LVL1;
-     }
-     ///add by chq ---end------
+      dAngle= acos(dot2(ab,bc)/(mod_ab*mod_bc));//
+
       //cout <<  i << " Angle =  "<< dAngle << endl;
       if(fabs(dAngle) >= MIN_ANGLE_BSPLINE){ // en caso del angulo que forman los segmentos sea menor, entonces generaremos puntos para aproximar mjor la curva
         // siendo ba vector director de b->a y bc el vector director b->c
@@ -861,14 +802,12 @@ class Path{
         if(fabs(vPoints[b].dSpeed) > dAuxSpeed){
 
           if(vPoints[b].dSpeed < 0.0)  // Cambiamos sentido de avance
-            dAuxSpeed = -fabs(dAuxSpeed);
+            dAuxSpeed = -dAuxSpeed;
 
           dMinDist = DistForSpeed(fabs(vPoints[b].dSpeed));//根据速度确定最小限定距离
           //cout << "Min dist = " << dMinDist  << endl;
           // Si el punto antes del giro esta a una distancia menor a la mínima, añadimos nuevo punto a un metro
-          ///减去１的目的是上一循环可能在１m处插入了缓冲点 chq
-          /// //b-->minturnp---->1m-->mindist------------>c
-          if( mod_ab - 1 > dMinDist ){//如果两点距离超过了速度决定的限定距离，可以再插入点
+          if( mod_ab > dMinDist ){//如果两点距离超过了速度决定的限定距离，可以再插入点
             //Lo creamos//we create
             /// chq if the dist bett a and b is much more bigger, then we  create a mid point after a
             ba.dX = -ab.dX;
@@ -878,7 +817,8 @@ class Path{
             aux.dX = Bx + K * ba.dX;  // x = x' + K*Vx
             aux.dY = By + K * ba.dY;  // y = y' + K*Vy  //(Vx, Vy) vector director
 
-            aux.dSpeed = vPoints[b].dSpeed;
+            aux.dSpeed = vPoints[b].dSpeed;///disable by chq
+            //cout << "Nuevo punto en " << aux.dX << ", " << aux.dY << endl;
             new_points.push_back(aux);
           }
 
@@ -898,11 +838,12 @@ class Path{
           aux.dY = By + K * ba.dY;  // y = y' + K*Vy  //(Vx, Vy) vector director
           ///added by chq 转弯速度限制为dAuxSpeed -start
           if(vPoints[b].dSpeed < 0.0)  // Cambiamos sentido de avance
-            dAuxSpeed = -fabs(dAuxSpeed);
+            dAuxSpeed = -dAuxSpeed;
           aux.dSpeed = dAuxSpeed;
           ///added by chq -end
 
           ///aux.dSpeed = vPoints[b].dSpeed;
+          //cout << "Nuevo punto en " << aux.dX << ", " << aux.dY << endl;
           new_points.push_back(aux);
           //j++;
         }
@@ -917,7 +858,7 @@ class Path{
           aux.dY = By + K * bc.dY;  // y = y' + K*Vy  //(Vx, Vy) vector director
           ///added by chq start
           if(vPoints[b].dSpeed < 0.0)  // Cambiamos sentido de avance
-            dAuxSpeed = -fabs(dAuxSpeed);
+            dAuxSpeed = -dAuxSpeed;
           aux.dSpeed = dAuxSpeed;
           ///added by chq end
           ///aux.dSpeed = vPoints[b].dSpeed;
@@ -927,26 +868,19 @@ class Path{
         }
         ///加入缓冲点
         // Creamos punto para después del giro
-        if( dMinDist > 0.0) {
-          ///减去distance的目的是　为了防止下一个点在距离其前方distance处插入最小转弯点（１m缓冲点必须在下一个最小转弯点前方） chq
-          //a-------->1mp-->minturnp---->b
-          if( mod_bc-distance > 1.0){  // si la distancia al punto C es mayor que 1 metro, después del giro
+        if(dMinDist > 0.0) {
+          if(mod_bc > 1.0){  // si la distancia al punto C es mayor que 1 metro, después del giro
             /// chq if the dist bet b and c is beyond 1 m then we create a mid point
             // Creamos un nuevo punto
-            // Lo creamos
+            //Lo creamos
             K = 1.0 / sqrt(bc.dX * bc.dX + bc.dY * bc.dY);
             aux.dX = Bx + K * bc.dX;  // x = x' + K*Vx
             aux.dY = By + K * bc.dY;  // y = y' + K*Vy  //(Vx, Vy) vector director
             aux.dSpeed = vPoints[b].dSpeed;
             new_points.push_back(aux);
-          }
-          else
-          {
+          }else{
             // Si no, establecemos una velocidad máxima
-            //vPoints[c].dSpeed = vPoints[b].dSpeed;//disabled by chq
-            if(vPoints[b].dSpeed < 0.0)
-              dAuxSpeed = -fabs(dAuxSpeed);
-            vPoints[c].dSpeed = dAuxSpeed;
+            vPoints[c].dSpeed = vPoints[b].dSpeed;
           }
         }
 
@@ -994,10 +928,8 @@ class Path{
 
       dAngle= acos(dot2(ab,bc)/(mod_ab*mod_bc));
       dAngle1= acos(dot2(bc,cd)/(mod_bc*mod_cd));
-
       //夹角超过阈值的才插入BSPLINE点
-     #if 0
-      if(fabs(dAngle) >= MIN_ANGLE_BSPLINE && mod_ab>0.3 && mod_bc>0.3){ // en caso del angulo que forman los segmentos sea menor, entonces generaremos puntos, siguiendo una curva de Bezier, para aproximar mjor la curva
+      if(fabs(dAngle) >= MIN_ANGLE_BSPLINE){ // en caso del angulo que forman los segmentos sea menor, entonces generaremos puntos, siguiendo una curva de Bezier, para aproximar mjor la curva
         // siendo ba vector director de b->a y bc el vector director b->c
         Waypoint aux_wp;
         double t, aux_speed;
@@ -1006,6 +938,7 @@ class Path{
         B = new_points[b];
         C = new_points[c];
         D = new_points[d];
+
         aux_speed = new_points[b].dSpeed; //takes speed of the waypoint in the middle
         vPoints.pop_back();      // Eliminamos el waypoint del medio. El primer waypoint no se modifica
         //基于三次B样条特性，为了平滑转角两端，我们必须分别用3nd B样条曲线分别在A-B,A-B之间进行平滑
@@ -1035,10 +968,7 @@ class Path{
         //        << " size= " << (int)points.size() << endl;
         }
       }
-      else
-      #endif
-      {  //Se queda como está
-
+      else{  //Se queda como está
         vPoints.push_back(new_points[c]);
       }
     }
@@ -1057,7 +987,6 @@ class Path{
 
   return OK;
   }
-
   //! Prints all the waypoints
   void Print(){
     cout << "Path::Print: Printing all the waypoints..." << endl;
@@ -1090,15 +1019,14 @@ private:
     Path pathFilling;
     //! Vector with next paths to follow
     queue <Path> qPath;
-    //! current robot's position 
+    //! current robot's position
     geometry_msgs::Pose2D pose2d_robot;
     //! current robot's odometry
     nav_msgs::Odometry odometry_robot;
     //! current robot's linear speed
     double dLinearSpeed;
     //! Lookahead bounds
-    double look_ahead_inc,d_lookahear_min_, d_lookahear_max_;
-    double d_lookvertical_min_;//大于这个距离，瞄向垂点
+    double d_lookahear_min_, d_lookahear_max_;
     //! Distance from the robot center to the wheel's center
     double d_dist_wheel_to_center_;
     //! Max allowed speed
@@ -1113,32 +1041,12 @@ private:
     std::string target_frame_;
     //! Mode in numeric format
     unsigned int ui_position_source;
-    //!  Sets the type of command to send to the robot (Twist or ackermann)
+    //!	Sets the type of command to send to the robot (Twist or ackermann)
     int command_type;
     //! Direction of movement (-1 or +1)
     int direction;
 
-    bool change_path;
-    bool comp_firstpoint;
-   ///PID
-    double dt , maxT , minT, Kp , Ki, Kd;
-    double dtS, maxS , minS, KpS, KiS, KdS;
-    PID* pidTheta ;
-    PID* pidVelocity;
-
-    ///reconfigure
-    boost::recursive_mutex configuration_mutex_;
-    dynamic_reconfigure::Server<robotnik_pp_planner::robotnik_pp_plannerConfig> *dsrv_;
-   // void reconfigureCB(robotnik_pp_planner::robotnik_pp_plannerConfig &config, uint32_t level);
-    robotnik_pp_planner::robotnik_pp_plannerConfig default_config_;
-
-
   //////// ROS
-  //! pub the path points chq
-  ros::Publisher path_pub_;
-  ros::Publisher path_marker_pub;
-  ros::Publisher tar_marker_pub;
-
   //! Publishes the status of the robot
   ros::Publisher status_pub_;
   //! Publish to cmd vel (Ackermann)
@@ -1179,15 +1087,11 @@ private:
 
 public:
 
-  /*!  \fn summit_controller::purepursuit_planner()
-   *   \brief Public constructor
+  /*!	\fn summit_controller::purepursuit_planner()
+   * 	\brief Public constructor
   */
-  purepursuit_planner_node(ros::NodeHandle h) :
-    node_handle_(h),
-    private_node_handle_("~"),
-    desired_freq_(50.0),
-    Component(desired_freq_),
-    action_server_goto(node_handle_, ros::this_node::getName(), false)
+  purepursuit_planner_node(ros::NodeHandle h) : node_handle_(h), private_node_handle_("~"),
+  desired_freq_(100.0),Component(desired_freq_),action_server_goto(node_handle_, ros::this_node::getName(), false)
   // boost::bind(&purepursuit_planner_node::executeCB, this, _1), false)
   {
     bRunning = false;
@@ -1200,41 +1104,27 @@ public:
     bEnabled = true;
     bCancel = false;
 
-    comp_firstpoint = false;
-    change_path = true;
     sComponentName.assign("purepursuit_planner_node");
     iState = INIT_STATE;
     direction = 0;
-
-    ///
-    /// \brief reconfig
-    ///
-    dsrv_ = new dynamic_reconfigure::Server<robotnik_pp_planner::robotnik_pp_plannerConfig>(ros::NodeHandle("~"));
-    dynamic_reconfigure::Server<robotnik_pp_planner::robotnik_pp_plannerConfig>::CallbackType cb = boost::bind(&purepursuit_planner_node::reconfigureCB, this, _1, _2);
-    dsrv_->setCallback(cb);
-
-    ROS_INFO_STREAM("purepursuit_planner_node init done!ros::this_node::getName():"<<ros::this_node::getName());
   }
 
-  /*!  \fn purepursuit_planner::~purepursuit_planner()
-   *   \brief Public destructor
+  /*!	\fn purepursuit_planner::~purepursuit_planner()
+   * 	\brief Public destructor
   */
   ~purepursuit_planner_node(){
 
   }
 
-  /*!  \fn oid ROSSetup()
-   *   \brief Setups ROS' stuff
+  /*!	\fn oid ROSSetup()
+   * 	\brief Setups ROS' stuff
   */
   void ROSSetup(){
     string s_command_type;
 
     private_node_handle_.param<std::string>("odom_topic", odom_topic_, "/wheel_diff_controller/odom");
     private_node_handle_.param("cmd_topic_vel", cmd_topic_vel_, std::string("/wheel_diff_controller/cmd_vel"));
-    private_node_handle_.param("d_lookvertical_min", d_lookvertical_min_, D_LOOKVERTICAL_MIN);
     private_node_handle_.param("d_lookahear_min", d_lookahear_min_, D_LOOKAHEAD_MIN);
-    private_node_handle_.param("look_ahead_inc", look_ahead_inc, D_LOOKAHEAD_INC);
-
     private_node_handle_.param("d_lookahear_max", d_lookahear_max_, D_LOOKAHEAD_MAX);
     private_node_handle_.param("d_dist_wheel_to_center", d_dist_wheel_to_center_, D_WHEEL_ROBOT_CENTER);
     private_node_handle_.param("max_speed", max_speed_, MAX_SPEED);
@@ -1243,29 +1133,9 @@ public:
     private_node_handle_.param("desired_freq", desired_freq_, desired_freq_);
     private_node_handle_.param<std::string>("command_type", s_command_type, COMMAND_TWIST_STRING);
     private_node_handle_.param<std::string>("target_frame", target_frame_, "/base_link");
-   //PID
-    private_node_handle_.param("max_w", maxT, M_PI);
-    private_node_handle_.param("min_w", minT, -M_PI);
-    private_node_handle_.param("kp_w", Kp, 1.0);
-    private_node_handle_.param("ki_w", Ki, 0.00);
-    private_node_handle_.param("kd_w", Kd, 0.000);
-    if(desired_freq_)
-      dt = 1.0/desired_freq_;
-    else
-      dt = 0.1;
-    private_node_handle_.param("max_v", maxS, M_PI);
-    private_node_handle_.param("min_v", minS, -M_PI);
-    private_node_handle_.param("kp_v", KpS, 0.8);
-    private_node_handle_.param("ki_v", KiS, 0.05);
-    private_node_handle_.param("kd_v", KdS, 0.005);
-    if(desired_freq_)
-      dtS = 1.0/desired_freq_;
-    else
-      dtS = 0.1;
-     pidTheta = new PID(dt, maxT, minT, Kp, Kd, Ki);
-     pidVelocity = new PID(dtS, maxS, minS, KpS, KdS, KiS);
+
     //private_node_handle_.param<std::string>("name_sc_enable_frot_laser_", name_sc_enable_front_laser_, "/s3000_laser_front/enable_disable");
-    //private_node_handl_.param<std::string>("name_sc_enable_back_laser", name_sc_enable_back_laser_, "/s3000_laser_back/enable_disable"  );
+    //private_node_handl_.param<std::string>("name_sc_enable_back_laser", name_sc_enable_back_laser_, "/s3000_laser_back/enable_disable"	);
 
     if(s_command_type.compare(COMMAND_ACKERMANN_STRING) == 0){
       command_type = COMMAND_ACKERMANN;
@@ -1294,10 +1164,7 @@ public:
       // Publish through the node handle Twist type messages to the command vel topic
       vel_pub_ = private_node_handle_.advertise<geometry_msgs::Twist>(cmd_topic_vel_, 1);
     }
-    path_marker_pub = private_node_handle_.advertise<visualization_msgs::MarkerArray>("purepersuit_marker_path",1);
-    tar_marker_pub = private_node_handle_.advertise<visualization_msgs::MarkerArray>("purepersuit_marker_target",1);
 
-    path_pub_ = private_node_handle_.advertise<nav_msgs::Path>("purepersuit_path", 1);
     //
     if(ui_position_source == MAP_SOURCE)
       tranform_map_pub_ = private_node_handle_.advertise<geometry_msgs::TransformStamped>("map_location", 100);
@@ -1318,11 +1185,11 @@ public:
     // Action server
     action_server_goto.registerGoalCallback(boost::bind(&purepursuit_planner_node::GoalCB, this));
         action_server_goto.registerPreemptCallback(boost::bind(&purepursuit_planner_node::PreemptCB, this));
-        
+
         // Services
         //sc_enable_front_laser_ = private_node_handle_.serviceClient<s3000_laser::enable_disable>(name_sc_enable_front_laser_);
         //sc_enable_back_laser_ = private_node_handle_.serviceClient<s3000_laser::enable_disable>(name_sc_enable_back_laser_);
-        
+
     ROS_INFO("%s::ROSSetup(): odom_topic = %s, command_topic_vel = %s, position source = %s, desired_hz=%.1lf, min_lookahead = %.1lf, max_lookahead = %.1lf, kr = %.2lf, command_type = %s", sComponentName.c_str(), odom_topic_.c_str(),
      cmd_topic_vel_.c_str(), position_source_.c_str(), desired_freq_, d_lookahear_min_, d_lookahear_max_, Kr, s_command_type.c_str());
 
@@ -1330,30 +1197,10 @@ public:
 
     //last_command_time = ros::Time::now();
   }
-  /*!  \fn reconfigureCB(AMCLConfig &config, uint32_t level)
-   *   \brief
-  */
-  void reconfigureCB(robotnik_pp_planner::robotnik_pp_plannerConfig &config, uint32_t level)
-  {
-    boost::recursive_mutex::scoped_lock cfl(configuration_mutex_);
-    maxT = config.max_w;
-    minT = config.min_w;
-    Kp = config.kp_w;
-    Ki = config.ki_w;
-    Kd = config.kd_w;
 
-    look_ahead_inc = config.look_ahead_inc;
-    d_lookahear_min_ = config.d_lookahear_min;
-    d_lookahear_max_ = config.d_lookahear_max;
-    max_speed_ = config.max_speed;
-    desired_freq_ = config.desired_freq;
 
-    ROS_INFO("purepersuit.reconfigureCB.now reconfig rotate speed pid para:pid_kp:%.3f,pid_ki:%.3f,pid_kd:%.3f ",Kp,Ki,Kd);
-    ROS_INFO("purepersuit.reconfigureCB.now reconfig trajectory track para:look_ahead_inc:%.3f,d_lookahear_min_:%.3f,d_lookahear_max_:%.3f,max_speed_:%.3f, desired_freq_",look_ahead_inc,d_lookahear_min_,d_lookahear_max_,max_speed_,desired_freq_);
-
-  }
-  /*!  \fn ReturnValue Setup()
-   *   \brief
+  /*!	\fn ReturnValue Setup()
+   * 	\brief
   */
   ReturnValue Setup(){
     // Checks if has been initialized
@@ -1363,7 +1210,6 @@ public:
     }
 
     // Starts action server
-
     action_server_goto.start();
 
     bInitialized = true;
@@ -1381,90 +1227,9 @@ public:
     updater_diagnostic.update();
     return(0);
   }
-  /*! \fn void pubMarkerRfs()
-   * Pub the path to rviz
-   * @author chq
-  */
-  void pubMarkerRfs(std::vector<Waypoint> new_points){
-  visualization_msgs::Marker points_marker;
-  visualization_msgs::Marker text_marker;
-  nav_msgs::Path path_points;
-  visualization_msgs::MarkerArray marker_array;
-  points_marker.header.stamp = ros::Time::now();
-  path_points.header.stamp = points_marker.header.stamp;
-  std::string frame;
-  if(position_source_ == "MAP")
-    frame = "/map";
-  else
-    frame = "/odom";
-  points_marker.header.frame_id = frame;
-  path_points.header.frame_id = points_marker.header.frame_id;
 
-  points_marker.type = visualization_msgs::Marker::POINTS;
-  points_marker.ns = "map_nmspace";
-  points_marker.action = visualization_msgs::Marker::ADD;
-  // Set the scale of the marker -- 1x1x1 here means 1m on a side
-  points_marker.scale.x = 0.1;
-  points_marker.scale.y = 0.1;
-  points_marker.scale.z = 0.1;
-  // Set the color -- be sure to set alpha to something non-zero!
-  //DarkOrchid	153 50 204
-  points_marker.color.r = 153;
-  points_marker.color.g = 50;
-  points_marker.color.b = 204;
-  points_marker.color.a = 0.3;
-  points_marker.lifetime = ros::Duration(100000);
-  geometry_msgs::Point p;
-  geometry_msgs::Pose pose;
-  geometry_msgs::PoseStamped pose_stamped;
-  pose_stamped.header.frame_id = path_points.header.frame_id;
-  if(new_points.size() ){
-    for(int i=0;i < new_points.size();i++){
-      points_marker.id = i;
-      //在相对于激光头的坐标空间
-      p.x = new_points[i].dX;
-      p.y = new_points[i].dY;
-      p.z = 0;
-      points_marker.points.push_back(p);
-
-      pose.position.x = p.x;
-      pose.position.y = p.y;
-      pose.position.z = 0;
-      pose_stamped.pose.position.x = p.x ;
-      pose_stamped.pose.position.y = p.y ;
-      pose_stamped.pose.orientation = tf::createQuaternionMsgFromYaw(new_points[i].dA);
-      path_points.poses.push_back(pose_stamped);
-
-      ////fort text type,Only scale.z is used. scale.z specifies the height of an uppercase "A".
-      text_marker = points_marker;
-      text_marker.ns = "purepersuit_text_space";
-      text_marker.type = visualization_msgs::Marker::TEXT_VIEW_FACING;
-      text_marker.color.r = 255;
-      text_marker.color.g = 0;
-      text_marker.color.b = 0;
-      text_marker.color.a = 1;
-      text_marker.scale.z = 0.1;
-      text_marker.id = i;
-      stringstream ss ;
-      ss << i;
-      string str;
-      ss >> str;
-      text_marker.text = str ;
-      text_marker.pose = pose;
-      marker_array.markers.push_back(text_marker);
-
-    }
-    marker_array.markers.push_back(points_marker);
-    marker_array.markers.push_back(text_marker);
-    path_marker_pub.publish(marker_array);
-    path_pub_.publish(path_points);
-  }
-
-
-  }
-
-  /*!  \fn ReturnValue Start()
-   *   \brief Start Controller
+  /*!	\fn ReturnValue Start()
+   * 	\brief Start Controller
   */
   ReturnValue Start(){
 
@@ -1478,8 +1243,8 @@ public:
     return OK;
   }
 
-  /*!  \fn ReturnValue Stop()
-   *   \brief Stop Controller
+  /*!	\fn ReturnValue Stop()
+   * 	\brief Stop Controller
   */
   ReturnValue Stop(){
 
@@ -1546,7 +1311,7 @@ public:
   }
 
 
-  /*!  \fn void InitState()
+  /*!	\fn void InitState()
   */
   void InitState(){
     ROS_INFO("purepursuit_planner::InitSate:");
@@ -1564,7 +1329,7 @@ public:
 
   }
 
-  /*!  \fn void StandbyState()
+  /*!	\fn void StandbyState()
   */
   void StandbyState(){
     if(CheckOdomReceive() == -1){
@@ -1583,7 +1348,7 @@ public:
     }
   }
 
-  /*!  \fn void ReadyState()
+  /*!	\fn void ReadyState()
   */
   void ReadyState(){
     if(CheckOdomReceive() == -1){
@@ -1604,7 +1369,6 @@ public:
       SwitchToState(STANDBY_STATE);
       return;
     }
-    //ROS_INFO("purepursuit_planner.ReadyState.do PurePursuit...");
 
     int ret = PurePursuit();
     static int cnt = 0;
@@ -1615,10 +1379,10 @@ public:
 
     if(ret == -1){
       ROS_ERROR("%s::ReadyState: Error on PurePursuit", sComponentName.c_str());
-      bCancel = true;  //Activates the flag to cancel the mision
+      bCancel = true;	//Activates the flag to cancel the mision
       SetRobotSpeed(0.0, 0.0);
       goto_result.route_result = -1;
-      goto_feedback.percent_complete = 100.0;  // Set the percent to 100% to complete the action
+      goto_feedback.percent_complete = 100.0;	// Set the percent to 100% to complete the action
 
       SwitchToState(STANDBY_STATE);
 
@@ -1626,7 +1390,7 @@ public:
       ROS_INFO("%s::ReadyState: Route finished", sComponentName.c_str());
       SetRobotSpeed(0.0, 0.0);
       goto_result.route_result = 0;
-      goto_feedback.percent_complete = 100.0;  // Set the percent to 100% to complete the action
+      goto_feedback.percent_complete = 100.0;	// Set the percent to 100% to complete the action
       SwitchToState(STANDBY_STATE);
     }
     // We have to update the percent while the mision is ongoing
@@ -1640,8 +1404,8 @@ public:
   void UpdateLookAhead(){
     double aux_lookahead = fabs(dLinearSpeed);
     double desired_lookahead = 0.0;
-    //double inc = 0.01;  // incremento del lookahead
-    ///期望的前瞻距离与速度有关，一般是速度大小值，超过边界等于边界
+    double inc = 0.01;	// incremento del lookahead
+
     if(aux_lookahead < d_lookahear_min_)
       desired_lookahead = d_lookahear_min_;
     else if(aux_lookahead > d_lookahear_max_)
@@ -1649,12 +1413,11 @@ public:
     else{
       desired_lookahead = aux_lookahead;
     }
-    ///如果期望与现状差值超过0.001 则将现状加inc
-    ///速度突变，dLookAhead非突变，而是逐渐改变，这个对于跟踪平滑较为重要，当然跟踪越平滑，可能跟踪误差就越大
+
     if((desired_lookahead - 0.001) > dLookAhead){
-      dLookAhead += look_ahead_inc;
+      dLookAhead+= inc;
     }else if((desired_lookahead + 0.001) < dLookAhead)
-      dLookAhead -= look_ahead_inc;
+      dLookAhead-= inc;
   }
 
 
@@ -1663,11 +1426,9 @@ public:
   *   \return w.x * v.x + w.y * w.y
   */
   double Dot2( double x1, double y1, double x2, double y2) {
-    //在点积运算中，第一个向量投影到第二个向量上
-    //点乘的结果就是两个向量的模相乘,然后再与这两个向量的夹角的余弦值相乘.或者说是两个向量的各个分量分别相乘的结果的和
-    //如果点乘的结果为0,那么这两个向量互相垂直；如果结果大于0,那么这两个向量的夹角小于90度；如果结果小于0,那么这两个向量的夹角大于90度
     return (x1*x2 + y1*y2); // cross product
-}
+  }
+
 
   /*! \fn double Dist(double x1, double y1, double x2, double y2)
   *   \brief obtains distance between points p1 and p2
@@ -1680,8 +1441,8 @@ public:
 
   /*! \fn double DistP2S( Odometry current_position, Waypoint s0, Waypoint s1, Waypoint *Pb)
    *  \brief obtains distance between the current position and segment s0->s1, and returns the point
-   *  Return: the shortest distance from p to s (utm points) and the point
-   *  of the segment that gives the shortest distance
+   *	Return: the shortest distance from p to s (utm points) and the point
+   *	of the segment that gives the shortest distance
   */
   double DistP2S( geometry_msgs::Pose2D current_position, Waypoint s0, Waypoint s1, Waypoint *Pb){
     double vx,vy, wx, wy;
@@ -1695,14 +1456,7 @@ public:
     wy = current_position.y - s0.dY;
 
     c1 = Dot2( wx, wy, vx, vy );
-    //如果投影点在线段后方
-    //
-    //   \.cur_pos
-    //    \
-    //     \di
-    //      \
-    //       \
-    //       s0---s1
+
     if ( c1 <= 0.0 ) {
       di = Dist(current_position.x, current_position.y, s0.dX, s0.dY);
       Pb->dX = s0.dX;
@@ -1711,13 +1465,7 @@ public:
     }
 
     c2 = Dot2(vx,vy, vx, vy);
-    //如果投影点在线段前方
-    //     /.cur_pos
-    //    / |
-    //   /di|
-    //  /   |
-    // /    |
-    //s0-s1-|
+
     if ( c2 <= c1 ) {
       //printf("kanban::DistP2S: c2 <= c1\n");
       di = Dist(current_position.x, current_position.y, s1.dX, s1.dY);
@@ -1725,12 +1473,7 @@ public:
       Pb->dY = s1.dY;
       return di;
     }
-    //如果投影点在线段上
-    //    .cur_pos
-    //   /|
-    //  / |di
-    // /  |
-    //s0------s1
+
     b = c1 / c2;
     Pb->dX = s0.dX + b * vx;
     Pb->dY = s0.dY + b * vy;
@@ -1739,317 +1482,32 @@ public:
 
     return di;
   }
-  ///从第一个点逐一执行路径而不跳跃执行
-ReturnValue PointOneByOne(geometry_msgs::Pose2D current_position, geometry_msgs::Pose2D *wp) {
-  int i=0,j=0,k=0;
-  static int last_i=0;
-  double dmin, d, d0, d1, d2,d3, *d_seg;
-  double t;
-  geometry_msgs::Pose2D target_position;
-  Waypoint s0, s1, Pb, Pb1;
-
-  int size = pathCurrent.NumOfWaypoints();
-  d_seg = new double[size]; //array con la distancia entre puntos consecutivos en la ruta
-  i = pathCurrent.GetCurrentWaypointIndex();
-  ROS_INFO("PointOneByOne.cur way index :%d,comp_firstpoint(1==true):%d",i,comp_firstpoint);
-  /// 3-Find cur segment
-  if( pathCurrent.GetCurrentWaypoint(&s0) != OK ){
-    ROS_ERROR("%s::PointOneByOne: Error getting cur waypoint %d", sComponentName.c_str(), j);
-    return ERROR;
-  }
-  if( pathCurrent.GetNextWaypoint(&s1) != OK ){
-    ROS_ERROR("%s::PointOneByOne: Error getting next waypoint %d", sComponentName.c_str(), j);
-    return ERROR;
-  }
-  d0 = Dist(s0.dX, s0.dY, s1.dX, s1.dY);        //dist bet s0 and s1
-  d  = DistP2S(current_position, s0, s1, &Pb1);  //Pb1 closest point on segment
-  d1 = Dist(Pb1.dX, Pb1.dY, s1.dX, s1.dY);      //dist bet pb1 and s1
-  d2 = Dist(s0.dX, s0.dY, Pb1.dX, Pb1.dY);        //dist bet s0 and P
-  d3 = Dist(current_position.x, current_position.y, s1.dX, s1.dY);        //dist bet curpos and s1
-  /*double vx,vy, wx, wy;
-  wx = s0.dX - current_position.x ;
-  wy = s0.dY - current_position.y ;
-  double rela_a = atan2(wy,wx)-current_position.theta;
-  radnorm(&rela_a);
-  */
-  ///ROS_INFO("pointdlh.cur dmin:%.3f, comp_firstpoint(0==false,1=yes):%d,g_dir(0==back):%d,change_path:%d",dmin,comp_firstpoint,g_dir,change_path);
-  if(  d > d_lookvertical_min_ && !comp_firstpoint)///must ahead to first tar + min dist + not comp
-  {
-    //double d0 = Dist(Pb.dX, Pb.dY, s0.dX, s0.dY);
-    double gradient = atan2(s0.dY-s1.dY,s0.dX-s1.dX);//reverse dir
-    target_position.x = s0.dX + dLookAhead*exp(-1.0/d)*cos(gradient);//无穷远处瞄准起点后方lookahead处，靠近瞄准起始点(即始终瞄准目标点后方)
-    target_position.y = s0.dY + dLookAhead*exp(-1.0/d)*sin(gradient);
-    double angle_segment = atan2(target_position.y - current_position.y, target_position.x - current_position.x);
-    radnorm(&angle_segment);
-    target_position.theta = angle_segment;
-    *wp = target_position;
-    delete d_seg;
-    g_dir = look_back;
-    return OK;
-  }
-  else{
-    g_dir = lool_ahead;
-    if( dmin <= d_lookvertical_min_ )
-      comp_firstpoint = true;
-  }
-
-  double angle_segment = atan2(s1.dY - s0.dY, s1.dX - s0.dX);
-  radnorm(&angle_segment);
-//  d0 = Dist(s0.dX, s0.dY, s1.dX, s1.dY);        //dist bet s0 and s1
-//  d  = DistP2S(current_position, s0, s1, &Pb1);  //Pb1 closest point on segment
-//  d1 = Dist(Pb1.dX, Pb1.dY, s1.dX, s1.dY);      //dist bet pb1 and s1
-//  d2 = Dist(s0.dX, s0.dY, Pb1.dX, Pb1.dY);        //dist bet s0 and P
-
-  ///method lookahead_tar = dist_curpos2tar;
-  /// 这种方式跟踪更平滑但是误差相对下一种较差，但是不容易震荡
-  //  .----
-  //   \  lookahead
-  //    \___
-  //s0-----s1
-  //
-  if( d3 <= dLookAhead ){
-    //change tar
-   k = pathCurrent.GetCurrentWaypointIndex()+1;
-   if( k < size-1 ){
-    j= k;
-    ///update target
-    ROS_INFO("PointOneByOne.change to next target------------------index:%d",j);
-    // Sets the waypoint where the robot is at the moment
-    if(pathCurrent.SetCurrentWaypoint(j) == ERROR){
-      ROS_ERROR("%s::PointOneByOne: Error setting current waypoint to %d", sComponentName.c_str(), j);
-      return ERROR;
-    }
-
-   }
-   ///不管是到达终点还是到达线段端点，also指定为end点
-   //else{
-     target_position.x = s1.dX;
-     target_position.y = s1.dY;
-     target_position.theta = angle_segment;
-     *wp = target_position;
-     delete d_seg;
-     return OK;
-  // }
-  }
-  else if( d >= dLookAhead )//toward to pb1
-  {
-    target_position.x = Pb1.dX;
-    target_position.y = Pb1.dY;
-    target_position.theta = angle_segment;
-    *wp = target_position;
-    delete d_seg;
-    ROS_INFO("PointOneByOne.d(%.6f) >= dLookAhead(%.6f).track p",d,dLookAhead);
-    return OK;
-  }
-  else{
-      if( d2 <= 0 ){///d2 s0TOpb
-        VecPosition p1(s0.dX,s0.dY);
-        VecPosition p2(s1.dX,s1.dY);
-        VecPosition cur_p(current_position.x,current_position.y);
-        Line l = Line::makeLineFromTwoPoints( p1, p2 );
-        double d_close = l.getDistanceWithPoint(cur_p);
-        double head_dist1 = sqrt(pow(dLookAhead,2)-pow(d_close,2));
-        double head_dist2 = sqrt(pow(d,2)-pow(d_close,2));
-        double dist = head_dist1 - head_dist2;
-        if( d0 > 1e-5 )
-          t = dist/d0; //chq
-        else
-          t = 0;
-        ROS_INFO("PointOneByOne.at back of s0.dist:%.6f",dist);
-      }
-      else
-      {
-        double head_dist1 = sqrt(pow(dLookAhead,2)-pow(d,2));
-        double dist = d2+head_dist1 ;
-        if( d0 > 1e-5 )
-          t = dist/d0; //chq
-        else
-          t = 0;
-        ROS_INFO("PointOneByOne.at up or down of s0.dist:%.6f",dist);
-      }
-
-      target_position.x = s0.dX + ( s1.dX - s0.dX )*t;
-      target_position.y = s0.dY + ( s1.dY - s0.dY )*t;
-      target_position.theta = angle_segment;
-      *wp = target_position;
-      delete d_seg;
-      return OK;
-    }
 
 
-
-
-
-///method lookahead = dist_curpos2p+dist_p2tar
-///这种方式跟踪精度较好，但是速度高的时候容易震荡
-#if 0
-  if( d >= dLookAhead )//toward to pb1
-  {
-    target_position.x = Pb1.dX;
-    target_position.y = Pb1.dY;
-    target_position.theta = angle_segment;
-    *wp = target_position;
-    delete d_seg;
-    ROS_INFO("PointOneByOne.d(%.6f) >= dLookAhead(%.6f).track p",d,dLookAhead);
-    return OK;
-  }
-  else{
-    ///1-if track end then end this seg
-    if( d+d1 < dLookAhead ){
-      //change tar
-     k = pathCurrent.GetCurrentWaypointIndex()+1;
-     if( k < size-1 ){
-      j= k;
-      ///update target
-      ROS_INFO("PointOneByOne.change to next target------------------index:%d",j);
-      // Sets the waypoint where the robot is at the moment
-      if(pathCurrent.SetCurrentWaypoint(j) == ERROR){
-        ROS_ERROR("%s::PointOneByOne: Error setting current waypoint to %d", sComponentName.c_str(), j);
-        return ERROR;
-      }
-     }
-   //  else{
-       target_position.x = s1.dX;
-       target_position.y = s1.dY;
-       target_position.theta = angle_segment;
-       *wp = target_position;
-       delete d_seg;
-       return OK;
-  //   }
-    }
-    //otheewise
-    double dist=0.;
-    dist = d2+(dLookAhead-d);
-    if( d0 > 1e-5 )
-      t = dist/d0; //chq
-    else
-      t = 0;
-    //if(d >= dLookAhead ){//toward to s0-s1
-      /*if( d0 > 1e-5 )
-        t = 1 - (d-dLookAhead)/d0; //chq
-      else
-        t = 0;
-        */
-
-      //if at back
-      //.(cur)    |
-      //  \       |
-      //   \ |dist|
-      //    (P)s0---------s1
-      // lh = curpos2s0 + dist
-      // => dist  = lh-curpos2s0
-      if( d2<=0 ){
-        ROS_INFO("PointOneByOne.track s0-s1.at back to s0.dLookAhead:%.3f,dist(s0totar):%.3f,d0(s02s1):%.3f,t:%.6f",dLookAhead,dist,d0,t);
-      }
-      //if the p is bet s0 and s1
-      //       .
-      //       |
-      //   |   |dist |
-      //  s0---P---(tar)--s1
-      //  lh = curpos2p+dist
-      //  dist_s02tar = s02p+dist
-      //=>dist_s02tar = s02p+lh-curpos2p
-      else{
-        ROS_INFO("PointOneByOne.track s0-s1 up or down to seg.dLookAhead:%.3f,dist(s02tar):%.3f,d0(s02s1):%.3f,d2(s02p):%6.f,t:%.6f",dLookAhead,dist,d0,t);
-      }
-      target_position.x = s0.dX + ( s1.dX - s0.dX )*t;
-      target_position.y = s0.dY + ( s1.dY - s0.dY )*t;
-      target_position.theta = angle_segment;
-      *wp = target_position;
-      delete d_seg;
-      return OK;
-    //}
-  }
-//}
-
-#endif
-#if 0
-       ROS_INFO("PointOneByOne.d0(s02s1):%.6f,d1(p2s2):%.6f,d2(s0_2p):%.6f,d(cur2p):%.6f",d0,d1,d2,d);
-      if( d1 > dLookAhead ){
-        double dist = d2+dLookAhead;
-        if( d0 > 1e-5 )
-          t = dist/d0; //chq
-        else
-          t = 0;
-        ROS_INFO("PointOneByOne.track s0-s1.dLookAhead:%.3f,dist(s02tar):%.3f,d0(s02s1):%.3f,d2(s02p):%6.f,t:%.6f",dLookAhead,dist,d0,t);
-
-        target_position.x = s0.dX + ( s1.dX - s0.dX )*t;
-        target_position.y = s0.dY + ( s1.dY - s0.dY )*t;
-        target_position.theta = angle_segment;
-        *wp = target_position;
-        delete d_seg;
-        return OK;
-       }
-      else{
-        //change tar
-       k = pathCurrent.GetCurrentWaypointIndex()+1;
-       if( k < size-1 ){
-        j= k;
-        ///update target
-        ROS_INFO("PointOneByOne.change to next target------------------index:%d",j);
-        // Sets the waypoint where the robot is at the moment
-        if(pathCurrent.SetCurrentWaypoint(j) == ERROR){
-          ROS_ERROR("%s::PointOneByOne: Error setting current waypoint to %d", sComponentName.c_str(), j);
-          return ERROR;
-        }
-       }
-      // else{
-         target_position.x = s1.dX;
-         target_position.y = s1.dY;
-         target_position.theta = angle_segment;
-         *wp = target_position;
-         delete d_seg;
-         return OK;
-      // }
-      }
-#endif
-
-
-
-}
-
-  /*! \fn ReturnValue PointDlh(geometry_msgs::Pose2D current_position, geometry_msgs::Pose2D *wp  )
+  /*! \fn ReturnValue PointDlh(geometry_msgs::Pose2D current_position, geometry_msgs::Pose2D *wp	)
    *  \brief Returns a point in a distance dlookahead on the path
-   *  \brief 0,跟踪的不是给定的目标点　而是由给定的路径点构成的线段上的动态形成点，由lookahead推动点移动，这样跟踪更平滑!!!
-   *  \brief 1,找到距离当前位置最近的线段索引k，并设为最新的跟踪索引
-   *  \brief 2,沿着索引k线段向前累计线段距离，直到加到索引k'线段(长度l)，sum距离为s,超过dLookAhead
-   *  \brief 3,last跟踪ｋ’上的哪一点，取决于k'长度l在s中，超过dLookAhead部分所占的比重，比重逐渐增大，跟踪点逐渐由k'起点趋向于k'末尾点
    *  \return OK
    *  \return ERROR
   */
   ReturnValue PointDlh(geometry_msgs::Pose2D current_position, geometry_msgs::Pose2D *wp) {
     int i,j=0,k;
-    double dmin, d, d0, d1, d2, *d_seg;
+    double dmin, d, d1, d2, *d_seg;
     double t;
     geometry_msgs::Pose2D target_position;
     Waypoint s0, s1, Pb, Pb1;
-    static bool comp_firstpoint = false;
-    static bool change_path = true;
+
     int size = pathCurrent.NumOfWaypoints();
 
     d_seg = new double[size]; //array con la distancia entre puntos consecutivos en la ruta
 
-    /// 1- Find closest segment
-    /// 1 寻找最近线段
+    // 1- Find closest segment
     dmin = 100000000;
-    //递推找到所有路径点，两两构成的线段中，距离当前车子位置最近距离的线段和垂点
-    i = pathCurrent.GetCurrentWaypointIndex();
-    ROS_INFO("pointdlh.cur way index :%d,change_path(1==true):%d",i,change_path);
-    if( i == 0 ){
-      if(change_path){
-        comp_firstpoint = false;///reset when get new targets
-        change_path = false;
-      }
-    }
-    else{
-      change_path = true;
-    }
 
-    for(; i < (size - 1); i++) {
+    for(i = pathCurrent.GetCurrentWaypointIndex(); i < (size -1); i++) {
       if( (pathCurrent.GetWaypoint(i, &s0) == OK) &&  (pathCurrent.GetWaypoint(i+1, &s1) == OK) ){
         d_seg[i] = Dist(s0.dX, s0.dY, s1.dX, s1.dY);
-        ///Pb1 当前位置到线段上的最近点（s0-s1之间，不是垂足!!!）
-        d = DistP2S(current_position, s0, s1, &Pb1);    // Pb1 closest point on segment
+
+        d = DistP2S(current_position, s0, s1, &Pb1);		// Pb1 closest point on segment
 
         if (d < dmin) {
           Pb.dX = Pb1.dX;  // not the same as Pb=Pb1 !
@@ -2068,20 +1526,17 @@ ReturnValue PointOneByOne(geometry_msgs::Pose2D current_position, geometry_msgs:
     //ROS_INFO("PointDlh:: Current waypoint index %d, next %d",pathCurrent.GetCurrentWaypointIndex(), j);
 
     // Si cambiamos de waypoint
-    // 如果当前距离最近的线段不再是历史track point，更新
     if(pathCurrent.GetCurrentWaypointIndex() != j){
-      //add by chq for reset process
-      comp_firstpoint = false;///reset when change target
       // Sets the waypoint where the robot is at the moment
       if(pathCurrent.SetCurrentWaypoint(j) == ERROR){
         ROS_ERROR("%s::PointDlh: Error setting current waypoint to %d", sComponentName.c_str(), j);
         return ERROR;
       }else{ // OK
         //ROS_INFO("PointDlh:: Changing waypoint to %d", j);
-        if(j == (size - 2)){  // Penultimo waypoint
+        if(j == (size - 2)){	// Penultimo waypoint
           Waypoint w_last, w_before_last;
-          pathCurrent.GetCurrentWaypoint(&w_before_last);  // Penultimo waypoint
-          pathCurrent.BackWaypoint(&w_last);        // Ultimo waypoint
+          pathCurrent.GetCurrentWaypoint(&w_before_last);	// Penultimo waypoint
+          pathCurrent.BackWaypoint(&w_last);				// Ultimo waypoint
           // Distancia maxima = distancia entre el punto actual y el penultimo punto + más la distancia entre los dos ultimos puntos + un valor constante
           //dMaxDistance = Dist(w_before_last.dX, w_before_last.dY, odomWhenLastWaypoint.px, odomWhenLastWaypoint.py) + Dist(w_last.dX, w_last.dY, w_before_last.dX, w_before_last.dY) + 0.1;
           //ROS_INFO("%s::PointDlh: Penultimo punto. Robot en (%.3lf, %.3lf, %.3lf). Distancia máxima a recorrer = %.3lf m ", sComponentName.c_str(), odomWhenLastWaypoint.px, odomWhenLastWaypoint.py, odomWhenLastWaypoint.pa, dMaxDistance);
@@ -2090,68 +1545,28 @@ ReturnValue PointOneByOne(geometry_msgs::Pose2D current_position, geometry_msgs:
       }
     }
 
-    /// 2-Find cur segment add by chq to cal s0
-    if( pathCurrent.GetCurrentWaypoint(&s0) != OK ){
-      ROS_ERROR("%s::PointDlh: Error getting cur waypoint %d", sComponentName.c_str(), j);
-      return ERROR;
-    }
-
-    ///2 获取最新的所跟踪的线段
-    /// 2-Find segment ahead in dlookahead
+    // 2-Find segment ahead in dlookahead
     if( pathCurrent.GetNextWaypoint(&s1) != OK ){
       ROS_ERROR("%s::PointDlh: Error getting next waypoint %d", sComponentName.c_str(), j);
       return ERROR;
     }
-    //d0 = Dist(Pb.dX, Pb.dY, s0.dX, s0.dY);
+
     d1 = Dist(Pb.dX, Pb.dY, s1.dX, s1.dY);
 
     k = j;              // k : index of D_LOOKAHEAD point segment
-    ///!!!added by chq for move fast to segment line ---start
-    // if dist to line is large then we treat the Pb as the target
-    // 这种方式可以更好的进入目标点
-    ROS_INFO("pointdlh.cur dmin:%.3f, comp_firstpoint(0==false,1=yes):%d,g_dir(0==back):%d,change_path:%d",dmin,comp_firstpoint,g_dir,change_path);
-    if( dmin > d_lookvertical_min_ && !comp_firstpoint)
-    {
-      //double d0 = Dist(Pb.dX, Pb.dY, s0.dX, s0.dY);
-      double gradient = atan2(s0.dY-s1.dY,s0.dX-s1.dX);//reverse dir
-      target_position.x = s0.dX + dLookAhead*exp(-1.0/dmin)*cos(gradient);//无穷远处瞄准起点后方lookahead处，靠近瞄准起始点(即始终瞄准目标点后方)
-      target_position.y = s0.dY + dLookAhead*exp(-1.0/dmin)*sin(gradient);
-      double angle_segment = atan2(target_position.y - current_position.y, target_position.x - current_position.x);
-      radnorm(&angle_segment);
-      target_position.theta = angle_segment;
-      *wp = target_position;
-      delete d_seg;
-      g_dir = look_back;
-      return OK;
-    }
-    else{
-      g_dir = lool_ahead;
-      if( dmin <= d_lookvertical_min_ )
-        comp_firstpoint = true;
-    }
-    ///!!!!added by chq for move fast to segment line ---end
-    //如果从垂点到垂点所在线段的末尾距离不超过dLookAhead，则持续沿着前向线段的距离累加，直到超过之。
     while ( (d1 < dLookAhead) && ( (k+1) < (size - 1) ) ) {
       // searched point on this segment
       k = k + 1;
       d1 = d1 + d_seg[k];
     }
-    /// 累加的最后一条线段k，其在超过dLookAhead所占的分值比比重，决定了偏向于跟踪k线段的起点还是末尾.比重越大，越倾向于跟踪末尾
-    /// 3- Obtain t parameter in the segment
+
+    // 3- Obtain t parameter in the segment
     d2 = ( d1 - dLookAhead );       // t parameter of segment k
-    if(d_seg[k]>1e-5)
-      t = (d_seg[k] - d2) / d_seg[k]; // Pendiente avoid div/0. En teoria no puede producirse pq dos waypoints consecutivos serán diferentes
-    ///add by chq start---
-    else
-      t = 0;
-    if(t>1)t=1;
-    if(t<0)t=0;
-    ///add by chq end---
-    ///t = 1 - (d1-lookahead)/seg[k] //chq
-    ROS_INFO("pointdlh.para d1:%.6f, dLookAhead:%.6f, t :%.6f",d1,dLookAhead,t);
+    t = (d_seg[k] - d2) / d_seg[k]; // Pendiente avoid div/0. En teoria no puede producirse pq dos waypoints consecutivos serán diferentes
+
     // 4- Obtain point with t parameter
     if( (pathCurrent.GetWaypoint(k, &s0) == OK) && (pathCurrent.GetWaypoint(k + 1, &s1) == OK) ) {
-      ///chq seg[k]在累计和超过dLookAhead距离中占的比重越大，越倾向于参考ｋ末尾点。否则越偏向于参考看ｋ起始点
+
       target_position.x = s0.dX + ( s1.dX - s0.dX )*t;
       target_position.y = s0.dY + ( s1.dY - s0.dY )*t;
       double angle_segment = atan2(s1.dY - s0.dY, s1.dX - s0.dX);
@@ -2170,96 +1585,9 @@ ReturnValue PointOneByOne(geometry_msgs::Pose2D current_position, geometry_msgs:
     }
 
   }
-  /*!  \fn void pubTarget()
-   * \brief visualize the target and the rotation speed for debugging
-   * \param current_position cur robot pos
-   * \param next_position target pos
-   * \param w rotate angle(speed)
-   */
-void pubTarget(geometry_msgs::Pose2D current_position, geometry_msgs::Pose2D next_position,double w){
- visualization_msgs::Marker points_marker;
- visualization_msgs::Marker dir_marker;
- visualization_msgs::MarkerArray marker_array;
- points_marker.header.stamp = ros::Time::now();
- dir_marker.header.stamp = points_marker.header.stamp;
- std::string frame;
- if(position_source_ == "MAP")
-   frame = "/map";
- else
-   frame = "/odom";
- points_marker.header.frame_id = frame;
- dir_marker.header.frame_id = points_marker.header.frame_id;
-
- points_marker.type = visualization_msgs::Marker::POINTS;
- points_marker.ns = "purepersuit_space";
- points_marker.action = visualization_msgs::Marker::ADD;
- // Set the scale of the marker -- 1x1x1 here means 1m on a side
- points_marker.scale.x = 0.2;
- points_marker.scale.y = 0.2;
- points_marker.scale.z = 0.2;
- // Set the color -- be sure to set alpha to something non-zero!
- //DarkOrchid	153 50 204
-
- if( g_dir == look_back){
-   points_marker.color.r = 0.8;
-   points_marker.color.g = 0;
-   points_marker.color.b = 0;
-   points_marker.color.a = 0.5;
- }
- else{
-   points_marker.color.r = 0.0;
-   points_marker.color.g = 0.8;
-   points_marker.color.b = 0.0;
-   points_marker.color.a = 0.5;
- }
-
- points_marker.lifetime = ros::Duration(100000);
- points_marker.id = 0;
- geometry_msgs::Point p;
- p.x = next_position.x;
- p.y = next_position.y;
- p.z = 1;
- points_marker.points.push_back(p);
 
 
- dir_marker.type = visualization_msgs::Marker::ARROW;
- dir_marker.ns = "purepersuit_space";
- dir_marker.action = visualization_msgs::Marker::ADD;
- // Set the scale of the marker -- 1x1x1 here means 1m on a side
- //if is arrow scale.x is the shaft diameter, and scale.y is the head diameter.
- //If scale.z is not zero, it specifies the head length.
- dir_marker.scale.x = 0.1;
- dir_marker.scale.y = 0.1;
- dir_marker.scale.z = 0.05;
- // Set the color -- be sure to set alpha to something non-zero!
- //DarkOrchid	153 50 204
- dir_marker.color.r = 153;
- dir_marker.color.g = 50;
- dir_marker.color.b = 204;
- dir_marker.color.a = 0.3;
- dir_marker.lifetime = ros::Duration(100000);
- ///do not euqal to last points_marker id!!!
- dir_marker.id = 1;
-
- p.x = current_position.x;
- p.y = current_position.y;
- p.z = 0;
- //The point at index 0 is assumed to be the start point, and the point at index 1 is assumed to be the end.
- dir_marker.points.push_back(p);
-
- float len = 0.5;//arrow len
- float abs_angle = current_position.theta+w;
- p.x = current_position.x+cos(abs_angle)*len;
- p.y = current_position.y+sin(abs_angle)*len;
- p.z = 0;
- dir_marker.points.push_back(p);
-
- marker_array.markers.push_back(points_marker);
- marker_array.markers.push_back(dir_marker);
- tar_marker_pub.publish(marker_array);
-
-}
-  /*!  \fn int PurePursuit()
+  /*!	\fn int PurePursuit()
    * \brief High level control loop in cartesian coordinates
    * obtains desiredSpeedMps and desiredPhiEffort according to
    * the robot location and the path defined by the waypoints
@@ -2268,175 +1596,274 @@ void pubTarget(geometry_msgs::Pose2D current_position, geometry_msgs::Pose2D nex
    *  \return 1 if the route finishes
    */
   int PurePursuit(){
-    double dx, dy, x1, y1;
-    double curv, yaw;
-    double wref;//, epw, uw;
-    //double d = D_WHEEL_ROBOT_CENTER;   // Length in m (equiv to curv radius)
-    double Kd = 1.1; // don't increase! 250
-    Waypoint last_waypoint, next_waypoint;
+      double dx, dy, x1, y1;
+      double curv, yaw;
+      double wref;//, epw, uw;
+      //double d = D_WHEEL_ROBOT_CENTER;   // Length in m (equiv to curv radius)
+      double Kd = 1.1; // don't increase! 250
+      Waypoint last_waypoint, next_waypoint;
 
-    double dAuxSpeed = 0.0;
-    double dth;
-    double aux = 0.0, dDistCovered = 0.0;
-    int ret = 0;
+      double dAuxSpeed = 0.0;
+      double dth;
+      double aux = 0.0, dDistCovered = 0.0;
+      int ret = 0;
 
-    geometry_msgs::Pose2D current_position = this->pose2d_robot;
-    geometry_msgs::Pose2D next_position;
-    ///disabled by chq
-    //if(pathCurrent.NumOfWaypoints() < 2)  {
-    if(pathCurrent.NumOfWaypoints() < 4)  {
-      ROS_ERROR("%s::PurePursuit:points num:%d,below to 4, not enought waypoints",pathCurrent.NumOfWaypoints(), sComponentName.c_str());
-      return -1 ;
-    }
+      geometry_msgs::Pose2D current_position = this->pose2d_robot;
+      geometry_msgs::Pose2D next_position;
 
-    pubMarkerRfs(pathCurrent.GetWaypoints());//rviz打印跟踪点和跟踪方向 add for debugging
-    yaw = current_position.theta;
-
-    ///根据速度大小更新前瞻距离actively!!!
-    ///
-    //Updates the lookahead depending of the current velocity
-    UpdateLookAhead();
-
-    //
-    // Get next point in cartesian coordinates
-    if(PointOneByOne(current_position, &next_position) != OK)
-    //if(PointDlh(current_position, &next_position) != OK)
-    {
-      ROS_ERROR("%s::PurePursuit: Error getting next point in the route", sComponentName.c_str());
-      return -1;
-    }
-    ///chq 绝对坐标系旋转到车子参考系 to cal relative pos
-    // Curvature 曲率
-    dx = current_position.x - next_position.x;
-    dy = current_position.y - next_position.y;
-    //rotate to robot self cord
-    ///chq newx = R * rot(-cur_theta)_dx = Rcos(theta - cur_pos_theta) = R*(cos t * cos c + sin t * sin c) = dx * cos c + dy * sin c
-    x1 = cos(yaw)*dx + sin(yaw)*dy; //Original
-    y1 = -sin(yaw)*dx + cos(yaw)*dy;
-    //这个公式不难推导，就是以当前点和目标点构成的圆弧，求解旋转半径或者转向速度
-    if ((x1*x1 + y1*y1) == 0)
-      curv = 0;
-    else
-      curv = (2.0 / (x1*x1 + y1*y1)) * -y1;      //Original
-
-    // Obtenemos alfa_ref en bucle abierto segun curvatura
-    ///对于舵轮车要考虑转向轮到车子中心的前后轴距，计算的偏转角是转向轮的旋转角
-    ///而对于差速，直接计算的到的偏转角就为角速度
-    /// wref = atan(d_dist_wheel_to_center_/(1.0/curv));
-    ///wref = atan2(-y1,-x1); //因为是差速，这里没有前后轮轴距 chq
-    ///wref = 2*atan2(-y1,-x1); //两倍代表偏差是到目标点的旋转角度变化，而不是一半（到目标的连线与当前朝向的夹角） chq
-
-    if(pathCurrent.BackWaypoint(&last_waypoint) == ERROR){
-      ROS_ERROR("%s::PurePursuit: Error getting the last point in the path", sComponentName.c_str());
-      return -1;
-    }
-
-    double dAuxDist = Dist(current_position.x, current_position.y, last_waypoint.dX, last_waypoint.dY);  //dist(waypoints.back().pos, current_position);
-
-    if(pathCurrent.GetNextWaypoint(&next_waypoint) == ERROR){
-      ROS_ERROR("%s::PurePursuit: Error getting next waypoint in the path", sComponentName.c_str());
-      return -1;
-    }
-
-    dAuxSpeed = next_waypoint.dSpeed;
-    ///wref = dAuxSpeed * curv;
-    if (dAuxSpeed >= 0)
-       dth = next_position.theta - current_position.theta;
-    else
-       dth = -(next_position.theta + Pi - current_position.theta);
-
-    // normalize
-    radnorm(&dth);
-    double aux_wref = wref;
-    ///wref += Kr * dth;
-     double wref0 = wref;
-    //ROS_INFO("PID control.pre_error bef theta control:%.6f ",pidTheta->preError());
-    //wref = pidTheta->calculate(0, -wref);
-    ///ROS_INFO("PID control.pre_error after theta control:%.6f ",pidTheta->preError());
-    ///pubTarget(current_position,next_position,wref);//added by chq
-    //ROS_INFO("cur orientation %f, Angle Error: %f , pid w: %f",current_position.theta,wref0, wref);
-
-    ///ROS_INFO("Purepursuit: current pos (%.2lf, %.2lf), next pos (%.2lf, %.2lf), lookahead %.2lf, yaw = %.3lf, curv = %.3lf, dth = %.3lf, wref = %.3lf(%.3lf), speed=%.3lf", current_position.x, current_position.y, next_position.x, next_position.y, dLookAhead, yaw, curv, dth, wref, aux_wref, dAuxSpeed);
-    //ROS_INFO("Purepursuit: yaw = %.3lf, curv = %.3lf, dth = %.3lf, wref = %.3lf", yaw, curv, dth, wref);
-
-
-    ////////////////// Sets the speed depending of distance or speed restrictions /////////
-    ///////////////////////////////////////////////////////////////////////////////////////
-    // Controls the max allowed using first restriction
-    ///限定最大速度
-    if(fabs(dAuxSpeed) > max_speed_){
-      if(dAuxSpeed > 0)
-        dAuxSpeed = max_speed_;
-      else
-        dAuxSpeed = -max_speed_;
-    }
-
-    ///接近最后一个点的距离分两级，modify速度也分两级
-    if(dAuxDist <= AGVS_SECOND_DECELERATION_DISTANCE)  {
-      if( (dAuxSpeed < 0.0) && (dAuxSpeed < -AGVS_SECOND_DECELERATION_MAXSPEED) )
-        dAuxSpeed = -AGVS_SECOND_DECELERATION_MAXSPEED;
-      else if( (dAuxSpeed > 0.0) && (dAuxSpeed > AGVS_SECOND_DECELERATION_MAXSPEED) )
-        dAuxSpeed = AGVS_SECOND_DECELERATION_MAXSPEED;
-
-    }else if(dAuxDist <= AGVS_FIRST_DECELERATION_DISTANCE) {
-      if( (dAuxSpeed < 0.0) && (dAuxSpeed < AGVS_FIRST_DECELERATION_MAXSPEED))
-        dAuxSpeed = -AGVS_FIRST_DECELERATION_MAXSPEED;
-      else if( (dAuxSpeed > 0.0) && (dAuxSpeed > AGVS_FIRST_DECELERATION_MAXSPEED) )
-        dAuxSpeed = AGVS_FIRST_DECELERATION_MAXSPEED;
-    }
-    //如果在后方，按照方式１舵轮转向方式，转向，否则按照固定旋转半径转弯
-    //if(x1 > 0 ){
-    //if not arrive first point the use method 1
-    ///第一个点要求快速到达，方法一更合适（如果初始位置离第一个点很远，使用方法２得到的转弯半径可能很远，需要很久才能到达）
-    if(pathCurrent.GetCurrentWaypointIndex()==0 ){
-      wref = 2 * atan2(-y1,-x1);
-      ROS_INFO("-------------purepersuit.using turn directly------------------------");
-    }
-    else
-    //wref = dAuxSpeed * curv;
-    wref = 2*atan2(-y1,-x1);
-    //wref = atan(d_dist_wheel_to_center_/(1.0/curv));
-    wref += Kr * dth;
-    wref = pidTheta->calculate(0, -wref);
-    pubTarget(current_position,next_position,wref);//added by chq
-    ROS_INFO("Purepursuit: current pos (%.2lf, %.2lf), next pos (%.2lf, %.2lf), lookahead %.2lf, yaw = %.3lf, curv = %.3lf, dth = %.3lf, wref(+dth) = %.6lf(%.6lf(raw)), speed=%.3lf", current_position.x, current_position.y, next_position.x, next_position.y, dLookAhead, yaw, curv, dth, wref, aux_wref, dAuxSpeed);
-
-    //ROS_INFO("purepersuit.after mod, the speed aux:%.3f",dAuxSpeed);
-    if(command_type == COMMAND_ACKERMANN){
-      SetRobotSpeed(dAuxSpeed, wref);
-    }else{
-      SetRobotSpeed(dAuxSpeed, wref*direction);
-    }
-
-    //
-    // When the robot is on the last waypoint, checks the distance to the end
-    if( pathCurrent.GetCurrentWaypointIndex() >= (pathCurrent.NumOfWaypoints() - 2) ){
-      ret = -10;
-      double ddist2 = Dist( current_position.x, current_position.y, last_waypoint.dX, last_waypoint.dY);
-      // Distancia recorrida
-      //dDistCovered = Dist( current_position.px, current_position.py, odomWhenLastWaypoint.px, odomWhenLastWaypoint.py);
-      ///到终点精度
-      if (ddist2 < WAYPOINT_POP_DISTANCE_M) {
-        SetRobotSpeed(0.0, 0.0);
-
-        ROS_INFO("%s::PurePursuit: target position reached (%lf, %lf, %lf). Ending current path", sComponentName.c_str(), current_position.x, current_position.x, current_position.theta*180.0/Pi);
-
-        pathCurrent.Clear();
-        return 1;
+      if(pathCurrent.NumOfWaypoints() < 2)	{
+        ROS_ERROR("%s::PurePursuit: not enought waypoints", sComponentName.c_str());
+        return -1 ;
       }
+
+      yaw = current_position.theta;
+
+      //
+      //Updates the lookahead depending of the current velocity
+      UpdateLookAhead();
+
+      //
+      // Get next point in cartesian coordinates
+      if(PointDlh(current_position, &next_position) != OK){
+        ROS_ERROR("%s::PurePursuit: Error getting next point in the route", sComponentName.c_str());
+        return -1;
+      }
+      //
+      // Curvature
+      dx = current_position.x - next_position.x;
+      dy = current_position.y - next_position.y;
+      x1 = cos(yaw)*dx + sin(yaw)*dy; //Original
+      y1 = -sin(yaw)*dx + cos(yaw)*dy;
+
+      if ((x1*x1 + y1*y1) == 0)
+        curv = 0;
+      else
+        curv = (2.0 / (x1*x1 + y1*y1)) * -y1;  		//Original
+
+      // Obtenemos alfa_ref en bucle abierto segun curvatura
+      wref = atan(d_dist_wheel_to_center_/(1.0/curv));
+
+
+      if(pathCurrent.BackWaypoint(&last_waypoint) == ERROR){
+        ROS_ERROR("%s::PurePursuit: Error getting the last point in the path", sComponentName.c_str());
+        return -1;
+      }
+
+      double dAuxDist = Dist(current_position.x, current_position.y, last_waypoint.dX, last_waypoint.dY);	//dist(waypoints.back().pos, current_position);
+
+      if(pathCurrent.GetNextWaypoint(&next_waypoint) == ERROR){
+        ROS_ERROR("%s::PurePursuit: Error getting next waypoint in the path", sComponentName.c_str());
+        return -1;
+      }
+
+      dAuxSpeed = next_waypoint.dSpeed;
+
+      if (dAuxSpeed >= 0)
+         dth = next_position.theta - current_position.theta;
+      else
+        dth = -(next_position.theta + Pi - current_position.theta);
+
+
+      // normalize
+      radnorm(&dth);
+      double aux_wref = wref;
+      wref += Kr * dth;
+
+      //ROS_INFO("Purepursuit: current pos (%.2lf, %.2lf), next pos (%.2lf, %.2lf), lookahead %.2lf, yaw = %.3lf, curv = %.3lf, dth = %.3lf, wref = %.3lf(%.3lf), speed=%.3lf", current_position.x, current_position.y, next_position.x, next_position.y, dLookAhead, yaw, curv, dth, wref, aux_wref, dAuxSpeed);
+      //ROS_INFO("Purepursuit: yaw = %.3lf, curv = %.3lf, dth = %.3lf, wref = %.3lf", yaw, curv, dth, wref);
+
+
+      ////////////////// Sets the speed depending of distance or speed restrictions /////////
+      ///////////////////////////////////////////////////////////////////////////////////////
+      // Controls the max allowed using first restriction
+      if(fabs(dAuxSpeed) > max_speed_){
+        if(dAuxSpeed > 0)
+          dAuxSpeed = max_speed_;
+        else
+          dAuxSpeed = -max_speed_;
+      }
+
+
+      if(dAuxDist <= AGVS_SECOND_DECELERATION_DISTANCE)	{
+        if( (dAuxSpeed < 0.0) && (dAuxSpeed < -AGVS_SECOND_DECELERATION_MAXSPEED) )
+          dAuxSpeed = -AGVS_SECOND_DECELERATION_MAXSPEED;
+        else if( (dAuxSpeed > 0.0) && (dAuxSpeed > AGVS_SECOND_DECELERATION_MAXSPEED) )
+          dAuxSpeed = AGVS_SECOND_DECELERATION_MAXSPEED;
+
+      }else if(dAuxDist <= AGVS_FIRST_DECELERATION_DISTANCE) {
+        if( (dAuxSpeed < 0.0) && (dAuxSpeed < AGVS_FIRST_DECELERATION_MAXSPEED))
+          dAuxSpeed = -AGVS_FIRST_DECELERATION_MAXSPEED;
+        else if( (dAuxSpeed > 0.0) && (dAuxSpeed > AGVS_FIRST_DECELERATION_MAXSPEED) )
+          dAuxSpeed = AGVS_FIRST_DECELERATION_MAXSPEED;
+      }
+
+      if(command_type == COMMAND_ACKERMANN){
+        SetRobotSpeed(dAuxSpeed, wref);
+      }else{
+        SetRobotSpeed(dAuxSpeed, wref*direction);
+      }
+
+      //
+      // When the robot is on the last waypoint, checks the distance to the end
+      if( pathCurrent.GetCurrentWaypointIndex() >= (pathCurrent.NumOfWaypoints() - 2) ){
+        ret = -10;
+        double ddist2 = Dist( current_position.x, current_position.y, last_waypoint.dX, last_waypoint.dY);
+        // Distancia recorrida
+        //dDistCovered = Dist( current_position.px, current_position.py, odomWhenLastWaypoint.px, odomWhenLastWaypoint.py);
+        if (ddist2 < WAYPOINT_POP_DISTANCE_M) {
+          SetRobotSpeed(0.0, 0.0);
+
+          ROS_INFO("%s::PurePursuit: target position reached (%lf, %lf, %lf). Ending current path", sComponentName.c_str(), current_position.x, current_position.x, current_position.theta*180.0/Pi);
+
+          pathCurrent.Clear();
+          return 1;
+        }
+      }
+
+      return 0;
     }
+//  int PurePursuit(){
+//    double dx, dy, x1, y1;
+//    double curv, yaw;
+//    double wref;//, epw, uw;
+//    //double d = D_WHEEL_ROBOT_CENTER;   // Length in m (equiv to curv radius)
+//    double Kd = 1.1; // don't increase! 250
+//    Waypoint last_waypoint, next_waypoint;
 
-    return 0;
-  }
+//    double dAuxSpeed = 0.0;
+//    double dth;
+//    double aux = 0.0, dDistCovered = 0.0;
+//    int ret = 0;
 
-  /*!  \fn void CancelPath()
+//    geometry_msgs::Pose2D current_position = this->pose2d_robot;
+//    geometry_msgs::Pose2D next_position;
+
+//    if(pathCurrent.NumOfWaypoints() < 2)	{
+//      ROS_ERROR("%s::PurePursuit: not enought waypoints", sComponentName.c_str());
+//      return -1 ;
+//    }
+
+//    yaw = current_position.theta;
+
+//    //
+//    //Updates the lookahead depending of the current velocity
+//    UpdateLookAhead();
+
+//    //
+//    // Get next point in cartesian coordinates
+//    if(PointDlh(current_position, &next_position) != OK){
+//      ROS_ERROR("%s::PurePursuit: Error getting next point in the route", sComponentName.c_str());
+//      return -1;
+//    }
+//    //
+//    // Curvature
+//    dx = current_position.x - next_position.x;
+//    dy = current_position.y - next_position.y;
+//    x1 = cos(yaw)*dx + sin(yaw)*dy; //Original
+//    y1 = -sin(yaw)*dx + cos(yaw)*dy;
+
+//    if ((x1*x1 + y1*y1) == 0)
+//      curv = 0;
+//    else
+//      curv = (2.0 / (x1*x1 + y1*y1)) * -y1;  		//Original
+
+//    // Obtenemos alfa_ref en bucle abierto segun curvatura
+//   /// wref = atan(d_dist_wheel_to_center_/(1.0/curv));
+
+//    ///wref = 2*atan2(-y1,-x1); //两倍代表偏差是到目标点的旋转角度变化，而不是一半（到目标的连线与当前朝向的夹角） chq
+//    if(pathCurrent.BackWaypoint(&last_waypoint) == ERROR){
+//      ROS_ERROR("%s::PurePursuit: Error getting the last point in the path", sComponentName.c_str());
+//      return -1;
+//    }
+
+//    double dAuxDist = Dist(current_position.x, current_position.y, last_waypoint.dX, last_waypoint.dY);	//dist(waypoints.back().pos, current_position);
+
+//    if(pathCurrent.GetNextWaypoint(&next_waypoint) == ERROR){
+//      ROS_ERROR("%s::PurePursuit: Error getting next waypoint in the path", sComponentName.c_str());
+//      return -1;
+//    }
+
+//    dAuxSpeed = next_waypoint.dSpeed;
+
+//    if (dAuxSpeed >= 0)
+//       dth = next_position.theta - current_position.theta;
+//    else
+//      dth = -(next_position.theta + Pi - current_position.theta);
+
+
+//    // normalize
+//    radnorm(&dth);
+//    double aux_wref = wref;
+//    //wref += Kr * dth;
+
+//    //ROS_INFO("Purepursuit: current pos (%.2lf, %.2lf), next pos (%.2lf, %.2lf), lookahead %.2lf, yaw = %.3lf, curv = %.3lf, dth = %.3lf, wref = %.3lf(%.3lf), speed=%.3lf", current_position.x, current_position.y, next_position.x, next_position.y, dLookAhead, yaw, curv, dth, wref, aux_wref, dAuxSpeed);
+//    //ROS_INFO("Purepursuit: yaw = %.3lf, curv = %.3lf, dth = %.3lf, wref = %.3lf", yaw, curv, dth, wref);
+
+
+//    ////////////////// Sets the speed depending of distance or speed restrictions /////////
+//    ///////////////////////////////////////////////////////////////////////////////////////
+//    // Controls the max allowed using first restriction
+//    if(fabs(dAuxSpeed) > max_speed_){
+//      if(dAuxSpeed > 0)
+//        dAuxSpeed = max_speed_;
+//      else
+//        dAuxSpeed = -max_speed_;
+//    }
+
+
+//    if(dAuxDist <= AGVS_SECOND_DECELERATION_DISTANCE)	{
+//      if( (dAuxSpeed < 0.0) && (dAuxSpeed < -AGVS_SECOND_DECELERATION_MAXSPEED) )
+//        dAuxSpeed = -AGVS_SECOND_DECELERATION_MAXSPEED;
+//      else if( (dAuxSpeed > 0.0) && (dAuxSpeed > AGVS_SECOND_DECELERATION_MAXSPEED) )
+//        dAuxSpeed = AGVS_SECOND_DECELERATION_MAXSPEED;
+
+//    }else if(dAuxDist <= AGVS_FIRST_DECELERATION_DISTANCE) {
+//      if( (dAuxSpeed < 0.0) && (dAuxSpeed < AGVS_FIRST_DECELERATION_MAXSPEED))
+//        dAuxSpeed = -AGVS_FIRST_DECELERATION_MAXSPEED;
+//      else if( (dAuxSpeed > 0.0) && (dAuxSpeed > AGVS_FIRST_DECELERATION_MAXSPEED) )
+//        dAuxSpeed = AGVS_FIRST_DECELERATION_MAXSPEED;
+//    }
+//    wref = dAuxSpeed*curv;
+//    wref =atan2(-y1,-x1);
+//    if(wref>M_PI)wref=M_PI;
+//    if(wref<-M_PI)wref=-M_PI;
+//    wref = atan(d_dist_wheel_to_center_/(1.0/curv));
+//    wref += Kr * dth;
+
+//    if(command_type == COMMAND_ACKERMANN){
+//      SetRobotSpeed(dAuxSpeed, wref);
+//    }else{
+//      SetRobotSpeed(dAuxSpeed, wref*direction);
+//    }
+
+//    //
+//    // When the robot is on the last waypoint, checks the distance to the end
+//    if( pathCurrent.GetCurrentWaypointIndex() >= (pathCurrent.NumOfWaypoints() - 2) ){
+//      ret = -10;
+//      double ddist2 = Dist( current_position.x, current_position.y, last_waypoint.dX, last_waypoint.dY);
+//      // Distancia recorrida
+//      //dDistCovered = Dist( current_position.px, current_position.py, odomWhenLastWaypoint.px, odomWhenLastWaypoint.py);
+//      if (ddist2 < WAYPOINT_POP_DISTANCE_M) {
+//        SetRobotSpeed(0.0, 0.0);
+
+//        ROS_INFO("%s::PurePursuit: target position reached (%lf, %lf, %lf). Ending current path", sComponentName.c_str(), current_position.x, current_position.x, current_position.theta*180.0/Pi);
+
+//        pathCurrent.Clear();
+//        return 1;
+//      }
+//    }
+
+//    return 0;
+//  }
+
+  /*!	\fn void CancelPath()
    * Removes all the waypoints introduced in the system
   */
   void CancelPath(){
 
-    pathCurrent.Clear();  // Clears current path
-    pathFilling.Clear();  // Clears the auxiliary path
-    while(!qPath.empty())  // Clears the queue of paths
+    pathCurrent.Clear();	// Clears current path
+    pathFilling.Clear();	// Clears the auxiliary path
+    while(!qPath.empty())	// Clears the queue of paths
       qPath.pop();
 
     bCancel = false;
@@ -2445,7 +1872,7 @@ void pubTarget(geometry_msgs::Pose2D current_position, geometry_msgs::Pose2D nex
     action_server_goto.setPreempted();
   }
 
-  /*!  \fn void SetRobotSpeed()
+  /*!	\fn void SetRobotSpeed()
   */
   void SetRobotSpeed(double speed, double angle){
     if(command_type == COMMAND_ACKERMANN){
@@ -2468,7 +1895,7 @@ void pubTarget(geometry_msgs::Pose2D current_position, geometry_msgs::Pose2D nex
   }
 
 
-  /*!  \fn void ShutDownState()
+  /*!	\fn void ShutDownState()
   */
   void ShutDownState(){
     if(bRunning)
@@ -2478,7 +1905,7 @@ void pubTarget(geometry_msgs::Pose2D current_position, geometry_msgs::Pose2D nex
 
   }
 
-  /*!  \fn void EmergencyState()
+  /*!	\fn void EmergencyState()
   */
   void EmergencyState(){
     if(CheckOdomReceive() == 0){
@@ -2488,13 +1915,13 @@ void pubTarget(geometry_msgs::Pose2D current_position, geometry_msgs::Pose2D nex
 
   }
 
-  /*!  \fn void FailureState()
+  /*!	\fn void FailureState()
   */
   void FailureState(){
 
   }
 
-  /*!  \fn void AllState()
+  /*!	\fn void AllState()
   */
   void AllState(){
 
@@ -2516,11 +1943,11 @@ void pubTarget(geometry_msgs::Pose2D current_position, geometry_msgs::Pose2D nex
       }
     }
 
-    AnalyseCB();  // Checks action server state
+    AnalyseCB();	// Checks action server state
 
-    ReadAndPublish();  // Reads and publish into configured topics
+    ReadAndPublish();	// Reads and publish into configured topics
 
-    if(bCancel)    // Performs the cancel in case of required
+    if(bCancel)		// Performs the cancel in case of required
       CancelPath();
   }
 
@@ -2571,14 +1998,14 @@ void pubTarget(geometry_msgs::Pose2D current_position, geometry_msgs::Pose2D nex
   }
 
   /*! \fn int CalculateDirectionSpeed(Waypoint target_position)
-  *  \brief Calcula el sentido de movimiento de una ruta, dependiendo de la posición inicial y el ángulo del robot
-  *  \return 1 si el sentido es positivo
-  *  \return -1 si el sentido es negativo
+  *	\brief Calcula el sentido de movimiento de una ruta, dependiendo de la posición inicial y el ángulo del robot
+  *	\return 1 si el sentido es positivo
+  *	\return -1 si el sentido es negativo
   */
   int CalculateDirectionSpeed(Waypoint target_position){
     int ret = 1;
     double alpha = pose2d_robot.theta;
-    double x =  pose2d_robot.x, y = pose2d_robot.y;
+    double x =	pose2d_robot.x, y = pose2d_robot.y;
     double ux, uy, vx, vy;
     double beta = 0.0;
     static int last_direction = 0;
@@ -2646,15 +2073,14 @@ void pubTarget(geometry_msgs::Pose2D current_position, geometry_msgs::Pose2D nex
   }
 
   /*! \fn int CalculateDirectionSpeed(geometry_msgs::Pose2D target_position)
-  *  \brief Calcula el sentido de movimiento de una ruta, dependiendo de la posición inicial y el ángulo del robot
-  * 根据机器人的初始位置和角度计算路线的移动方向
-  *  \return 1 si el sentido es positivo
-  *  \return -1 si el sentido es negativo
+  *	\brief Calcula el sentido de movimiento de una ruta, dependiendo de la posición inicial y el ángulo del robot
+  *	\return 1 si el sentido es positivo
+  *	\return -1 si el sentido es negativo
   */
   int CalculateDirectionSpeed(geometry_msgs::Pose2D target_position){
     int ret = 1;
     double alpha = pose2d_robot.theta;
-    double x =  pose2d_robot.x, y = pose2d_robot.y;
+    double x =	pose2d_robot.x, y = pose2d_robot.y;
     double ux, uy, vx, vy;
     double beta = 0.0;
     static int last_direction = 0;
@@ -2672,16 +2098,14 @@ void pubTarget(geometry_msgs::Pose2D current_position, geometry_msgs::Pose2D nex
     // Cálculo del vector entre el punto objetivo y el robot
     vx = target_position.x - x;
     vy = target_position.y - y;
-    //计算方向向量和向量到目标点之间的角度
+
     // Cálculo del ángulo entre el vector director y el vector al punto objetivo
     beta = acos( (ux * vx + uy * vy) / ( sqrt(ux*ux + uy*uy) * sqrt(vx*vx + vy*vy) ) );
-    //我们根据机器人的方向和目标位置（弧度）之间的角度返回值
-    // 我们将考虑最后一条路线前进方向的价值。
+
     // Devolvemos valor dependiendo del ángulo entre la orientación del robot y la posición objetivo (radianes)
     // Tendremos en cuenta el valor del sentido de avance de la última ruta.
     if(fabs(beta) <= pi_medios){
       // Calculo inicial de direccion
-      // 初步计算方向
       if(last_direction == 0)
         ret = 1;
       else {
@@ -2723,27 +2147,26 @@ void pubTarget(geometry_msgs::Pose2D current_position, geometry_msgs::Pose2D nex
     return ret;
   }
 
-  /*!  \fn ReturnValue Agvs::MergePath()
-   *   \brief Merges the current path with the next path
+  /*!	\fn ReturnValue Agvs::MergePath()
+   * 	\brief Merges the current path with the next path
   */
   ReturnValue MergePath(){
     Waypoint new_waypoint, wFirst, wLast;
     Path aux;
 
+
     if(action_server_goto.isNewGoalAvailable()){
       goto_goal.target = action_server_goto.acceptNewGoal()->target; // Reads points from action server
       if(goto_goal.target.size() > 0){
-        if(goto_goal.target.size() > 1){  // Tries to use the second point of the route
+        if(goto_goal.target.size() > 1){	// Tries to use the second point of the route
           direction = CalculateDirectionSpeed(goto_goal.target[1].pose);
         }else{
           direction = CalculateDirectionSpeed(goto_goal.target[0].pose);
         }
-        ///force to use front laser  chq!!!!!!!!---->
-        direction = 1;
-         ///force to use front laser  chq!!!!!!!<----
-        if(direction == 1){  // Uses only front laser
+       direction = 1;
+        if(direction == 1){	// Uses only front laser
           SetLaserFront();
-        }else{  // Uses only back laser
+        }else{	// Uses only back laser
           SetLaserBack();
         }
 
@@ -2769,12 +2192,11 @@ void pubTarget(geometry_msgs::Pose2D current_position, geometry_msgs::Pose2D nex
 
         //pathFilling.Print();
         // Adds the new path to the queue
-
         qPath.push(pathFilling);
         // Clears temporary path object
         pathFilling.Clear();
 
-        goto_feedback.percent_complete = 0.0;  // Inits the feedback percentage
+        goto_feedback.percent_complete = 0.0;	// Inits the feedback percentage
 
         // Only if exists any path into the queue
         if(qPath.size() > 0){
@@ -2799,10 +2221,8 @@ void pubTarget(geometry_msgs::Pose2D current_position, geometry_msgs::Pose2D nex
           // Pops the extracted path
           qPath.pop();
 
-          goto_goal.target.clear();  // removes current goals
-          //reset flag
-          comp_firstpoint = false;
-          change_path = true;
+          goto_goal.target.clear();	// removes current goals
+
           return OK;
         }
       }
@@ -2888,12 +2308,10 @@ void pubTarget(geometry_msgs::Pose2D current_position, geometry_msgs::Pose2D nex
 // MAIN
 int main(int argc, char** argv)
 {
-  ///程序会以这个名字发布server,所以不要轻易改这个个名字
   ros::init(argc, argv, "robotnik_pp_planner");
 
   ros::NodeHandle n;
-
-  purepursuit_planner_node planner(n);
+    purepursuit_planner_node planner(n);
 
   planner.ControlThread();
 

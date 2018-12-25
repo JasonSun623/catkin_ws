@@ -2393,9 +2393,11 @@ void pubTarget(geometry_msgs::Pose2D current_position, geometry_msgs::Pose2D nex
       ROS_INFO("-------------purepersuit.using turn directly------------------------");
     }
     else
-    //wref = dAuxSpeed * curv;
-    wref = 2*atan2(-y1,-x1);
-    //wref = atan(d_dist_wheel_to_center_/(1.0/curv));
+      //wref = dAuxSpeed * curv;
+      wref = 2*atan2(-y1,-x1);
+      //wref = atan(d_dist_wheel_to_center_/(1.0/curv));
+    
+    
     wref += Kr * dth;
     wref = pidTheta->calculate(0, -wref);
     pubTarget(current_position,next_position,wref);//added by chq

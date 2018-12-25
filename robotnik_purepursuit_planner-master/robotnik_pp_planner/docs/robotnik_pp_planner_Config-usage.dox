@@ -1,0 +1,16 @@
+\subsubsection usage Usage
+\verbatim
+<node name="robotnik_pp_planner" pkg="robotnik_pp_planner" type="robotnik_pp_planner">
+  <param name="max_w" type="double" value="3.14159265359" />
+  <param name="min_w" type="double" value="-3.14159265359" />
+  <param name="kp_w" type="double" value="0.5" />
+  <param name="ki_w" type="double" value="0.05" />
+  <param name="kd_w" type="double" value="0.005" />
+  <param name="max_v" type="double" value="1.0" />
+  <param name="min_v" type="double" value="0.0" />
+  <param name="kp_v" type="double" value="0.5" />
+  <param name="ki_v" type="double" value="0.05" />
+  <param name="kd_v" type="double" value="0.005" />
+</node>
+\endverbatim
+
