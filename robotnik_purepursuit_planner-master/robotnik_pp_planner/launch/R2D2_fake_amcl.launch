@@ -1,0 +1,26 @@
+<launch>
+<!-- Arguments -->
+  <arg name="scan_topic"     default="scan"/>
+  <arg name="initial_pose_x" default="0.0"/>
+  <arg name="initial_pose_y" default="0.0"/>
+  <arg name="initial_pose_a" default="0.0"/>
+<!-- Map Arguments -->
+ <arg name="map_file" default="$(find robotnik_pp_planner)/maps/coverage_space2.map"/>
+<!--Map Server -->
+ <node name="map_server" type="map_server" pkg="map_server" args="$(arg map_file)" />
+  
+
+ <!--fire up virtual amcl -->
+<node pkg="fake_localization" type="fake_localization" name="fake_loc" output="screen" >
+  <param name="global_frame_id" value="map" />
+  <param name="odom_frame_id" value="odom" />
+ <remap from="base_pose_ground_truth" to="/wheel_diff_controller/odom" />
+</node>
+
+<!-- the virtual amcl need a transform from map to odom-->
+<!--node pkg="tf" type="static_transform_publisher" name="tf_map_to_odom" args="0 0 0 0 0 0 /map /odom 10" /-->
+<!--node pkg="tf" type="static_transform_publisher" name="odom_map_broadcaster"
+args="0 0 0 0 0 0 /map /odom 30" /-->
+
+
+</launch>

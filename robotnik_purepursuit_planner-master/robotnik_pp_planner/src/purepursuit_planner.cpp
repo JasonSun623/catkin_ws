@@ -41,38 +41,38 @@
 
 
 #define ODOM_TIMEOUT_ERROR          0.2        // max num. of seconds without receiving odom values
-#define MAP_TIMEOUT_ERROR          0.2        // max num. of seconds without receiving map transformations
-#define AGVS_TURN_RADIUS          0.20      // distancia en la que empieza a girar el robot cuando llega a una esquina
-#define MIN_ANGLE_BEZIER          0.261799388    // ángulo (radianes) mínimo entre segmentos de la recta para los que ajustaremos a una curva de BEZIER//我们将调整为BEZIER曲线的线段之间的最小角度（弧度）
-#define MIN_ANGLE_BSPLINE          0.261799388    // ángulo (radianes) mínimo entre segmentos de la recta para los que ajustaremos a una curva de BEZIER//我们将调整为BEZIER曲线的线段之间的最小角度（弧度）
+#define MAP_TIMEOUT_ERROR           0.2        // max num. of seconds without receiving map transformations
+#define AGVS_TURN_RADIUS            0.20      // distancia en la que empieza a girar el robot cuando llega a una esquina
+#define MIN_ANGLE_BEZIER            0.261799388    // ángulo (radianes) mínimo entre segmentos de la recta para los que ajustaremos a una curva de BEZIER//我们将调整为BEZIER曲线的线段之间的最小角度（弧度）
+#define MIN_ANGLE_BSPLINE           0.261799388    // ángulo (radianes) mínimo entre segmentos de la recta para los que ajustaremos a una curva de BEZIER//我们将调整为BEZIER曲线的线段之间的最小角度（弧度）
 
-#define BEZIER_CONTROL_POINTS        5
-#define BSPLINE_CONTROL_POINTS       5
-#define D_LOOKVERTICAL_MIN            0.3    // heading to vertical point limit dist chq
-#define D_LOOKAHEAD_INC            0.01
-#define D_LOOKAHEAD_MIN            0.3    // Minima distancia del punto objetivo en m (PurePursuit con lookahead dinámico)
-#define D_LOOKAHEAD_MAX            1.1    // Maxima distancia del punto objetivo
-#define D_WHEEL_ROBOT_CENTER          0.478   // Distance from the motor wheel to the robot center
+#define BEZIER_CONTROL_POINTS          5
+#define BSPLINE_CONTROL_POINTS         5
+#define D_LOOKVERTICAL_MIN             0.3    // heading to vertical point limit dist chq
+#define D_LOOKAHEAD_INC                0.01
+#define D_LOOKAHEAD_MIN                0.1    // Minima distancia del punto objetivo en m (PurePursuit con lookahead dinámico)
+#define D_LOOKAHEAD_MAX                1.1    // Maxima distancia del punto objetivo
+#define D_WHEEL_ROBOT_CENTER           0.478   // Distance from the motor wheel to the robot center
 
 //#define MAX_SPEED_LVL1            0.5
 //#define MAX_SPEED_LVL2            0.3
-#define MAX_SPEED_LVL1            0.3
-#define MAX_SPEED_LVL2            0.2
-#define MAX_SPEED                 1.2
+#define MAX_SPEED_LVL1              0.3
+#define MAX_SPEED_LVL2              0.2
+#define MAX_SPEED                   1.2
 
-#define WAYPOINT_POP_DISTANCE_M        0.10    //Distancia mínima para alcanzar punto objetivo m (PurePursuit)
+#define WAYPOINT_POP_DISTANCE_M              0.10    //Distancia mínima para alcanzar punto objetivo m (PurePursuit)
 
-#define AGVS_FIRST_DECELERATION_DISTANCE   0.5   // meters -> when the vehicle is arriving to the goal, it has to decelarate at this distance
-#define AGVS_FIRST_DECELERATION_MAXSPEED  0.15  // m/s
-#define AGVS_SECOND_DECELERATION_DISTANCE   0.25   // meters -> when the vehicle is arriving to the goal, it has to decelarate another time at this distance
-#define AGVS_SECOND_DECELERATION_MAXSPEED  0.1   // m/s
-#define AGVS_DEFAULT_KR  0.20            //
+#define AGVS_FIRST_DECELERATION_DISTANCE     0.5   // meters -> when the vehicle is arriving to the goal, it has to decelarate at this distance
+#define AGVS_FIRST_DECELERATION_MAXSPEED     0.15  // m/s
+#define AGVS_SECOND_DECELERATION_DISTANCE    0.25   // meters -> when the vehicle is arriving to the goal, it has to decelarate another time at this distance
+#define AGVS_SECOND_DECELERATION_MAXSPEED    0.1   // m/s
+#define AGVS_DEFAULT_KR                      0.20            //
 
 
-#define COMMAND_ACKERMANN          100
-#define COMMAND_TWIST            200
-#define COMMAND_ACKERMANN_STRING      "Ackermann"
-#define COMMAND_TWIST_STRING        "Twist"
+#define COMMAND_ACKERMANN              100
+#define COMMAND_TWIST                  200
+#define COMMAND_ACKERMANN_STRING       "Ackermann"
+#define COMMAND_TWIST_STRING           "Twist"
 //chq 切换算法rviz显示
 enum look_dir{
   look_back = 0,//瞄准起点后方
@@ -1118,7 +1118,7 @@ private:
     //! Direction of movement (-1 or +1)
     int direction;
 
-    bool change_path;
+    bool need_repub_path;
     bool comp_firstpoint;
    ///PID
     double dt , maxT , minT, Kp , Ki, Kd;
@@ -1201,7 +1201,7 @@ public:
     bCancel = false;
 
     comp_firstpoint = false;
-    change_path = true;
+    need_repub_path = true;
     sComponentName.assign("purepursuit_planner_node");
     iState = INIT_STATE;
     direction = 0;
@@ -1499,13 +1499,13 @@ public:
   */
   void ControlThread()
   {
-    ROS_INFO("purepursuit_planner::ControlThread() start...");
+    //ROS_INFO("purepursuit_planner.ControlThread() start...");
     ros::Rate r(desired_freq_);  // 50.0
 
 
     // while(node_handle_.ok()) {
     while(ros::ok()) {
-
+      //ROS_INFO("purepursuit.ControlThread.start...");
       switch(iState){
 
         case INIT_STATE:
@@ -1535,13 +1535,13 @@ public:
       }
 
       AllState();
-
+      //ROS_INFO("purepursuit.ControlThread.end...");
       ros::spinOnce();
       r.sleep();
     }
     ShutDownState();
 
-    ROS_INFO("purepursuit_planner::ControlThread(): End");
+    //ROS_INFO("purepursuit_planner::ControlThread(): End");
 
   }
 
@@ -1586,6 +1586,7 @@ public:
   /*!  \fn void ReadyState()
   */
   void ReadyState(){
+    //ROS_INFO("purepersuit.ReadyState.start...");
     if(CheckOdomReceive() == -1){
       ROS_INFO("purepursuit_planner.ReadyState.CheckOdomReceive() == -1.do set speed = 0 SwitchToState(EMERGENCY_STATE),return!");
       SetRobotSpeed(0.0, 0.0);
@@ -1630,7 +1631,7 @@ public:
       SwitchToState(STANDBY_STATE);
     }
     // We have to update the percent while the mision is ongoing
-
+   //ROS_INFO("purepersuit.ReadyState.end...");
   }
 
 
@@ -1772,7 +1773,7 @@ ReturnValue PointOneByOne(geometry_msgs::Pose2D current_position, geometry_msgs:
   double rela_a = atan2(wy,wx)-current_position.theta;
   radnorm(&rela_a);
   */
-  ///ROS_INFO("pointdlh.cur dmin:%.3f, comp_firstpoint(0==false,1=yes):%d,g_dir(0==back):%d,change_path:%d",dmin,comp_firstpoint,g_dir,change_path);
+  ///ROS_INFO("pointdlh.cur dmin:%.3f, comp_firstpoint(0==false,1=yes):%d,g_dir(0==back):%d,need_repub_path:%d",dmin,comp_firstpoint,g_dir,need_repub_path);
   if(  d > d_lookvertical_min_ && !comp_firstpoint)///must ahead to first tar + min dist + not comp
   {
     //double d0 = Dist(Pb.dX, Pb.dY, s0.dX, s0.dY);
@@ -2024,7 +2025,7 @@ ReturnValue PointOneByOne(geometry_msgs::Pose2D current_position, geometry_msgs:
     geometry_msgs::Pose2D target_position;
     Waypoint s0, s1, Pb, Pb1;
     static bool comp_firstpoint = false;
-    static bool change_path = true;
+    static bool need_repub_path = true;
     int size = pathCurrent.NumOfWaypoints();
 
     d_seg = new double[size]; //array con la distancia entre puntos consecutivos en la ruta
@@ -2034,15 +2035,15 @@ ReturnValue PointOneByOne(geometry_msgs::Pose2D current_position, geometry_msgs:
     dmin = 100000000;
     //递推找到所有路径点，两两构成的线段中，距离当前车子位置最近距离的线段和垂点
     i = pathCurrent.GetCurrentWaypointIndex();
-    ROS_INFO("pointdlh.cur way index :%d,change_path(1==true):%d",i,change_path);
+    ROS_INFO("pointdlh.cur way index :%d,need_repub_path(1==true):%d",i,need_repub_path);
     if( i == 0 ){
-      if(change_path){
+      if(need_repub_path){
         comp_firstpoint = false;///reset when get new targets
-        change_path = false;
+        need_repub_path = false;
       }
     }
     else{
-      change_path = true;
+      need_repub_path = true;
     }
 
     for(; i < (size - 1); i++) {
@@ -2109,7 +2110,7 @@ ReturnValue PointOneByOne(geometry_msgs::Pose2D current_position, geometry_msgs:
     ///!!!added by chq for move fast to segment line ---start
     // if dist to line is large then we treat the Pb as the target
     // 这种方式可以更好的进入目标点
-    ROS_INFO("pointdlh.cur dmin:%.3f, comp_firstpoint(0==false,1=yes):%d,g_dir(0==back):%d,change_path:%d",dmin,comp_firstpoint,g_dir,change_path);
+    ROS_INFO("pointdlh.cur dmin:%.3f, comp_firstpoint(0==false,1=yes):%d,g_dir(0==back):%d,need_repub_path:%d",dmin,comp_firstpoint,g_dir,need_repub_path);
     if( dmin > d_lookvertical_min_ && !comp_firstpoint)
     {
       //double d0 = Dist(Pb.dX, Pb.dY, s0.dX, s0.dY);
@@ -2268,6 +2269,7 @@ void pubTarget(geometry_msgs::Pose2D current_position, geometry_msgs::Pose2D nex
    *  \return 1 if the route finishes
    */
   int PurePursuit(){
+    //ROS_INFO("purepursuit.PurePursuit start...");
     double dx, dy, x1, y1;
     double curv, yaw;
     double wref;//, epw, uw;
@@ -2289,7 +2291,7 @@ void pubTarget(geometry_msgs::Pose2D current_position, geometry_msgs::Pose2D nex
       return -1 ;
     }
 
-    pubMarkerRfs(pathCurrent.GetWaypoints());//rviz打印跟踪点和跟踪方向 add for debugging
+
     yaw = current_position.theta;
 
     ///根据速度大小更新前瞻距离actively!!!
@@ -2393,9 +2395,11 @@ void pubTarget(geometry_msgs::Pose2D current_position, geometry_msgs::Pose2D nex
       ROS_INFO("-------------purepersuit.using turn directly------------------------");
     }
     else
-    //wref = dAuxSpeed * curv;
-    wref = 2*atan2(-y1,-x1);
-    //wref = atan(d_dist_wheel_to_center_/(1.0/curv));
+      //wref = dAuxSpeed * curv;
+      wref = 2*atan2(-y1,-x1);
+      //wref = atan(d_dist_wheel_to_center_/(1.0/curv));
+
+
     wref += Kr * dth;
     wref = pidTheta->calculate(0, -wref);
     pubTarget(current_position,next_position,wref);//added by chq
@@ -2497,7 +2501,7 @@ void pubTarget(geometry_msgs::Pose2D current_position, geometry_msgs::Pose2D nex
   /*!  \fn void AllState()
   */
   void AllState(){
-
+    //ROS_INFO("purepursuit.AllState start...");
     // Only if we use the map as source for positioning
     if(ui_position_source == MAP_SOURCE){
       try{
@@ -2512,7 +2516,7 @@ void pubTarget(geometry_msgs::Pose2D current_position, geometry_msgs::Pose2D nex
         msg.header.stamp = last_map_time;
         tranform_map_pub_.publish(msg);
       }catch (tf::TransformException ex){
-        //ROS_ERROR("%s::AllState: %s", sComponentName.c_str(), ex.what());
+        ROS_ERROR("%s::AllState lookupTransform from %s to %s failed!info: %s", sComponentName.c_str(),"map",target_frame_.c_str(), ex.what());
       }
     }
 
@@ -2522,6 +2526,8 @@ void pubTarget(geometry_msgs::Pose2D current_position, geometry_msgs::Pose2D nex
 
     if(bCancel)    // Performs the cancel in case of required
       CancelPath();
+
+    //ROS_INFO("purepursuit.AllState end...");
   }
 
   /*! \fn void OdomCallback(const nav_msgs::Odometry::ConstPtr& odom_value)
@@ -2802,7 +2808,11 @@ void pubTarget(geometry_msgs::Pose2D current_position, geometry_msgs::Pose2D nex
           goto_goal.target.clear();  // removes current goals
           //reset flag
           comp_firstpoint = false;
-          change_path = true;
+          need_repub_path = true;
+         // if(need_repub_path){
+            pubMarkerRfs(pathCurrent.GetWaypoints());//rviz打印跟踪点和跟踪方向 add for debugging
+         //   need_repub_path = false;
+         // }
           return OK;
         }
       }
