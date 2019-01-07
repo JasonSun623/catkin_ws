@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+
+
+<xacro:macro name="imu_gazebo" params="parent_link link imu_topic update_rate stdev *joint_origin">
+<!-- 1,create link -->
+<link name="${link}" />
+<!-- 2,simulates IMU sensor. Measurements are computed by the ROS plugin -->
+  <gazebo>
+    <plugin name="imu_plugin" filename="libgazebo_ros_imu.so">
+      <alwaysOn>true</alwaysOn>
+      <bodyName>${link}</bodyName>
+      <topicName>${imu_topic}</topicName>
+      <serviceName>imu_service</serviceName>
+      <gaussianNoise>${stdev * stdev}</gaussianNoise>
+      <updateRate>${update_rate}</updateRate>
+    </plugin>
+  </gazebo>
+<!-- 3,create joint relation -->
+    <joint name="base_link_to_imu_joint" type="fixed">
+      <parent link="${parent_link}" />
+      <child link="${link}" />
+      <axis xyz="0 1 0" />
+      <!-- origin cord spcified  outsidely -->
+      <xacro:insert_block name="joint_origin"/>
+    </joint>
+ </xacro:macro>
+</robot>
