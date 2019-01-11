@@ -1,0 +1,638 @@
+/*******************************************************************************
+* Copyright (c) 2018
+* All rights reserved.
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted provided that the following conditions are met:
+*
+* * Redistributions of source code must retain the above copyright notice, this
+*   list of conditions and the following disclaimer.
+*
+* * Redistributions in binary form must reproduce the above copyright notice,
+*   this list of conditions and the following disclaimer in the documentation
+*   and/or other materials provided with the distribution.
+*
+* * Neither the name of the copyright holder nor the names of its
+*   contributors may be used to endorse or promote products derived from
+*   this software without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+* DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+* FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+* SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+* CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+* OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+* OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*******************************************************************************/
+
+
+#include <ros/ros.h>
+#include <exception>
+#include <std_msgs/String.h>
+#include <boost/asio.hpp>
+#include <imu_publisher/imu_publisher.h>
+#include <imu_publisher/imu_transport.h>
+#include <std_msgs/UInt16.h>
+
+
+namespace imu_publisher_space
+{
+imu_publisher::imu_publisher(const std::string& port_name, uint32_t baud_rate, boost::asio::io_service& io) :
+  Transport(io),
+  baud_rate_(baud_rate),
+  shutting_down_(false), 
+  serial_(io, port_name),
+  poll_read_buf_(),
+  imu_msg(new sensor_msgs::Imu()),
+  count_(0)
+{
+  //JY901 = CJY901();
+  priv_nh.param<std::string>("imu_frame", _imu_frame, "/imu_link");
+  priv_nh.param<std::string>("imu_topic", _imu_topic, "/imu_data");
+  priv_nh.param<double>("orient_covar", orient_covar, pow(0.01*M_PI/180,2));
+  priv_nh.param<double>("angle_v_covar", angle_v_covar, pow(0.05*M_PI/180,2));
+  priv_nh.param<double>("acc_covar", acc_covar, pow(0.01,2));
+  priv_nh.param("rate", data_rate, 100);////解析速度大于回传数度
+  //设置串口参数
+  serial_.set_option(boost::asio::serial_port_base::baud_rate(baud_rate_));
+  serial_.set_option(boost::asio::serial_port::flow_control());
+  serial_.set_option(boost::asio::serial_port::parity());
+  serial_.set_option(boost::asio::serial_port::stop_bits());
+  serial_.set_option(boost::asio::serial_port::character_size(8));
+  imu_pub = priv_nh.advertise<sensor_msgs::Imu>(_imu_topic, 100);
+
+  _start_timer = false;
+
+  data_rate = (data_rate>1) ? data_rate : 1;
+  float time = 1.0/(float)data_rate;
+
+  ///定时频率应与数据回传速率相一致，如果回传的慢，定时程序快，可能会导致有效采样数据接受不足，而无法正常发布数据
+  timer = priv_nh.createTimer(ros::Duration(time), &imu_publisher::poll,this);
+
+  //double pose_var = orient_covar;
+  // @ref kobuki. set a non-zero covariance on unused dimensions (pitch and roll); this is a requirement of robot_pose_ekf
+  // set yaw covariance as very low, to make it dominate over the odometry heading when combined
+  // 1: fill once, as its always the same;  2: using an invented value; cannot we get a realistic estimation?
+
+  imu_msg->header.frame_id = _imu_frame;
+  imu_msg->orientation_covariance[0] = orient_covar;//rr
+  imu_msg->orientation_covariance[1] = 0.0;
+  imu_msg->orientation_covariance[2] = 0.0;
+  imu_msg->orientation_covariance[3] = 0.0;
+  imu_msg->orientation_covariance[4] = orient_covar;//pp
+  imu_msg->orientation_covariance[5] = 0.0;
+  imu_msg->orientation_covariance[6] = 0.0;
+  imu_msg->orientation_covariance[7] = 0.0;
+  imu_msg->orientation_covariance[8] = orient_covar;//yy
+  //double angle_v_var = pow(0.05*M_PI/180,2);
+  imu_msg->angular_velocity_covariance[0] = angle_v_covar;//vr
+  imu_msg->angular_velocity_covariance[1] = 0;
+  imu_msg->angular_velocity_covariance[2] = 0;
+  imu_msg->angular_velocity_covariance[3] = 0;
+  imu_msg->angular_velocity_covariance[4] = angle_v_covar;//bp
+  imu_msg->angular_velocity_covariance[5] = 0;
+  imu_msg->angular_velocity_covariance[6] = 0;
+  imu_msg->angular_velocity_covariance[7] = 0;
+  imu_msg->angular_velocity_covariance[8] = angle_v_covar;//vy
+  //double acc_var = pow(0.01,2);
+  imu_msg->linear_acceleration_covariance[0] = acc_covar;//ax
+  imu_msg->linear_acceleration_covariance[1] = 0;
+  imu_msg->linear_acceleration_covariance[2] = 0;
+  imu_msg->linear_acceleration_covariance[3] = 0;
+  imu_msg->linear_acceleration_covariance[4] = acc_covar;//ay
+  imu_msg->linear_acceleration_covariance[5] = 0;
+  imu_msg->linear_acceleration_covariance[6] = 0;
+  imu_msg->linear_acceleration_covariance[7] = 0;
+  imu_msg->linear_acceleration_covariance[8] = acc_covar;//az
+
+
+  readbuffersize = 11*6;//每组数据１１byte,并且设置好数据一般是４类，为保证数据读取完整，这这里设置偏大一点
+  max_one_buffer_size =1024;//最不好的情况一个read_buffer_有１０２４个字节，一般不可能这么大
+  max_array_size = max_one_buffer_size*readbuffersize;
+  buf = (uint8_t*)malloc(sizeof(uint8_t)*max_array_size);
+  buf_bak = (uint8_t*)malloc(sizeof(uint8_t)*max_array_size);
+}
+
+void imu_publisher::poll(const ros::TimerEvent& event)
+{
+  //std::cout << "[ imu_publisher imu_publisher::poll data before ] " << std::endl;;
+  static double r,p,y;
+  static double vr,vp,vy;
+  static double ax,ay,az;
+  static geometry_msgs::Quaternion qua_msg;
+
+  ///start timer
+  if(!_start_timer)return;
+
+  long long i = 0;
+  count_ = readOneBuffer();
+  /*
+   * Buffer recv_com = readBuffer();
+
+
+  for(uint8_t n : recv_com)
+  {
+    // std::cout << n;
+
+    if( count_ >= max_array_size ){
+      count_ = max_array_size - 1;
+      ///debug
+      //uint8_t buf_array_bef[max_array_size];
+      //memcpy(&buf_array_bef[0],&buf[0],max_array_size);
+
+      //uint8_t temp_array_bak[count_];
+      //memcpy(&temp_array_bak[0],&buf[1],count_);
+
+      memcpy(&buf_bak[0],&buf[1],count_);
+      memcpy(&buf[0],&buf_bak[0],count_);
+      ///debug
+     // uint8_t buf_array_aft[max_array_size];
+      //memcpy(&buf_array_aft[0],&buf[0],max_array_size);
+      //std::cout<<std::endl;
+    }
+    buf[count_++] = n;
+  }
+  */
+  uint8_t cur_data_type = 0;
+  int one_data_size = 11;
+  bool get_msg = false;
+  while( count_ >= one_data_size  &&!get_msg )
+  {
+    if (buf[0] != 0x55){//如果开头不是0x５５则数据逐个向左移位,继续判断后面数据是否是命令码
+      i--;
+      memcpy(&buf_bak[0],&buf[0],count_);
+      count_--;
+      memcpy(&buf[0],&buf_bak[1],count_);
+      continue;
+    }
+    //check
+    uint8_t sum = 0;
+    for(int j = 0; j < one_data_size-1; j++ )
+      sum += buf[j];
+
+    bool check_suc = (sum == buf[one_data_size-1]);
+    ///if rec too fast ,the data would be err we must check bef using it
+    if(!check_suc){
+      i -= 1;//读完完整的11byte继续利用buf里面剩余的数据
+      memcpy(&buf_bak[0],&buf[0],count_);
+      count_--;
+      memcpy(&buf[0],&buf_bak[1],count_);
+
+      continue;
+    }
+    cur_data_type = buf[1];
+    uint8_t temp_data[44];
+    memcpy(temp_data,&buf[0],44);
+
+    switch(cur_data_type)
+    {
+      /*case 0x50:
+        {
+          memcpy(&JY901.stcTime,&buf[2],8);
+          i -= one_data_size;//读完完整的１１byte继续利用buf里面剩余的数据
+          memcpy(&buf_bak[0],&buf[0],count_);
+          count_ -= one_data_size;
+          memcpy(&buf[0],&buf_bak[one_data_size],count_);
+          printf("Time:20%d-%d-%d %d:%d:%.3f\r\n",(short)JY901.stcTime.ucYear,(short)JY901.stcTime.ucMonth,
+              (short)JY901.stcTime.ucDay,(short)JY901.stcTime.ucHour,(short)JY901.stcTime.ucMinute,(float)JY901.stcTime.ucSecond+(float)JY901.stcTime.usMiliSecond/1000);
+          break;//
+        }
+
+      case 0x51:
+      {
+
+        memcpy(&JY901.stcAcc,&buf[2],8);
+        ax = (float)JY901.stcAcc.a[0]/32768*16;
+        ay = (float)JY901.stcAcc.a[1]/32768*16;
+        az = (float)JY901.stcAcc.a[2]/32768*16;//unit g
+        //imu_pub.publish(imu_msg);
+        i -= one_data_size;//读完完整的１１byte继续利用buf里面剩余的数据
+        memcpy(&buf_bak[0],&buf[0],count_);
+        count_ -= one_data_size;
+        memcpy(&buf[0],&buf_bak[one_data_size],count_);
+        //printf("Acc:%.3f %.3f %.3f\r\n",ax,ay,az);
+        break;//
+      }
+      case 0x52:
+      {
+        memcpy(&JY901.stcGyro,&buf[2],8);
+        vr = (float)JY901.stcGyro.w[0]/32768*2000 * (M_PI/180);
+        vp = (float)JY901.stcGyro.w[1]/32768*2000 * (M_PI/180);
+        vy = (float)JY901.stcGyro.w[2]/32768*2000 * (M_PI/180);//unit rad/s
+
+        //imu_pub.publish(imu_msg);
+        i -= one_data_size;//读完完整的１１byte继续利用buf里面剩余的数据
+        memcpy(&buf_bak[0],&buf[0],count_);
+        count_ -= one_data_size;
+        memcpy(&buf[0],&buf_bak[one_data_size],count_);
+
+
+        //printf("Gyro:%.3f %.3f %.3f\r\n",vr,vp,vy);
+        break;//
+      }
+      case 0x53:
+      {
+        memcpy(&JY901.stcAngle,&buf[2],8);
+        r = (float)(JY901.stcAngle.Angle[0])/32768.0f * M_PI;
+        p = (float)(JY901.stcAngle.Angle[1])/32768.0f * M_PI;
+        y = (float)(JY901.stcAngle.Angle[2])/32768.0f * M_PI;//unit rad
+        geometry_msgs::Quaternion qua_msg = tf::createQuaternionMsgFromRollPitchYaw(r,p,y);
+        i -= one_data_size;//读完完整的11byte继续利用buf里面剩余的数据
+        memcpy(&buf_bak[0],&buf[0],count_);
+        count_ -= one_data_size;
+        memcpy(&buf[0],&buf_bak[one_data_size],count_);
+        printf(" rpy Angle(z):%.3f %.3f %.3f,qua:%.3f %.3f %.3f %.3f \r\n",r,p,y, qua_msg.x,qua_msg.y,qua_msg.z,qua_msg.w);
+        break;//
+      }
+      case 0x54:
+      {
+        memcpy(&JY901.stcMag,&buf[2],8);
+        //imu_pub.publish(imu_msg);
+        //printf("Mag:%d %d %d\r\n",JY901.stcMag.h[0],JY901.stcMag.h[1],JY901.stcMag.h[2]);
+        i -= one_data_size;//读完完整的１１byte继续利用buf里面剩余的数据
+        memcpy(&buf_bak[0],&buf[0],count_);
+        count_ -= one_data_size;
+        memcpy(&buf[0],&buf_bak[one_data_size],count_);
+
+
+        break;
+      }
+      case 0x55:
+      {
+        memcpy(&JY901.stcDStatus,&buf[2],8);
+        //printf("DStatus:%d %d %d %d\r\n",JY901.stcDStatus.sDStatus[0],JY901.stcDStatus.sDStatus[1],JY901.stcDStatus.sDStatus[2],JY901.stcDStatus.sDStatus[3]);
+        i -= one_data_size;//读完完整的１１byte继续利用buf里面剩余的数据
+        memcpy(&buf_bak[0],&buf[0],count_);
+        count_ -= one_data_size;
+        memcpy(&buf[0],&buf_bak[one_data_size],count_);
+
+
+        break;
+      }
+      case 0x56:
+      {
+        memcpy(&JY901.stcPress,&buf[2],8);
+        //printf("Pressure:%lx Height%.2f\r\n",JY901.stcPress.lPressure,(float)JY901.stcPress.lAltitude/100);
+        i -= one_data_size;//读完完整的１１byte继续利用buf里面剩余的数据
+        memcpy(&buf_bak[0],&buf[0],count_);
+        count_ -= one_data_size;
+        memcpy(&buf[0],&buf_bak[one_data_size],count_);
+
+
+        break;
+      }
+      case 0x57:
+      {
+        memcpy(&JY901.stcLonLat,&buf[2],8);
+        //printf("Longitude:%ldDeg%.5fm Lattitude:%ldDeg%.5fm\r\n",JY901.stcLonLat.lLon/10000000,(double)(JY901.stcLonLat.lLon % 10000000)/1e5,JY901.stcLonLat.lLat/10000000,(double)(JY901.stcLonLat.lLat % 10000000)/1e5);
+        i -= one_data_size;//读完完整的１１byte继续利用buf里面剩余的数据
+        memcpy(&buf_bak[0],&buf[0],count_);
+        count_ -= one_data_size;
+        memcpy(&buf[0],&buf_bak[one_data_size],count_);
+
+
+        break;
+      }
+      case 0x58:
+      {
+        memcpy(&JY901.stcGPSV,&buf[2],8);
+        //printf("GPSHeight:%.1fm GPSYaw:%.1fDeg GPSV:%.3fkm/h\r\n\r\n",(float)JY901.stcGPSV.sGPSHeight/10,(float)JY901.stcGPSV.sGPSYaw/10,(float)JY901.stcGPSV.lGPSVelocity/1000);
+        i -= one_data_size;//读完完整的１１byte继续利用buf里面剩余的数据
+        memcpy(&buf_bak[0],&buf[0],count_);
+        count_ -= one_data_size;
+        memcpy(&buf[0],&buf_bak[one_data_size],count_);
+
+
+        break;
+      }
+      */
+    case 0x59:
+    {
+      memcpy(&JY901.stcQua,&buf[2],8);
+      //printf("GPSHeight:%.1fm GPSYaw:%.1fDeg GPSV:%.3fkm/h\r\n\r\n",(float)JY901.stcGPSV.sGPSHeight/10,(float)JY901.stcGPSV.sGPSYaw/10,(float)JY901.stcGPSV.lGPSVelocity/1000);
+      qua_msg.w = (float)(JY901.stcQua.qua[0])/32768.0f;//first is w
+
+      qua_msg.x = (float)(JY901.stcQua.qua[1])/32768.0f;
+      qua_msg.y = (float)(JY901.stcQua.qua[2])/32768.0f;
+      qua_msg.z = (float)(JY901.stcQua.qua[3])/32768.0f;
+
+      tf::Quaternion tmp_;
+      tf::quaternionMsgToTF(qua_msg, tmp_);
+      tfScalar imu_yaw, imu_pitch, imu_roll;
+      tf::Matrix3x3(tmp_).getRPY(imu_roll, imu_pitch, imu_yaw);
+      printf(" qua(xyzw):%.3f %.3f %.3f %.3f,  Angle(rpy):%.3f %.3f %.3f\r\n", qua_msg.x,qua_msg.y,qua_msg.z,qua_msg.w, imu_roll,imu_pitch,imu_yaw);
+      //i -= one_data_size;//读完完整的１１byte继续利用buf里面剩余的数据
+      //memcpy(&buf_bak[0],&buf[0],count_);
+      //count_ -= one_data_size;
+      //memcpy(&buf[0],&buf_bak[one_data_size],count_);
+      count_ = 0;
+      get_msg =true;
+      break;
+    }
+    default:
+      i-=1;
+      memcpy(&buf_bak[0],&buf[0],count_);
+      count_--;
+      memcpy(&buf[0],&buf_bak[1],count_);
+
+
+      break;
+    }
+
+    imu_msg->header.stamp = ros::Time::now();
+
+    imu_msg->linear_acceleration.x = ax;
+    imu_msg->linear_acceleration.y = ay;
+    imu_msg->linear_acceleration.z = az;
+    imu_msg->angular_velocity.x = vr;
+    imu_msg->angular_velocity.y = vp;
+    imu_msg->angular_velocity.z = vy;
+    imu_msg->orientation.x = qua_msg.x;
+    imu_msg->orientation.y = qua_msg.y;
+    imu_msg->orientation.z = qua_msg.z;
+    imu_msg->orientation.w = qua_msg.w;
+    //if(cur_data_type = 0x53 )
+    //if(pub_msg)
+    {
+
+     // pub_msg = false;
+    }
+
+
+  }
+  imu_pub.publish(imu_msg);///if loop end ,pub msg
+}
+
+bool imu_publisher::init()
+{
+   
+    temp_read_buf_.resize(1024, 0);
+    try
+    {
+        thread_ = boost::thread(boost::bind(&imu_publisher::mainRun, this));
+    }
+    catch(std::exception &e)
+    {
+        std::cerr << "Transport Serial thread create failed " << std::endl;
+        std::cerr << "Error Info: " << e.what() <<std::endl;
+        return false;
+    }
+
+    return true;
+}
+
+void imu_publisher::mainRun()
+{
+    std::cout << "Transport main read/write started" <<std::endl;
+
+
+    start_a_read();
+    ios_.run();
+}
+
+void imu_publisher::start_a_read()
+{
+    boost::mutex::scoped_lock lock(port_mutex_);
+
+    serial_.async_read_some(boost::asio::buffer(temp_read_buf_),
+                           boost::bind(&imu_publisher::readHandler,
+                                       this,
+                                       boost::asio::placeholders::error,
+                                       boost::asio::placeholders::bytes_transferred
+                                       ));
+}
+
+void imu_publisher::readHandler(const boost::system::error_code &ec, size_t bytesTransferred)
+{
+    if (ec)
+    {
+        std::cerr << "Transport Serial read Error "<< std::endl;
+        return;
+    }
+
+    boost::mutex::scoped_lock lock(read_mutex_);
+    //temp_read_buf_ 发来的一桢数据
+    Buffer data(temp_read_buf_.begin(), temp_read_buf_.begin() + bytesTransferred);
+    //数据帧压栈
+    read_buffer_.push(data);
+    //restart readHandler
+    start_a_read();
+}
+
+void imu_publisher::start_a_write()
+{
+    boost::mutex::scoped_lock lock(port_mutex_);
+
+    if (!write_buffer_.empty())
+    {
+        boost::asio::async_write(serial_, boost::asio::buffer((write_buffer_.front())),
+                                 boost::bind(&imu_publisher::writeHandler, this, boost::asio::placeholders::error));
+        write_buffer_.pop();
+    }
+
+}
+
+void imu_publisher::writeHandler(const boost::system::error_code &ec)
+{
+    if (ec)
+    {
+        std::cerr << "Transport Serial write Error "<< std::endl;
+        return;
+    }
+
+    boost::mutex::scoped_lock lock(write_mutex_);
+
+    if (!write_buffer_.empty()) start_a_write();
+}
+
+Buffer imu_publisher::readBuffer()
+{
+  //循环更新队列　取read_buffer_的一桢放入data,在read_buffer_删除此帧
+    boost::mutex::scoped_lock lock(read_mutex_);
+    Buffer data;
+
+    while (!read_buffer_.empty())
+    {
+        Buffer temp_data = read_buffer_.front();
+
+        for(uint8_t n : temp_data) 
+        {
+          // std::cout << n;
+          data.push_back(n);
+        }      
+        read_buffer_.pop();
+
+    }
+    
+    return data;
+}
+long long imu_publisher::readOneBuffer(){
+  //循环更新队列　取read_buffer_的一桢放入data,在read_buffer_删除此帧
+    boost::mutex::scoped_lock lock(read_mutex_);
+
+    long long i = 0;
+    memset(buf,'\0',sizeof(buf));
+    //delete []buf;
+    //buf = new uint8_t[max_array_size];
+   ///
+    double temp_readbuffersize = readbuffersize;
+    while (temp_readbuffersize-- && read_buffer_.size())
+    {
+        Buffer temp_data = read_buffer_.front();
+        for(uint8_t n : temp_data)
+        {
+          buf[i++] = n;
+          if(i>=max_array_size)break;
+        }
+        read_buffer_.pop();
+    }
+    return i;
+}
+
+void imu_publisher::writeBuffer(Buffer& data)
+{
+    boost::mutex::scoped_lock lock(write_mutex_);
+
+    write_buffer_.push(data);
+    start_a_write();
+}
+
+}
+
+void sendConfToImu( imu_publisher_space::imu_publisher& imu ,uint8_t cmd,int data){
+  ///其他指令待添加
+  imu_publisher_space::Buffer buf;
+  buf.push_back(0xff);
+  buf.push_back(0xaa);
+  buf.push_back(cmd);//rec rate
+  uint8_t low_data = 0x00;
+  uint8_t high_data = 0x00;
+  if(cmd == 0x03){
+    switch (data) {
+    case 1:
+      low_data = 0x03;
+    case 2:
+      low_data = 0x04;
+    case 5:
+      low_data = 0x05;
+    case 10:
+      low_data = 0x06;
+    case 20:
+      low_data = 0x07;
+    case 50:
+      low_data = 0x08;
+    case 100:
+      low_data = 0x09;
+    case 125:
+      low_data = 0x0a;
+    case 200:
+      low_data = 0x0b;
+      break;
+    default:
+      break;
+    }
+
+  }
+  else
+  if(cmd == 0x04){
+      switch (data) {
+      case 2400:
+        low_data = 0x00;
+      case 4800:
+        low_data = 0x01;
+      case 9600:
+        low_data = 0x02;
+      case 19200:
+        low_data = 0x03;
+      case 38400:
+        low_data = 0x04;
+      case 57600:
+        low_data = 0x05;
+      case 115200:
+        low_data = 0x06;
+      case 230400:
+        low_data = 0x07;
+      case 460800:
+        low_data = 0x08;
+      case 921600:
+        low_data = 0x09;
+
+        break;
+      default:
+        break;
+      }
+    }
+  else
+  if(cmd == 0x00){
+      low_data = data;
+    }
+ else{
+   std::cerr << "imu_publisher.sendConfToImu.invalid cmd .return!!!" <<std::endl;
+   return;
+ }
+  buf.push_back(low_data);
+  buf.push_back(high_data);
+
+   std::cout << "[ imu_publisher send buf]";
+   for(uint8_t n : buf) {
+       std::cout << n;
+   }
+   std::cout << std::endl;
+   std::cout << "[ imu_publisher ] size buf : " << buf.size() << std::endl;
+   imu.writeBuffer(buf);
+}
+
+int main(int argc, char **argv)
+{
+  ros::init(argc, argv, "imu_publisher");
+  ros::NodeHandle n;
+  ros::NodeHandle priv_nh("~");
+
+  std::string port;
+  int baud_rate;
+  int data_rate;//date rec rate
+
+  priv_nh.param("port", port, std::string("/dev/ttyUSB0"));
+  priv_nh.param("baud_rate", baud_rate, 115200);///波特率大于数据回传内容最小位数（２倍）
+
+  boost::asio::io_service io;
+
+  ros::Rate loop_rate(data_rate);
+
+  int count = 0;
+
+  try
+  {
+    imu_publisher_space::imu_publisher imu(port, baud_rate, io);
+    if (!imu.init())
+    {
+        std::cerr << "[ imu_publisher ] serial Transport initialize failed ,please check your system" <<std::endl;
+        return -1;
+    } 
+    ros::Duration(3.0).sleep();
+    imu.enableTimer(true);
+    ros::spin();
+  }
+  catch (boost::system::system_error ex)
+  {
+    ROS_ERROR("Error instantiating imu_publisher object. Are you sure you have the correct port and baud rate? Error was %s", ex.what());
+    return -1;
+  }
+  catch (std::exception e)
+  {
+    std::cerr << "[ imu_publisher ] exception  > " << e.what() << std::endl;
+    return -1;
+  }
+  catch (...)
+  {
+
+    return -1;
+  }
+
+
+
+  return 0;
+}
