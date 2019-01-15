@@ -21,8 +21,6 @@ pf_slam::pf_slam(){
   map_marker_pub = nh.advertise<visualization_msgs::MarkerArray>("pf_map",1);
   global_pos_pub = nh.advertise< geometry_msgs::PoseStamped >("pf_slam_pose",1);
   ROS_INFO_STREAM("pf_slam.construct.init done!");
-
-
 }
 
 pf_slam::~pf_slam(){

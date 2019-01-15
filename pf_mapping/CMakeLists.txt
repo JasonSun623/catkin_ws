@@ -6,7 +6,7 @@ add_compile_options(-std=c++11)
 #add for debug
 #第一句保证了CXXFLAGS被加上了-g
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
-#第二局保证了具体的Make语句被显示出来，我们可以实际检查编译选项是否正常。
+#第二句保证了具体的Make语句被显示出来，我们可以实际检查编译选项是否正常。
 set(CMAKE_VERBOSE_MAKEFILE ON)
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)

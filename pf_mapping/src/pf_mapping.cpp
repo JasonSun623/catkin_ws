@@ -243,6 +243,8 @@ namespace pf_mapping_space {
   void pf_mapping::sortPairRfsDist(){
       std::deque<order_pair_rfs_para> cur_order_pair_deque=ordered_pair_rfs_dist;//all the pair rfs ordered by largest to smallest
       order_pair_rfs_para cur_rfs_pair;
+
+      ///插入排序
       for(int i = 1 ;i < cur_order_pair_deque.size();i++){
         for(int j = i; j > 0 && cur_order_pair_deque[j-1].dist() < cur_order_pair_deque[j].dist();j--){
           cur_rfs_pair = cur_order_pair_deque[j];
@@ -253,6 +255,8 @@ namespace pf_mapping_space {
         }
 
       }
+
+
       ordered_pair_rfs_dist = cur_order_pair_deque;
   }
 
@@ -401,11 +405,11 @@ namespace pf_mapping_space {
     pose.position.x = loc_pos.x;
     pose.position.y = loc_pos.y;
     pose.position.z = 0;
-    tf::Quaternion qua = tf::createQuaternionFromRPY(0,0,loc_pos.theta);
-    geometry_msgs::Quaternion geo_qua;
-    tf::quaternionTFToMsg(qua,geo_qua);
-    pose.orientation = geo_qua;
-
+    //tf::Quaternion qua = tf::createQuaternionFromRPY(0,0,loc_pos.theta);
+    //geometry_msgs::Quaternion geo_qua;
+    //tf::quaternionTFToMsg(qua,geo_qua);
+    //pose.orientation = geo_qua;
+    pose.orientation =tf::createQuaternionMsgFromYaw(loc_pos.theta);
 
     loc_pos_marker.color.r = 153;
     loc_pos_marker.color.g = 0;
