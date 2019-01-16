@@ -26,47 +26,47 @@ private_nh.param<std::string>("rfs_topic",rfs_topic,"pf_reflectors");
 private_nh.param<std::string>("odom_topic",odom_topic,"/wheel_diff_controller/odom");
 private_nh.param("tf_broadcast", tf_broadcast_, true);
 
-nh.param<double>("perimeter_rang1",lrange1,0.05);
-nh.param<double>("perimeter_rang2",lrange2,0.1);
-nh.param<double>("perimeter_rang3",lrange3,0.2);
-nh.param<double>("perimeter_rang4",lrange4,0.3);
+private_nh.param<double>("perimeter_rang1",lrange1,0.05);
+private_nh.param<double>("perimeter_rang2",lrange2,0.1);
+private_nh.param<double>("perimeter_rang3",lrange3,0.2);
+private_nh.param<double>("perimeter_rang4",lrange4,0.3);
 
-nh.param<double>("side_var_rang1",dxrange1,0.05);
-nh.param<double>("side_var_rang2",dxrange2,0.1);
-nh.param<double>("side_var_rang3",dxrange3,0.2);
-nh.param<double>("side_var_rang4",dxrange4,0.3);
+private_nh.param<double>("side_var_rang1",dxrange1,0.05);
+private_nh.param<double>("side_var_rang2",dxrange2,0.1);
+private_nh.param<double>("side_var_rang3",dxrange3,0.2);
+private_nh.param<double>("side_var_rang4",dxrange4,0.3);
 
-nh.param<double>("p_rang1",prange1,0.05);
-nh.param<double>("p_rang2",prange2,0.1);
-nh.param<double>("p_rang3",prange3,0.2);
-nh.param<double>("p_rang4",prange4,0.3);
+private_nh.param<double>("p_rang1",prange1,0.05);
+private_nh.param<double>("p_rang2",prange2,0.1);
+private_nh.param<double>("p_rang3",prange3,0.2);
+private_nh.param<double>("p_rang4",prange4,0.3);
 
-nh.param<double>("k_perimeter_rang1",kl1,0.5);
-nh.param<double>("k_perimeter_rang2",kl2,0.35);
-nh.param<double>("k_perimeter_rang3",kl3,0.1);
-nh.param<double>("k_perimeter_rang4",kl4,0.05);
+private_nh.param<double>("k_perimeter_rang1",kl1,0.5);
+private_nh.param<double>("k_perimeter_rang2",kl2,0.35);
+private_nh.param<double>("k_perimeter_rang3",kl3,0.1);
+private_nh.param<double>("k_perimeter_rang4",kl4,0.05);
 
-nh.param<double>("k_side_var1",kdx1,0.5);
-nh.param<double>("k_side_var2",kdx2,0.35);
-nh.param<double>("k_side_var3",kdx3,0.1);
-nh.param<double>("k_side_var4",kdx4,0.05);
+private_nh.param<double>("k_side_var1",kdx1,0.5);
+private_nh.param<double>("k_side_var2",kdx2,0.35);
+private_nh.param<double>("k_side_var3",kdx3,0.1);
+private_nh.param<double>("k_side_var4",kdx4,0.05);
 
-nh.param<double>("k_p_rang1",kp1,0.5);
-nh.param<double>("k_p_rang2",kp2,0.35);
-nh.param<double>("k_p_rang3",kp3,0.1);
-nh.param<double>("k_p_rang4",kp4,0.05);
+private_nh.param<double>("k_p_rang1",kp1,0.5);
+private_nh.param<double>("k_p_rang2",kp2,0.35);
+private_nh.param<double>("k_p_rang3",kp3,0.1);
+private_nh.param<double>("k_p_rang4",kp4,0.05);
 
 private_nh.param<double>("init_pos_x",init_pos.x,0.0);
 private_nh.param<double>("init_pos_y",init_pos.y,0.0);
 private_nh.param<double>("init_pos_angle",init_pos.theta,0.0);//rad
 
-nh.param<double>("triangle_side_min_len",triangle_side_min_len,2);
-nh.param<double>("triangle_grouping_thread",triangle_grouping_thread,20);
-nh.param<double>("search_triangle_thread",search_triangle_thread,20);
-nh.param<double>("match_angle_thread",match_angle_thread,10);//deg
-nh.param<double>("match_dist_thread",match_dist_thread,0.4);
-nh.param<double>("score_thread",score_thread,0.9);
-nh.param<int>("scan_update_fre",scan_update_fre,30);
+private_nh.param<double>("triangle_side_min_len",triangle_side_min_len,2);
+private_nh.param<double>("triangle_grouping_thread",triangle_grouping_thread,20);
+private_nh.param<double>("search_triangle_thread",search_triangle_thread,20);
+private_nh.param<double>("match_angle_thread",match_angle_thread,10);//deg
+private_nh.param<double>("match_dist_thread",match_dist_thread,0.4);
+private_nh.param<double>("score_thread",score_thread,0.9);
+private_nh.param<int>("scan_update_fre",scan_update_fre,30);
 private_nh.param("transform_tolerance", tmp_tol, 0.1);
 transform_tolerance_.fromSec(tmp_tol);
 tfb_ = new tf::TransformBroadcaster();
@@ -122,19 +122,19 @@ void  pfLocalize::callBackScan(const sensor_msgs::LaserScan & scan){
   double dt = timer.getTime()/1000.0;
   //补偿不同帧激光点采样时间存在的不同时间差　以及采样后到接收到存在的相同时间差
   compensateScanRecDelay(v_optrfs_center,dt);
-  ROS_INFO("pfLocalize::callBackScan.the scan reced delay time:%.6f(ms)",dt*1000);
+  ROS_DEBUG("pfLocalize::callBackScan.the scan reced delay time:%.6f(ms)",dt*1000);
   std::vector<VecPosition> temp_rfs;
   rfs_pos_pub.poses.clear();
   rfs_pos_pub.header.frame_id = scan_frame;
   geometry_msgs::Pose pose;
   for (int i = 0;i < v_optrfs_center.size(); i++){
     temp_rfs.push_back( VecPosition(v_optrfs_center[i]) );
-
-     pose.position.x = v_optrfs_center[i].getX();
-     pose.position.y = v_optrfs_center[i].getY();
-     pose.position.z = 0;
-     rfs_pos_pub.poses.push_back(pose);
+    pose.position.x = v_optrfs_center[i].getX();
+    pose.position.y = v_optrfs_center[i].getY();
+    pose.position.z = 0;
+    rfs_pos_pub.poses.push_back(pose);
   }
+  //pub mea rfs
   pub_rfs_center.publish(rfs_pos_pub);
   _rfs=temp_rfs;
   //getPubPos(v_optrfs_center,rfs_pos,items_MarkerArray);
@@ -159,7 +159,12 @@ void  pfLocalize::callBackScan(const sensor_msgs::LaserScan & scan){
 
 }*/
 
-void pfLocalize::pubMapToThisTF(geometry_msgs::Pose2D cur_pos ){/*
+void pfLocalize::pubMapToThisTF(geometry_msgs::Pose2D cur_pos ){
+  static CountTime pub_waster_t,loop_pub;
+  pub_waster_t.begin();
+  loop_pub.end();
+  double dt_loop = loop_pub.getTime();
+  loop_pub.begin();
   ros::Time cur_time = ros::Time::now();
   tf::Stamped<tf::Pose> odom_to_map;
   try
@@ -167,7 +172,7 @@ void pfLocalize::pubMapToThisTF(geometry_msgs::Pose2D cur_pos ){/*
 
     tf::Transform tmp_tf(tf::createQuaternionFromYaw(cur_pos.theta),tf::Vector3(cur_pos.x,cur_pos.y,0) );
     tf::Stamped<tf::Pose> tmp_tf_stamped (tmp_tf.inverse(),
-                                          cur_time,
+                                          ros::Time(0),///chq!!!这个时间参数很重要，设置不当会导致transformPose转换失败
                                           scan_frame);
    //transformPose Transform a Stamped Pose Message into the target frame
    //This can throw all that lookupTransform can throw as well as tf::InvalidTransform
@@ -184,7 +189,7 @@ void pfLocalize::pubMapToThisTF(geometry_msgs::Pose2D cur_pos ){/*
   }
   catch(tf::TransformException)
   {
-    ROS_DEBUG("Failed to subtract base to odom transform");
+    ROS_ERROR("Failed to subtract base to odom transform");
     return;
   }
 
@@ -200,12 +205,15 @@ void pfLocalize::pubMapToThisTF(geometry_msgs::Pose2D cur_pos ){/*
                                       transform_tolerance_);
     //chq map2odom = inv(odom2map)
     tf::StampedTransform tmp_tf_stamped(latest_tf_.inverse(),
-                                        transform_expiration,
+                                        //transform_expiration,
+                                        ros::Time::now(),
                                         map_frame, odom_frame);
     this->tfb_->sendTransform(tmp_tf_stamped);
-    sent_first_transform_ = true;
   }
-  */
+  pub_waster_t.end();
+
+  double dt = pub_waster_t.getTime();
+  ///ROS_INFO("pf_Localize.pubmaptothisTF.done!pub waster:%.6f,loop time:%.6f",dt,dt_loop);
 }
 void pfLocalize::deadReckingThread(){
 
@@ -213,16 +221,14 @@ void pfLocalize::deadReckingThread(){
   double r_x,r_y;
   static CountTime gcount_time;
   if(!_run_loc_thread){
-    ROS_DEBUG("wait for running.do not start dead recking thread");
+    ROS_WARN("wait for running.do not start pf_Localize dead recking thread");
     return;
    }
-  //ros::Rate r(100);
-//  while(nh.ok()){
     gcount_time.end();
     dt = gcount_time.getTime()/1000;//getTime is ms
     gcount_time.begin();
     //TODO need to optimize
-
+    ///ROS_INFO("pfLocalize::deadReckingThread.loop period(ms):%.6f",dt*1000);
     if(_re_deadrecking){
       ///更新为全局坐标时，会打乱里程计的计时，从而影响到位置，角度的推算，
       ///从而影响反光板的匹配，间接影响定位精度～！！！！(important!!!)
@@ -231,14 +237,13 @@ void pfLocalize::deadReckingThread(){
       /// 更新本次位置为反光板匹配位置
       double dx = recking_pos.x-global_pos.x;
       double dy = recking_pos.y-global_pos.y;
-      ROS_INFO("pfLocalize::deadReckingThread.upate global pos to recking pos!err dx,dy:(%.6f,%.6f)",dx,dy);
+      ROS_DEBUG("pfLocalize::deadReckingThread.upate global pos to recking pos!err dx,dy:(%.6f,%.6f)",dx,dy);
       recking_pos = global_pos;
       pubMapToThisTF(recking_pos);
       _re_deadrecking = false;
+      //if need upodate pos,reset clock
       gcount_time.end();
-      gcount_time.begin();//reset clock
-      //continue;
-
+      gcount_time.begin();
       return;
     }
 
@@ -250,7 +255,7 @@ void pfLocalize::deadReckingThread(){
     double dec = last_angle_result-temp_angle;
     dec =atan2(sin(dec),cos(dec));
     if(fabs(dec) > M_PI/3  ){
-      ROS_INFO("pfLocalize::deadReckingThrea.angle delta is beyond thread.may be meet error!");
+      ROS_WARN("pfLocalize::deadReckingThrea.angle delta is beyond thread.may be meet error!");
     }
     else{
       last_angle_result= temp_angle;
@@ -274,8 +279,7 @@ void pfLocalize::deadReckingThread(){
      recking_pos.x += delta_x;
      recking_pos.y += delta_y;
      recking_pos.theta = atan2(sin(cur_theta),cos(cur_theta));
-     ROS_INFO("pf_Localize.cur deckrecking pos (%.6f,%.6f),rot_x radius:%.6f,ang(deg):%.3f",recking_pos.x,recking_pos.y,r_x,Rad2Deg( recking_pos.theta));
-     //ros::Duration(0.01).sleep();
+     ROS_DEBUG("pf_Localize.cur deckrecking pos (%.6f,%.6f),rot_x radius:%.6f,ang(deg):%.3f",recking_pos.x,recking_pos.y,r_x,Rad2Deg( recking_pos.theta));
      //static CountTime pubtf_t;
      //pubtf_t.begin();
      pubMapToThisTF(recking_pos);
@@ -283,9 +287,6 @@ void pfLocalize::deadReckingThread(){
     // double dt_tf = pubtf_t.getTime();
      //ROS_INFO("pf_local.pub tf waster(ms):%.6f",dt_tf);
      ros::spinOnce();
-
-     //r.sleep();
-  //}
 }
 void pfLocalize::loadRfsMap(string name){
   map_rfs.clear();
