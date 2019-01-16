@@ -13,13 +13,14 @@ ros::NodeHandle private_nh("~");
 
  private_nh.param<std::string>("pub_rfs_topic", pub_rfs_topic, "pf_reflectors");
  private_nh.param<std::string>("scan_frame", scan_frame, "hokuyo_link");
+ private_nh.param<std::string>("base_frame", base_frame, "base_footprint");
  private_nh.param<std::string>("odom_frame", odom_frame, "odom");
+ private_nh.param<std::string>("map_frame",map_frame,"/map");
  private_nh.param<std::string>("scan_topic", scan_topic, "filter_scan");
 ///for filter rfs center---end
 
-private_nh.param<std::string>("map_frame",map_frame,"/map");
+
 private_nh.param<std::string>("map_name",map_name,"/home/hdros/catkin_ws/src/pf_localization/map/rfs.map");
-private_nh.param<std::string>("pos_frame",pos_frame,"base_link");
 private_nh.param<std::string>("pos_topic",pos_topic,"pose");
 private_nh.param<std::string>("recking_pos_topic",recking_pos_topic,"pose");
 private_nh.param<std::string>("rfs_topic",rfs_topic,"pf_reflectors");
@@ -170,10 +171,10 @@ void pfLocalize::pubMapToThisTF(geometry_msgs::Pose2D cur_pos ){
   try
   {
 
-    tf::Transform tmp_tf(tf::createQuaternionFromYaw(cur_pos.theta),tf::Vector3(cur_pos.x,cur_pos.y,0) );
+    tf::Transform tmp_tf(tf::createQuaternionFromYaw(cur_pos.theta),tf::Vector3(cur_pos.x,cur_pos.y,0) );///map2base
     tf::Stamped<tf::Pose> tmp_tf_stamped (tmp_tf.inverse(),
                                           ros::Time(0),///chq!!!这个时间参数很重要，设置不当会导致transformPose转换失败
-                                          scan_frame);
+                                          base_frame);///base2map
    //transformPose Transform a Stamped Pose Message into the target frame
    //This can throw all that lookupTransform can throw as well as tf::InvalidTransform
     //void transformPose(
@@ -181,15 +182,15 @@ void pfLocalize::pubMapToThisTF(geometry_msgs::Pose2D cur_pos ){
     //const geometry_msgs::PoseStamped& stamped_in,
     //geometry_msgs::PoseStamped& stamped_out) const;
    //chq odom2map =odom2pos * pos2map = odom2pos * inv(map2pos)
-    //transformPose所作的事　是　将base_link下的数据(pos2map)　转换到　目标　odom上去
-    // 即　获得　odom 到base_link的转换　乘以 　base_link下的数据
+    //transformPose所作的事　是　将base下的数据(pos2map)　转换到　目标　odom上去
+    // 即　获得　odom 到base的转换　乘以base下的数据
     this->tf_->transformPose(odom_frame,
                              tmp_tf_stamped,
-                             odom_to_map);
+                             odom_to_map);///odom2base* base2map =  odom2map
   }
   catch(tf::TransformException)
   {
-    ROS_ERROR("Failed to subtract base to odom transform");
+    ROS_ERROR("pfLocalize::pubMapToThisTF.Failed to subtract odom2map transform");
     return;
   }
 
@@ -215,6 +216,8 @@ void pfLocalize::pubMapToThisTF(geometry_msgs::Pose2D cur_pos ){
   double dt = pub_waster_t.getTime();
   ///ROS_INFO("pf_Localize.pubmaptothisTF.done!pub waster:%.6f,loop time:%.6f",dt,dt_loop);
 }
+
+///map2base , not odom2base(recking by gazebo or  real robot wheel controller)
 void pfLocalize::deadReckingThread(){
 
   double delta_x,delta_y,theta,cur_theta,delta_theta,dt;
@@ -367,16 +370,17 @@ void pfLocalize::createTriangleTemplate(){
  void pfLocalize::getMatchedMeaRfs(geometry_msgs::Pose2D pos,
                                    std::vector<VecPosition> mea_rfs,
                                    std::vector<std::pair<int,int> > &matched_mea_rfs){
-//TODO given the relative bet map and base_link how can we adjust the relation bet map and odom(we only know the relationship bet odom ->base_link->scan)
-//这里temp简化为全局位置就是激光头位置（激光相对于base_link无偏差）
+//1,TODO given map2base,how to cal map2odom(we only know the relationship bet odom ->base->...->scan)
+// caled in scan abs frame
   VecPosition abs_mea_rfs;
   std::vector<VecPosition> cur_map_rfs;
   {
      boost::mutex::scoped_lock l(temp_mut);
      cur_map_rfs= map_rfs;
   }
-  VecPosition v_loc_pos(pos.x,pos.y);
 
+
+  VecPosition v_scan_pos(pos.x,pos.y);//map2scan
   std::vector<int> candidate_rfs;//record candidate rfs index
   std::vector<VecPosition> relative_candidate_rfs;//the cord pos in scan frame
   std::list<std::pair<int,VecPosition> > flash_candidate_rfs;//temp
@@ -384,20 +388,20 @@ void pfLocalize::createTriangleTemplate(){
   bool dis_match,ang_match;
   matched_mea_rfs.clear();
 
-  //小于匹配搜索半径，作为待匹配项(store index)
+  //小于匹配搜索半径，作为待匹配项(store index!!!)
   for(int i= 0;i < cur_map_rfs.size();i++){
-    if( v_loc_pos.getDistanceTo(cur_map_rfs[i]) < search_triangle_thread )
+    if( v_scan_pos.getDistanceTo(cur_map_rfs[i]) < search_triangle_thread )
       candidate_rfs.push_back(i);//record index instead of value
   }
 
-  //rot to relative cord for comparing
+  //rot to scan relative cord for comparing
   for(int i= 0;i < candidate_rfs.size(); i++){
-    VecPosition p = cur_map_rfs[candidate_rfs[i]]-v_loc_pos;
+    VecPosition p = cur_map_rfs[candidate_rfs[i]]-v_scan_pos;
     p.rotate(-Rad2Deg(pos.theta));
     relative_candidate_rfs.push_back(p);
   }
 
-  //store the candidate pair<index,relative cord in loc frame>
+  //store the candidate pair<index,relative cord in scan frame>
   for(int i=0;i < candidate_rfs.size();i++){
     flash_candidate_rfs.push_back( std::make_pair(candidate_rfs[i],relative_candidate_rfs[i]) );
   }
@@ -423,7 +427,7 @@ void pfLocalize::createTriangleTemplate(){
       if( dis_match && ang_match ){
         abs_mea_rfs = mea_rfs[i];
         abs_mea_rfs.rotate(Rad2Deg(pos.theta));
-        abs_mea_rfs += v_loc_pos;//convert to abs cord,we will score them later
+        abs_mea_rfs += v_scan_pos;//convert to abs cord,we will score them later
         matched_mea_rfs.push_back(std::make_pair((*itr).first,i) );//store the rfs index in map and the index  of the measured rfs
         flash_candidate_rfs.erase(itr);
         break;
@@ -431,11 +435,11 @@ void pfLocalize::createTriangleTemplate(){
     }
   }
   if( matched_mea_rfs.size() && matched_mea_rfs.size() < 3 ){
-    ROS_ERROR("WARNNING!!pfLocalize::getMatchedMeaRfs size below 3!loc_pos(%.6f.%.6f).measured rfs size:%d, comp data:",pos.x,pos.y,mea_rfs.size());
+    ROS_ERROR("WARNNING!!pfLocalize::getMatchedMeaRfs size below 3!scan_pos(%.6f.%.6f).measured rfs size:%d, comp data:",pos.x,pos.y,mea_rfs.size());
     for(int i=0; i < mea_rfs.size(); i++){
       abs_mea_rfs = mea_rfs[i];
       abs_mea_rfs.rotate(Rad2Deg(pos.theta));
-      abs_mea_rfs += v_loc_pos;//convert to abs cord,we will score them later
+      abs_mea_rfs += v_scan_pos;//convert to abs cord,we will score them later
       ROS_INFO("abs mea index:%d,pos:(%.6f,%.6f)",i,abs_mea_rfs.getX(),abs_mea_rfs.getY());
       itr = flash_candidate_rfs.begin();
       int cnt = 0;
@@ -562,7 +566,7 @@ void pfLocalize::createTriangleTemplate(){
   return k;
   }
 
-  int pfLocalize::getOptimizeTriangle(std::vector<std::pair<int,int> > matched_rfs,
+ int pfLocalize::getOptimizeTriangle(geometry_msgs::Pose2D pos,std::vector<std::pair<int,int> > matched_rfs,
                                       std::vector<std::pair<int,int> >& best){
   int size = matched_rfs.size();
    //std::pair<set<int>,VecPosition> first:the rfs index in map,second: the measured rfs abs cord
@@ -573,9 +577,9 @@ void pfLocalize::createTriangleTemplate(){
     cur_triangle_template = _triangle_template;
   }
     //获得评分超过阈值的若干三角形
-  VecPosition v_loc_pos(cur_recking_pos.x,cur_recking_pos.y);
+  VecPosition v_scan_pos(pos.x,pos.y);
   std::vector<VecPosition > _mea_rfs = mea_rfs;//value transform
-  double cur_recking_angle = cur_recking_pos.theta;
+  double cur_scan_angle = pos.theta;
    for(int i = 0; i < size-2; i++){
      for(int j = i+1; j < size-1; j++){
        for(int k = j+1; k < size; k++){
@@ -583,12 +587,12 @@ void pfLocalize::createTriangleTemplate(){
          std::set<int> _set(a,a+3);
          if(cur_triangle_template.find(_set)!=cur_triangle_template.end()){
            //计算测量反光板的系数
-           VecPosition v_a = _mea_rfs[(matched_rfs[i]).second].rotate(Rad2Deg(cur_recking_angle));
-           v_a+=v_loc_pos;
-           VecPosition v_b = _mea_rfs[(matched_rfs[j]).second].rotate(Rad2Deg(cur_recking_angle));
-           v_b+=v_loc_pos;
-           VecPosition v_c = _mea_rfs[(matched_rfs[k]).second].rotate(Rad2Deg(cur_recking_angle));
-           v_c+=v_loc_pos;
+           VecPosition v_a = _mea_rfs[(matched_rfs[i]).second].rotate(Rad2Deg(cur_scan_angle));
+           v_a+=v_scan_pos;
+           VecPosition v_b = _mea_rfs[(matched_rfs[j]).second].rotate(Rad2Deg(cur_scan_angle));
+           v_b+=v_scan_pos;
+           VecPosition v_c = _mea_rfs[(matched_rfs[k]).second].rotate(Rad2Deg(cur_scan_angle));
+           v_c+=v_scan_pos;
            comparedata mea_rfs_triangle = calCoefficient(v_a,v_b,v_c);
            comparedata comp = mea_rfs_triangle - cur_triangle_template[_set];
           //超过一定阈值的放入待筛选列表
@@ -727,12 +731,10 @@ void pfLocalize::createTriangleTemplate(){
    if(dt < EPSILON)return ;//below to scan period we no not compensate
    std::vector<VecPosition> temp_rfs;
    for(int i =0 ;i < mea_rfs.size();i++){
-
      double theta =0;
      double delta_theta = m_cur_w * dt;//因为里程计更新速度足够快，我们认为里程计是准的,忽略了延迟
      double cur_theta = delta_theta+theta ;
      double delta_x,delta_y;
-
      if ( fabs( m_cur_w ) < EPSILON )
      {// fit the condition that there is no rotate speed
        delta_x = (m_cur_vec_x * cos(theta) - m_cur_vec_y * sin(theta) ) * dt;
@@ -742,7 +744,6 @@ void pfLocalize::createTriangleTemplate(){
      {
        double r_x = m_cur_vec_x/m_cur_w;
        double r_y = m_cur_vec_y/m_cur_w;
-
        delta_x = (  r_x * ( sin( cur_theta ) - sin( theta ) ) + r_y * ( cos( cur_theta ) - cos( theta ) ) ) ;
        delta_y = ( -r_x * ( cos( cur_theta ) - cos( theta ) ) + r_y * ( sin( cur_theta ) - sin( theta ) ) ) ;//注意，y方向上，前后偏移差值再取负，因为投影方向是向上为正
      }
@@ -754,7 +755,7 @@ void pfLocalize::createTriangleTemplate(){
    mea_rfs = temp_rfs;
  }
 
-void pfLocalize::calGlobalPosThread(){
+ void pfLocalize::calGlobalPosThread(){
   //ros::Rate r(100);
   if(!_run_loc_thread){
     ROS_DEBUG("wait for running.do not start cal GlobalPos Thread");
@@ -771,24 +772,57 @@ void pfLocalize::calGlobalPosThread(){
     boost::mutex::scoped_lock l(temp_mut);
     cur_map_rfs = map_rfs;
   }
+  static bool first_time = true;
 
+  if(first_time){
+    ///base2scan一般不会变化　为了加快速度　这里仅仅做一次转换
+    // normally exiting the tf bet base  and scan
+    tf::TransformListener tf_listener;
+    ///这里有个缺陷，tf一般比较慢，所以对于反光板实时计算有影响
+    try{
+      tf_listener.waitForTransform(base_frame, scan_frame, ros::Time(0), ros::Duration(1));
+      tf_listener.lookupTransform(base_frame, scan_frame, ros::Time(0), tf_base2scan);
+      first_time = false;//only transform suc ,can we set true!
+    }
+    catch (tf::TransformException ex){
+      ROS_ERROR("!!!pfLocalize::getMatchedMeaRfs.waitForTransform bet %s and %s .err:%s",base_frame.c_str(),scan_frame.c_str(),ex.what());
+      ros::Duration(1.0).sleep();
+    }
+    ROS_INFO("suc tf from base2scan!");
+  }
   //while(nh.ok()){
     ///update
-
     {
-  ///disable lock temp
+      //disable lock temp
       boost::mutex::scoped_lock l(cal_mut);
      // best.clear();
       //matched_mea_rfs.clear();
-      cur_recking_pos = recking_pos;//update cur recking pos for calculating
+      cur_recking_pos = recking_pos;//map2base update cur recking pos for calculating
       mea_rfs = _rfs;//update cur measured rfs for calculating
       compensate_timer.end();//the compensate_timer will be restarted by callBackScan fun when the new rfs be caled
       double comp_dt = compensate_timer.getTime()/1000.0;
       ROS_INFO("cal global pos.the rfs used delay time:%.6f(ms)",comp_dt*1000);
       compensateRfsUsedDelay(mea_rfs,comp_dt);
     }
+    /// transform map2base to map2scan <改进２.0 follow 考虑了base2scan的坐标关系>
+    //in tf tree 不一定有map2base的tf,所以我们创建了一个
+    tf::Transform tmp_tf(tf::createQuaternionFromYaw(cur_recking_pos.theta),tf::Vector3(cur_recking_pos.x,cur_recking_pos.y,0) );///map2base
+    tf::StampedTransform tf_map2base (tmp_tf,ros::Time(0),///chq!!!这个时间参数很重要，设置不当会导致transformPose转换失败
+                                     map_frame,base_frame);///map2base
+    tf::StampedTransform tf_map2scan;
+    tf_map2scan.mult(tf_map2base, tf_base2scan);
+    cur_scan_pos.x = tf_map2scan.getOrigin().getX();
+    cur_scan_pos.y = tf_map2scan.getOrigin().getY();
+    cur_scan_pos.theta = tf::getYaw(tf_map2scan.getRotation() );
+    ROS_INFO("pfLocalize::calGlobalPosThread.%s2%s tf(x,y,angle):%.6f,%.6f,%.6f",
+             base_frame.c_str(),scan_frame.c_str(),tf_base2scan.getOrigin().x(),tf_base2scan.getOrigin().y(),tf::getYaw(tf_base2scan.getRotation()));
+    ROS_INFO("pfLocalize::calGlobalPosThread.%s2%s tf(x,y,angle):%.6f,%.6f,%.6f",
+             map_frame.c_str(),base_frame.c_str(),tf_map2base.getOrigin().x(),tf_map2base.getOrigin().y(),tf::getYaw(tf_map2base.getRotation()));
+    ROS_INFO("pfLocalize::calGlobalPosThread.%s2%s tf(x,y,angle):%.6f,%.6f,%.6f",
+             map_frame.c_str(),scan_frame.c_str(),tf_map2scan.getOrigin().x(),tf_map2scan.getOrigin().y(),tf::getYaw(tf_map2scan.getRotation()));
+
     ///get the matched rfs correspond to map rfs
-    getMatchedMeaRfs(cur_recking_pos,mea_rfs,matched_mea_rfs);
+    getMatchedMeaRfs(cur_scan_pos,mea_rfs,matched_mea_rfs);
     if(mea_rfs.empty()){
       ROS_ERROR("ERROR!!!pfLocalize::calGlobalPosThread.no measured rfs.Using recking pos!.");
     }
@@ -804,7 +838,7 @@ void pfLocalize::calGlobalPosThread(){
       global_pos_pub.publish(_pose);
     }
     else{
-      int res = getOptimizeTriangle(matched_mea_rfs,best);
+      int res = getOptimizeTriangle(cur_scan_pos,matched_mea_rfs,best);
       if( res > 0){
         //template rfs cord in map
          VecPosition v_a = cur_map_rfs[best[0].first];
@@ -825,16 +859,24 @@ void pfLocalize::calGlobalPosThread(){
            // 从而反推出车子角度（反光板绝对角度－相对夹角　＝　车子绝对角度　）
            angle_result = getOptimizeAngle(best,cord_result);
            geometry_msgs::Pose2D pos;
-           pos.x = cord_result.getX();
-           pos.y = cord_result.getY();
-           pos.theta = angle_result;
+           ///cord_result是scan in map 故需要转换成base in map
+           ///map2base = map2scan * inv(base2scan)
+           tf::Transform tmp_tf(tf::createQuaternionFromYaw(angle_result),tf::Vector3(cord_result.getX(),cord_result.getY(),0) );///map2base
+           tf::StampedTransform tf_map2scan (tmp_tf,ros::Time(0),///chq!!!这个时间参数很重要，设置不当会导致transformPose转换失败
+                                            map_frame,scan_frame);///map2base
+           tf::StampedTransform tf_map2base;
+           tf_map2base.mult(tf_map2scan, tf_base2scan.inverse());
+           pos.x = tf_map2base.getOrigin().getX();
+           pos.y = tf_map2base.getOrigin().getY();
+           pos.theta = tf::getYaw(tf_map2base.getRotation() );
+
            global_pos = pos;
            _re_deadrecking = true;
            // global_pos_pub.publish(pos);
            _pose.header.stamp = ros::Time::now();
-           _pose.pose.position.x = cord_result.getX();
-           _pose.pose.position.y = cord_result.getY();
-           tf::quaternionTFToMsg(tf::createQuaternionFromYaw(angle_result),
+           _pose.pose.position.x = global_pos.x;
+           _pose.pose.position.y = global_pos.y;
+           tf::quaternionTFToMsg(tf::createQuaternionFromYaw(global_pos.theta),
                                  _pose.pose.orientation);
            global_pos_pub.publish(_pose);
 

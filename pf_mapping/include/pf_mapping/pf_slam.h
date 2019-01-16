@@ -9,6 +9,14 @@
 #include <std_msgs/Int16.h> //callback
 #include <pf_filtercenter/CountTime.hpp>
 #include <pf_localization/Geometry.h>
+
+#include <tf/LinearMath/Scalar.h>
+#include <tf/LinearMath/Vector3.h>
+#include "tf/transform_broadcaster.h"
+#include "tf/transform_listener.h"
+#include "tf/message_filter.h"
+#include "tf/tf.h"
+
 namespace pf_slam_space {
 using namespace pf_localization_space;
 struct order_pair_rfs_para{
@@ -102,15 +110,15 @@ public:
   */
  virtual void calGlobalPosThread();
  //每间隔一段时间，更新view范围内　已在地图中的反光板的坐标方差数据
- void updateHistoryRfsThread( geometry_msgs::Pose2D loc_pos,std::vector<VecPosition> mea_rfs,std::vector<std::pair<int,int> > matched_mea_rfs);
+ void updateHistoryRfsThread( geometry_msgs::Pose2D scan_pos,std::vector<VecPosition> mea_rfs,std::vector<std::pair<int,int> > matched_mea_rfs);
  /**
   * @brief get new  rfs
   * @param loc_pos input loc pos
   * @param mea_rfs input measured rfs
   * @param mea_rfs return every rfs index which not in abs rfs map data!!!!
   */
- void getNewRfs(geometry_msgs::Pose2D loc_pos, std::vector<VecPosition>& mea_rfs);
- void addingNewRfs(geometry_msgs::Pose2D loc_pos, std::vector<VecPosition> new_rfs);
+ void getNewRfs(geometry_msgs::Pose2D scan_pos, std::vector<VecPosition>& mea_rfs);
+ void addingNewRfs(geometry_msgs::Pose2D scan_pos, std::vector<VecPosition> new_rfs);
  /**
   * @brief update triangle template data and pair dist data by history rfs average data
   * @param avg_rfs_index   map rfs index
@@ -131,6 +139,8 @@ private:
  std::map<std::set<int>,double> _pair_rfs_dist;//the pair rfs in scan view  range
  std::deque<order_pair_rfs_para> ordered_pair_rfs_dist;//all the pair rfs ordered by largest to smallest
  std::deque<rfs_history_cord*> history_rfs;//every map rfs history cord para data
+
+ tf::StampedTransform tf_base2scan;
 
  double scan_range_max;
  double new_rfs_dist,new_rfs_angle_deg;//是新的反光板的最小间隔距离和角度

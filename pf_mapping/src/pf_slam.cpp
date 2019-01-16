@@ -4,14 +4,15 @@ using namespace pf_localization_space;
 pf_slam::pf_slam(){
   ros::NodeHandle private_nh("~");
   private_nh.param<double>("scan_range_max",scan_range_max,6);//rad
-  nh.param<double>("triangle_side_min_len",triangle_side_min_len,2);
-  nh.param<double>("triangle_grouping_thread",triangle_grouping_thread,20);
-  nh.param<double>("new_rfs_dist",new_rfs_dist,1);
-  nh.param<double>("new_rfs_angle_deg",new_rfs_angle_deg,10);
-  nh.param<int>("history_update_size",history_update_size_thread,10);
-  nh.param<double>("history_rfs_reject_dist",history_rfs_reject_dist,0.2);
-  nh.param<int>("min_his_rfs_avg_size",min_his_rfs_avg_size,7);
-  nh.param<double>("min_his_rfs_update_dist",his_rfs_update_thread,0.001);
+  private_nh.param<double>("triangle_side_min_len",triangle_side_min_len,2);
+  private_nh.param<double>("triangle_grouping_thread",triangle_grouping_thread,20);
+  private_nh.param<double>("new_rfs_dist",new_rfs_dist,1);
+  private_nh.param<double>("new_rfs_angle_deg",new_rfs_angle_deg,10);
+  private_nh.param<int>("history_update_size",history_update_size_thread,10);
+  private_nh.param<double>("history_rfs_reject_dist",history_rfs_reject_dist,0.2);
+  private_nh.param<int>("min_his_rfs_avg_size",min_his_rfs_avg_size,7);
+  private_nh.param<double>("min_his_rfs_update_dist",his_rfs_update_thread,0.001);
+
   mapping_start = false;
   init_mapping = true;
   ///timer_updatehistory= nh.createTimer(ros::Duration(0.10), boost::bind(&pf_slam::updateHistoryRfsThread,this));
@@ -54,7 +55,7 @@ void pf_slam::callBackMappingCancel(const std_msgs::Int16 if_cancel){
 }
 
 void pf_slam::callBackMappingStop(const std_msgs::String fname){
-  //save map
+  ///save map
   fstream out;
   std::string str_name = fname.data;
   out.open(str_name.c_str(), ios::out|ios::trunc);
@@ -113,22 +114,23 @@ void pf_slam::callBackMappingStop(const std_msgs::String fname){
    ROS_INFO("pf_slam.save map done!");
 }
 
-void pf_slam::addingNewRfs(geometry_msgs::Pose2D loc_pos, std::vector<VecPosition> new_rfs){
- // boost::mutex::scoped_lock l(addrfs_mut);
+void pf_slam::addingNewRfs(geometry_msgs::Pose2D scan_pos, std::vector<VecPosition> new_rfs){
+  //boost::mutex::scoped_lock l(addrfs_mut);
+  ///caled in scan abs frame
   VecPosition add;
-  VecPosition v_pos(loc_pos.x,loc_pos.y);
+  VecPosition v_pos(scan_pos.x,scan_pos.y);
 
   ///first add pos the map rfs
   for(int i = 0; i < new_rfs.size();i++){
     add = new_rfs[i];
-    add.rotate(Rad2Deg(loc_pos.theta));
+    add.rotate(Rad2Deg(scan_pos.theta));
     add += v_pos;
     _abs_map_rfs.push_back(add);
     rfs_history_cord* his_data = new rfs_history_cord;
     his_data->setAvgPos(add);
     his_data->addPos(add);
     history_rfs.push_back(his_data);
-    ROS_INFO("pf_slam::addingNewRfs.cur loc_pos(%.6f,%.6f).add pos:(%.6f,%.6f)",loc_pos.x,loc_pos.y,add.getX(), add.getY());
+    ROS_INFO("pf_slam::addingNewRfs.cur scan_pos(%.6f,%.6f).add pos:(%.6f,%.6f)",v_pos.getX(),v_pos.getY(),add.getX(), add.getY());
   }
 
   ///second to  updateTriangleTemplate
@@ -340,14 +342,15 @@ void pf_slam::insertSortRfs(std::vector<VecPosition> new_rfs){
 
 }
 
-void pf_slam::getNewRfs(geometry_msgs::Pose2D loc_pos, std::vector<VecPosition>& mea_rfs){
+void pf_slam::getNewRfs(geometry_msgs::Pose2D scan_pos, std::vector<VecPosition>& mea_rfs){
+  ///caled in scan frame
  std::vector<VecPosition> cur_mea_rfs = mea_rfs;
  std::deque<VecPosition> cur_abs_rfs = _abs_map_rfs;//
  std::vector<int> cur_candidate_match_rfs;//
  double dist;
  bool dis_match,ang_match;
  mea_rfs.clear();
- VecPosition v_loc_pos(loc_pos.x,loc_pos.y);
+ VecPosition v_scan_pos(scan_pos.x,scan_pos.y);
  //filter the map rfs which in cur scan view range
  for(int i = 0;i < cur_abs_rfs.size();i++){
    // if(dist = v_pos.getDistanceTo(cur_abs_rfs[i]) < scan_range_max){
@@ -369,8 +372,8 @@ void pf_slam::getNewRfs(geometry_msgs::Pose2D loc_pos, std::vector<VecPosition>&
    bool matched = false;
    for(int j = 0; j < cand_size; j++){
      rel_rfs = cur_abs_rfs[cur_candidate_match_rfs[j]];
-     rel_rfs -= v_loc_pos;
-     rel_rfs.rotate(-Rad2Deg(loc_pos.theta));
+     rel_rfs -= v_scan_pos;
+     rel_rfs.rotate(-Rad2Deg(scan_pos.theta));
      cmp_dist[i][j] = rel_rfs.getDistanceTo(cur_mea_rfs[i]);
      delta = Deg2Rad( rel_rfs.getDirection()-cur_mea_rfs[i].getDirection() );
      cmp_angle[i][j] = fabs( atan2Deg( sin(delta),cos(delta) ) );
@@ -383,9 +386,9 @@ void pf_slam::getNewRfs(geometry_msgs::Pose2D loc_pos, std::vector<VecPosition>&
     }
     if( !matched ){//no cur measured rfs in map rfs
       VecPosition abs_mea_pos = cur_mea_rfs[i];
-      abs_mea_pos.rotate(Rad2Deg(loc_pos.theta));
-      abs_mea_pos += v_loc_pos;
-      ROS_INFO("pf_slam.getNewRfs.no matched map rfs to cur mea rfs.abs_mea_pos:(%.4f,%.4f).loc_pos:(%.4f,%.4f)",abs_mea_pos.getX(),abs_mea_pos.getY(), loc_pos.x,loc_pos.y );
+      abs_mea_pos.rotate(Rad2Deg(scan_pos.theta));
+      abs_mea_pos += v_scan_pos;
+      ROS_INFO("pf_slam.getNewRfs.no matched map rfs to cur mea rfs.abs_mea_pos:(%.4f,%.4f).scan_pos:(%.4f,%.4f)",abs_mea_pos.getX(),abs_mea_pos.getY(), v_scan_pos.getX(),v_scan_pos.getY() );
       for(int k = 0; k < cand_size; k++ ){
         rel_rfs = cur_abs_rfs[cur_candidate_match_rfs[k]];
         ROS_INFO("comp abs_map_pos(%.4f,%.4f).dist:%.4f,angle(deg):%.4f",rel_rfs.getX(),rel_rfs.getY(),cmp_dist[i][k],cmp_angle[i][k]);
@@ -405,11 +408,11 @@ visualization_msgs::Marker loc_pos_marker;
 visualization_msgs::MarkerArray marker_array;
 rfs_marker.header.stamp = ros::Time::now();
 loc_pos_marker.header.stamp = rfs_marker.header.stamp;
-rfs_marker.header.frame_id = "map";
+rfs_marker.header.frame_id = map_frame;
 loc_pos_marker.header.frame_id = rfs_marker.header.frame_id;
 rfs_marker.type = visualization_msgs::Marker::POINTS;
 loc_pos_marker.type = visualization_msgs::Marker::ARROW;
-rfs_marker.ns = "map_nmspace";
+rfs_marker.ns = map_frame+"_nmspace";
 rfs_marker.action = visualization_msgs::Marker::ADD;
 // Set the scale of the marker -- 1x1x1 here means 1m on a side
 rfs_marker.scale.x = 0.05;
@@ -465,7 +468,6 @@ if(_abs_map_rfs.size() ){
   //pose.orientation = geo_qua;
   pose.orientation =tf::createQuaternionMsgFromYaw(loc_pos.theta);
 
-
   loc_pos_marker.color.r = 153;
   loc_pos_marker.color.g = 0;
   loc_pos_marker.color.b = 0;
@@ -505,6 +507,25 @@ void pf_slam::calGlobalPosThread(){
   std::vector<VecPosition> cur_map_rfs,cur_mea_rfs,cur_mea_rfs_mapping;
   geometry_msgs::Pose2D loc_pos,cur_recking_pos;
   double comp_dt;
+
+  static bool first_time = true;
+  if(first_time){
+    ///base2scan一般不会变化　为了加快速度　这里仅仅做一次转换
+    // normally exiting the tf bet base  and scan
+    tf::TransformListener tf_listener;
+    ///这里有个缺陷，tf一般比较慢，所以对于反光板实时计算有影响
+    try{
+      tf_listener.waitForTransform(base_frame, scan_frame, ros::Time(0), ros::Duration(1));
+      tf_listener.lookupTransform(base_frame, scan_frame,ros::Time(0), tf_base2scan);
+      first_time = false;//only transform suc ,can we set true!
+    }
+    catch (tf::TransformException ex){
+      ROS_ERROR("!!!pfLocalize::getMatchedMeaRfs.waitForTransform bet %s and %s .err:%s",base_frame.c_str(),scan_frame.c_str(),ex.what());
+      ros::Duration(1.0).sleep();
+    }
+    ROS_INFO("suc tf from base2scan!");
+  }
+
   ///get newest data
   {
     boost::mutex::scoped_lock l(temp_mut);
@@ -521,6 +542,27 @@ void pf_slam::calGlobalPosThread(){
       return;
     }
   }
+
+  /// transform map2base to map2scan <改进２.0 follow 考虑了base2scan的坐标关系>
+  //in tf tree 不一定有map2base的tf,所以我们创建了一个
+  tf::Transform tmp_tf(tf::createQuaternionFromYaw(cur_recking_pos.theta),tf::Vector3(cur_recking_pos.x,cur_recking_pos.y,0) );///map2base
+  tf::StampedTransform tf_map2base (tmp_tf,ros::Time(0),///chq!!!这个时间参数很重要，设置不当会导致transformPose转换失败
+                                   map_frame,base_frame);///map2base
+  tf::StampedTransform tf_map2scan;
+  tf_map2scan.mult(tf_map2base, tf_base2scan);
+  cur_scan_pos.x = tf_map2scan.getOrigin().getX();
+  cur_scan_pos.y = tf_map2scan.getOrigin().getY();
+  cur_scan_pos.theta = tf::getYaw(tf_map2scan.getRotation() );
+
+  ROS_INFO("pfLocalize::calGlobalPosThread.%s2%s tf(x,y,angle):%.6f,%.6f,%.6f",
+           base_frame.c_str(),scan_frame.c_str(),tf_base2scan.getOrigin().x(),tf_base2scan.getOrigin().y(),tf::getYaw(tf_base2scan.getRotation()));
+  ROS_INFO("pfLocalize::calGlobalPosThread.%s2%s tf(x,y,angle):%.6f,%.6f,%.6f",
+           map_frame.c_str(),base_frame.c_str(),tf_map2base.getOrigin().x(),tf_map2base.getOrigin().y(),tf::getYaw(tf_map2base.getRotation()));
+  ROS_INFO("pfLocalize::calGlobalPosThread.%s2%s tf(x,y,angle):%.6f,%.6f,%.6f",
+           map_frame.c_str(),scan_frame.c_str(),tf_map2scan.getOrigin().x(),tf_map2scan.getOrigin().y(),tf::getYaw(tf_map2scan.getRotation()));
+
+
+
   ///compensate data time delay
   {
     boost::mutex::scoped_lock l(cal_mut);
@@ -535,7 +577,7 @@ void pf_slam::calGlobalPosThread(){
   if( init_mapping ){
     {
     boost::mutex::scoped_lock l(addrfs_mut);
-    addingNewRfs(loc_pos,cur_mea_rfs_mapping);
+    addingNewRfs(cur_scan_pos,cur_mea_rfs_mapping);
     insertSortRfs(cur_mea_rfs_mapping);
     //setMapRfsData(_abs_map_rfs);
     //setTriangleTemplateData(_triangle_template);
@@ -554,13 +596,13 @@ void pf_slam::calGlobalPosThread(){
   static CountTime tim;
   tim.begin();
   ///get the matched rfs correspond to map rfs
-  getMatchedMeaRfs(loc_pos,cur_mea_rfs,matched_mea_rfs);//pair type: var first map rfs index,second measured rfx index
+  getMatchedMeaRfs(cur_scan_pos,cur_mea_rfs,matched_mea_rfs);//pair type: var first map rfs index,second measured rfx index
   if( matched_mea_rfs.size() < 3 ){
     ROS_ERROR("ERROR!!!pf_slam.slam_thread.matched_mea_rfs size:%d,no enough matched rfs.Using recking pos!.",matched_mea_rfs.size());
     pubGlobalPos(loc_pos);
   }
   else{
-    int res = getOptimizeTriangle(matched_mea_rfs,best);
+    int res = getOptimizeTriangle(cur_scan_pos,matched_mea_rfs,best);
     if( res > 0){
       //template rfs cord in map
        VecPosition v_a = cur_map_rfs[best[0].first];
@@ -580,16 +622,43 @@ void pf_slam::calGlobalPosThread(){
          // 又知道反光板绝对位置与定位位置关系，可以测得反光板在绝对坐标系下的角度，
          // 从而反推出车子角度（反光板绝对角度－相对夹角　＝　车子绝对角度　）
          angle_result = getOptimizeAngle(best,cord_result);
+
+         geometry_msgs::Pose2D pos;
+         ///cord_result是scan in map 故需要转换成base in map
+         ///map2base = map2scan * inv(base2scan)
+         tf::Transform tmp_tf(tf::createQuaternionFromYaw(angle_result),tf::Vector3(cord_result.getX(),cord_result.getY(),0) );///map2base
+         tf::StampedTransform tf_map2scan (tmp_tf,ros::Time(0),///chq!!!这个时间参数很重要，设置不当会导致transformPose转换失败
+                                          map_frame,scan_frame);///map2base
+         tf::StampedTransform tf_map2base;
+         tf_map2base.mult(tf_map2scan, tf_base2scan.inverse());
+         pos.x = tf_map2base.getOrigin().getX();
+         pos.y = tf_map2base.getOrigin().getY();
+         pos.theta = tf::getYaw(tf_map2base.getRotation() );
+
+         ROS_INFO("pfLocalize::calGlobalPosThread.%s2%s tf(x,y,angle):%.6f,%.6f,%.6f",
+                  base_frame.c_str(),scan_frame.c_str(),tf_base2scan.getOrigin().x(),tf_base2scan.getOrigin().y(),tf::getYaw(tf_base2scan.getRotation()));
+         ROS_INFO("pfLocalize::calGlobalPosThread after cal global pos .%s2%s tf(x,y,angle):%.6f,%.6f,%.6f",
+                  map_frame.c_str(),scan_frame.c_str(),tf_map2scan.getOrigin().x(),tf_map2scan.getOrigin().y(),tf::getYaw(tf_map2scan.getRotation()));
+         ROS_INFO("pfLocalize::calGlobalPosThread.after cal global pos.reverse cal %s2%s tf(x,y,angle):%.6f,%.6f,%.6f",
+                  map_frame.c_str(),base_frame.c_str(),tf_map2base.getOrigin().x(),tf_map2base.getOrigin().y(),tf::getYaw(tf_map2base.getRotation()));
+
+
          //在建图模式下，定位误差较大，在全局定位发生较大跳跃时，不使用全局定位结果
-         double de_x = fabs(cord_result.getX() - loc_pos.x);
-         double de_y = fabs(cord_result.getY() - loc_pos.y);
+         double de_x = fabs(pos.x - loc_pos.x);
+         double de_y = fabs(pos.y - loc_pos.y);
+
          if(de_x> 0.04 || de_y > 0.04){
            ROS_INFO("pf_slam.calGlobalPos.big delta happened!");
          }
          else{
-           loc_pos.x = cord_result.getX();
-           loc_pos.y = cord_result.getY();
-           loc_pos.theta = angle_result;
+           loc_pos.x = pos.x;
+           loc_pos.y = pos.y;
+           loc_pos.theta = pos.theta;
+
+           cur_scan_pos.x = cord_result.getX();
+           cur_scan_pos.y = cord_result.getY();
+           cur_scan_pos.theta = angle_result;
+
          }
          setGlobalPos(loc_pos);
          setReReckingFlag(true);
@@ -597,15 +666,18 @@ void pf_slam::calGlobalPosThread(){
          ROS_INFO("pf_slam cal global pos suc!global pos(%.6f,%.6f,%.6f),pre recking pos(%.6f,%.6f,%.6f)",
                   loc_pos.x,loc_pos.y,loc_pos.theta,cur_recking_pos.x,cur_recking_pos.y,cur_recking_pos.theta);
          ///for slam mapping
-         getNewRfs(loc_pos,cur_mea_rfs_mapping);///!!!只有初始和有全局定位结果时，slam才是准确的!!!!
+
+
+
+         getNewRfs(cur_scan_pos,cur_mea_rfs_mapping);///!!!只有初始和有全局定位结果时，slam才是准确的!!!!
          if(cur_mea_rfs_mapping.size())
          {
            boost::mutex::scoped_lock l(addrfs_mut);
-           addingNewRfs(loc_pos,cur_mea_rfs_mapping);
+           addingNewRfs(cur_scan_pos,cur_mea_rfs_mapping);
            insertSortRfs(cur_mea_rfs_mapping);
          }
          /// update history
-         updateHistoryRfsThread(loc_pos,cur_mea_rfs,matched_mea_rfs);
+         updateHistoryRfsThread(cur_scan_pos,cur_mea_rfs,matched_mea_rfs);
          ///
 
        }else{
@@ -626,7 +698,7 @@ void pf_slam::calGlobalPosThread(){
   ros::spinOnce();
   //}
 }
-void pf_slam::updateHistoryRfsThread( geometry_msgs::Pose2D loc_pos,std::vector<VecPosition> mea_rfs,std::vector<std::pair<int,int> > matched_mea_rfs){
+void pf_slam::updateHistoryRfsThread( geometry_msgs::Pose2D scan_pos,std::vector<VecPosition> mea_rfs,std::vector<std::pair<int,int> > matched_mea_rfs){
   //moving average!!!
   if( !mapping_start ){
     ROS_INFO("pf_slam::updateHistoryRfsThread.mapping not start.return");
@@ -637,15 +709,15 @@ void pf_slam::updateHistoryRfsThread( geometry_msgs::Pose2D loc_pos,std::vector<
  /// std::vector<VecPosition> mea_rfs = getMeasuredRfs();
  /// getMatchedMeaRfs(loc_pos,mea_rfs,matched_mea_rfs);
   int map_rfs_index;
-  VecPosition v_pos(loc_pos.x,loc_pos.y);
+  VecPosition v_pos(scan_pos.x,scan_pos.y);
   for(int i = 0 ; i < matched_mea_rfs.size();i++){
     map_rfs_index = matched_mea_rfs[i].first;
     VecPosition add=mea_rfs[matched_mea_rfs[i].second];
-    add.rotate(Rad2Deg(loc_pos.theta));
+    add.rotate(Rad2Deg(scan_pos.theta));
     add += v_pos;
 
     rfs_history_cord* &cur_his_rfs_cord = history_rfs[map_rfs_index];
-    std::list<VecPosition> &pos_arr=cur_his_rfs_cord->getPosArray();
+    std::list<VecPosition> &pos_arr = cur_his_rfs_cord->getPosArray();
     int cur_his_size = pos_arr.size();
 
     if( cur_his_size < history_update_size_thread)

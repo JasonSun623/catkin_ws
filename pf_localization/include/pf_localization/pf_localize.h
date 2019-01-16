@@ -230,7 +230,7 @@ public:
   /**
    * @brief 评价匹配到的反光板，选出最优的三个反光板（三角形）,相对坐标系下的
    */
-  int getOptimizeTriangle(std::vector<std::pair<int,int> > matched_rfs, std::vector<std::pair<int,int> >& best);
+  int getOptimizeTriangle(geometry_msgs::Pose2D pos,std::vector<std::pair<int,int> > matched_rfs, std::vector<std::pair<int,int> >& best);
   /**
    * @brief 根据计算出来的坐标　和匹配到的三角形，测量三角形　计算车身方向
    */
@@ -248,7 +248,8 @@ public:
   void callbackOdom(const nav_msgs::Odometry::ConstPtr& state_odata);
   //void callBackRelativeRfs(const geometry_msgs::PoseArray::ConstPtr& rfs_data);
   void callBackScan(const sensor_msgs::LaserScan & scan);
-
+  std::string map_frame,base_frame,scan_frame,odom_frame;
+  geometry_msgs::Pose2D cur_recking_pos,cur_scan_pos;
 private:
   double m_cur_vec_x,m_cur_vec_y,m_cur_w;//the trans velocity and the rot velocity cal by odom data
   double lrange1,lrange2,lrange3,lrange4;
@@ -277,7 +278,7 @@ private:
   geometry_msgs::Pose2D recking_pos;//odom recking pos
   geometry_msgs::Pose2D init_pos;//
   geometry_msgs::Pose2D global_pos;//caled by calGlobalPosThread
-  geometry_msgs::Pose2D cur_recking_pos;
+
 
   ros::NodeHandle nh;
   ros::Publisher global_pos_pub,global_recking_pos_pub;
@@ -292,7 +293,7 @@ private:
   boost::mutex rfs_mut;
   boost::mutex temp_mut;
 
-  std::string map_frame,scan_frame,odom_frame;
+
   std::string map_name ;
   std::string pos_frame ;
   std::string pos_topic,recking_pos_topic,pub_rfs_topic,rfs_topic ;
@@ -309,6 +310,7 @@ private:
   bool sent_first_transform_;
 
   tf::Transform latest_tf_;
+  tf::StampedTransform tf_base2scan;
   bool latest_tf_valid_;
    bool tf_broadcast_;
    tf::TransformBroadcaster* tfb_;

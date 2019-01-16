@@ -12,7 +12,8 @@ wheel_diff_controller:
   #须指定符号'，否则gazebo无法正确仿真
   left_wheel: 'left_front_wheel_joint'
   right_wheel: 'right_front_wheel_joint'
-  
+  ##########if 融合 不要pub tf,由ekf pub
+  enable_odom_tf: true
   # Odometry covariances for the encoder output of the robot. These values should
   # be tuned to your robot's sample odometry data, but these values are a good place
   # to start
@@ -20,8 +21,8 @@ wheel_diff_controller:
   twist_covariance_diagonal: [0.001, 0.001, 0.001, 0.001, 0.001, 0.03]
 
   # Top level frame (link) of the robot description
-  base_frame_id: base_link
-
+  base_frame_id: base_footprint
+  odom_frame_id: odom      # default: odom
 # Velocity and acceleration limits for the robot
 # chq.we must set bigger than normal because we do not want the outside setting is bigger than this like in dwa setting
 linear:
