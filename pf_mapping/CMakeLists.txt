@@ -132,7 +132,7 @@ include_directories(
 ## Declare a C++ library
  add_library(${PROJECT_NAME}
    src/Geometry.cpp
-   src/pf_mapping.cpp
+   #src/pf_mapping.cpp
    src/pf_slam.cpp
  )
 

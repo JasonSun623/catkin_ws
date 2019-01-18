@@ -18,6 +18,10 @@
 <!-- the horizontal offset in x dir dist bet the laser and car center -->
 <xacro:property name="x_offset_laser" value="0.4" />
 <!-- the vertical offset dist bet the driving wheel and car body -->
+<!-- the horizontal offset in y dir dist bet the laser and car center -->
+<xacro:property name="y_offset_laser" value="-0.2" />
+<!-- laser rotate angle in yaw -->
+<xacro:property name="yaw_laser" value="-1.57" />
 <xacro:property name="down_wheel" value="0.35" />
 <!-- the horizontal offset dist bet the driven wheel and car body -->
 <xacro:property name="offset_wheel" value="0.5" />
@@ -176,7 +180,7 @@
 
   <xacro:include filename="$(find pf_localization)/urdf/hokuyolaser_base.xacro" />
   <xacro:hokuyolaser parent_link="base_link">
-    <origin xyz="${x_offset_laser} 0 ${up_z+up_laser}" rpy="0 0 0" />
+    <origin xyz="${x_offset_laser} ${y_offset_laser} ${up_z+up_laser}" rpy="0 0 ${yaw_laser}" />
   </xacro:hokuyolaser>
 
 <transmission name="left_front_wheel_trans">

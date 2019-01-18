@@ -1,0 +1,57 @@
+<launch>
+<node pkg="pf_mapping" type="pf_mapping_node" name="pf_mapping_r2000" output="screen">
+ <!--  input bound for pf_filtercenter-->
+      <!--only  if the continuous laser points num beyond the thread,can we think  it is a rfs   -->
+   <param name="cluster_min_num" value="3" />
+      <!-- judge the valid laser pints by dist (if the dist > 0 ,then we think it is a valid rfs data) -->
+   <param name="judge_by_dist" value="true" />
+      <!-- only if the echo thread is beyond the thread ,can we treat is a rfs data(the param is valid when judge_by_dist param is false)-->
+   <param name="echo" value="100" />
+      <!-- reflector object radius -->
+   <param name="rf_radius" value="0.025" />
+      <!-- if new cal tfs center std_var is lower than the thread, we update the new caled center data to tht rfs center-->
+   <param name="err_thread" value="0.0011" />
+     <!-- the step search center dist  -->
+   <param name="search_step" value="0.0005" />
+
+ <!--  input bound for pf_localize-->
+  <param name="scan_update_fre" value="26" />
+  <param name="scan_frame" value="base_laser_link" />
+  <param name="base_frame" value="base_footprint" />
+  <param name="odom_frame" value="odom" />
+  <param name="map_frame" value="/map" />
+  <param name="scan_topic" value="/r2000_node/scan" />
+  <param name="odom_topic" value="odom" />
+     <!-- if pub map2odom-->
+  <param name="tf_broadcast" value="true" />
+   　 <!-- first mapping pos -->
+  <param name="init_pos_x" value="0.0" />
+  <param name="init_pos_y" value="0.0" />
+  <param name="init_pos_angle" value="0.0" />
+     <!--  the min permitted dist bet rfs-->
+  <param name="triangle_side_min_len" value="2.0" />
+     <!--if the distance is less than this threshold, it will be classified as a set of reflective plate templates.-->
+  <param name="triangle_grouping_thread" value="20" />
+     <!-- Only if the distance laser head itself is less than the distance threshold will it be matched. -->
+   <param name="search_triangle_thread" value="20" />
+     <!-- If the angle deviation(deg) is less than this threshold, the measurement will be considered to match the template. -->
+   <param name="match_angle_thread" value="10" />
+   <param name="match_dist_thread" value="0.4" />
+     <!-- TF lookup tolerance time(for odom2base lookup) -->
+   <param name="transform_tolerance" value="0.1" />
+ 
+      <!--  input bound for pf_mapping--> 
+      <!-- if the the measurd rfs dist comp to template rfs  dist below to the thread then we conside it a mathced rfs  -->
+ <param name="new_rfs_dist" value="1" />
+ <param name="new_rfs_angle_deg" value="10" />
+ <param name="keep_to_otherrfs_dist" value="2" />
+      <!-- only the his data size beyond this ,can we begin to update his data -->
+ <param name="history_update_size" value="10" />
+      <!-- if the dist bet cur his data and avg data ,then we do not add it to agv cal-->
+ <param name="history_rfs_reject_dist" value="0.5" />
+      <!-- only the filter his data size beyond this ,can we really to update his data -->
+ <param name="min_his_rfs_avg_size" value="7" />
+      <!-- if the err beyond this ,we will update the caled avg data to his avg data lastly-->
+ <param name="min_his_rfs_update_dist" value="0.001" />
+</node>
+</launch>

@@ -8,23 +8,23 @@ _run_loc_thread = false;
 ros::NodeHandle private_nh("~");
 
  ///for filter rfs center---start
- private_nh.param<int>("scan_update_fre",scan_update_fre,30);
+ private_nh.param<int>("scan_update_fre",scan_update_fre,26);
  private_nh.param<int>("fiter_scan_num", _fiter_scan_num, 1);
 
  private_nh.param<std::string>("pub_rfs_topic", pub_rfs_topic, "pf_reflectors");
- private_nh.param<std::string>("scan_frame", scan_frame, "hokuyo_link");
+ private_nh.param<std::string>("scan_frame", scan_frame, "base_laser_link");
  private_nh.param<std::string>("base_frame", base_frame, "base_footprint");
  private_nh.param<std::string>("odom_frame", odom_frame, "odom");
  private_nh.param<std::string>("map_frame",map_frame,"/map");
- private_nh.param<std::string>("scan_topic", scan_topic, "filter_scan");
+ private_nh.param<std::string>("scan_topic", scan_topic, "/r2000_node/scan");
 ///for filter rfs center---end
 
 
-private_nh.param<std::string>("map_name",map_name,"/home/hdros/catkin_ws/src/pf_localization/map/rfs.map");
+private_nh.param<std::string>("map_name",map_name,"/home/hdros/catkin_ws/src/pf_localization/map/rfsforloc20190117.map");
 private_nh.param<std::string>("pos_topic",pos_topic,"pose");
 private_nh.param<std::string>("recking_pos_topic",recking_pos_topic,"pose");
 private_nh.param<std::string>("rfs_topic",rfs_topic,"pf_reflectors");
-private_nh.param<std::string>("odom_topic",odom_topic,"/wheel_diff_controller/odom");
+private_nh.param<std::string>("odom_topic",odom_topic,"odom");
 private_nh.param("tf_broadcast", tf_broadcast_, true);
 
 private_nh.param<double>("perimeter_rang1",lrange1,0.05);
@@ -67,7 +67,6 @@ private_nh.param<double>("search_triangle_thread",search_triangle_thread,20);
 private_nh.param<double>("match_angle_thread",match_angle_thread,10);//deg
 private_nh.param<double>("match_dist_thread",match_dist_thread,0.4);
 private_nh.param<double>("score_thread",score_thread,0.9);
-private_nh.param<int>("scan_update_fre",scan_update_fre,30);
 private_nh.param("transform_tolerance", tmp_tol, 0.1);
 transform_tolerance_.fromSec(tmp_tol);
 tfb_ = new tf::TransformBroadcaster();
@@ -83,7 +82,8 @@ scan_sub = nh.subscribe(scan_topic,100,&pfLocalize::callBackScan,this);
 odom_sub = nh.subscribe(odom_topic,1,&pfLocalize::callbackOdom,this);
 global_pos_pub = nh.advertise<geometry_msgs::PoseStamped>(pos_topic,1);
 global_recking_pos_pub = nh.advertise<geometry_msgs::PoseStamped>(recking_pos_topic,1);
-
+map_marker_pub = nh.advertise<visualization_msgs::MarkerArray>("pf_map",1,true);
+rfs_marker_pub = nh.advertise<visualization_msgs::MarkerArray>("pf_rfs_marker",1,true);
 ROS_INFO_STREAM("pf_Localize.construct.init done!");
 
 }
@@ -231,7 +231,7 @@ void pfLocalize::deadReckingThread(){
     dt = gcount_time.getTime()/1000;//getTime is ms
     gcount_time.begin();
     //TODO need to optimize
-    ///ROS_INFO("pfLocalize::deadReckingThread.loop period(ms):%.6f",dt*1000);
+    //ROS_INFO("pfLocalize::deadReckingThread.loop period(ms):%.6f",dt*1000);
     if(_re_deadrecking){
       ///更新为全局坐标时，会打乱里程计的计时，从而影响到位置，角度的推算，
       ///从而影响反光板的匹配，间接影响定位精度～！！！！(important!!!)
@@ -240,10 +240,10 @@ void pfLocalize::deadReckingThread(){
       /// 更新本次位置为反光板匹配位置
       double dx = recking_pos.x-global_pos.x;
       double dy = recking_pos.y-global_pos.y;
-      ROS_DEBUG("pfLocalize::deadReckingThread.upate global pos to recking pos!err dx,dy:(%.6f,%.6f)",dx,dy);
+      ROS_INFO("pfLocalize::deadReckingThread.upate global pos to recking pos!err dx,dy:(%.6f,%.6f)",dx,dy);
       recking_pos = global_pos;
       pubMapToThisTF(recking_pos);
-      _re_deadrecking = false;
+      setReReckingFlag(false);
       //if need upodate pos,reset clock
       gcount_time.end();
       gcount_time.begin();
@@ -412,7 +412,7 @@ void pfLocalize::createTriangleTemplate(){
   std::list<std::pair<int,VecPosition>>::iterator itr;
   for(int i=0; i < mea_rfs.size(); i++){
     itr = flash_candidate_rfs.begin();
-    int cnt =0;
+    int cnt = 0;
     for(;itr != flash_candidate_rfs.end();itr++ ){
 
       rel_dist[i][cnt] = mea_rfs[i].getDistanceTo((*itr).second);
@@ -435,7 +435,7 @@ void pfLocalize::createTriangleTemplate(){
     }
   }
   if( matched_mea_rfs.size() && matched_mea_rfs.size() < 3 ){
-    ROS_ERROR("WARNNING!!pfLocalize::getMatchedMeaRfs size below 3!scan_pos(%.6f.%.6f).measured rfs size:%d, comp data:",pos.x,pos.y,mea_rfs.size());
+    ROS_ERROR("WARNNING!!pfLocalize::getMatchedMeaRfs size below 3 above to 1!scan_pos(%.6f.%.6f).measured rfs size:%d, comp data:",pos.x,pos.y,mea_rfs.size());
     for(int i=0; i < mea_rfs.size(); i++){
       abs_mea_rfs = mea_rfs[i];
       abs_mea_rfs.rotate(Rad2Deg(pos.theta));
@@ -452,7 +452,7 @@ void pfLocalize::createTriangleTemplate(){
 
  }
   if( matched_mea_rfs.empty() ){
-    ROS_ERROR("pfLocalize::getMatchedMeaRfserror to match!");
+    ROS_ERROR("pfLocalize::getMatchedMeaRfs.Error .No any rfs be matched!");
   }
 }
 
@@ -754,11 +754,134 @@ void pfLocalize::createTriangleTemplate(){
    }
    mea_rfs = temp_rfs;
  }
+void pfLocalize::pubGlobalPos( geometry_msgs::Pose2D pos ){
+  geometry_msgs::PoseStamped _pose;
+  _pose.header.frame_id=getMapFrame();
+  _pose.header.stamp = ros::Time::now();
+  _pose.pose.position.x = pos.x;
+  _pose.pose.position.y = pos.y;
+  tf::quaternionTFToMsg(tf::createQuaternionFromYaw(pos.theta),
+                        _pose.pose.orientation);
+  global_pos_pub.publish(_pose);
+}
+void pfLocalize::pubMarkerRfs(){
+std::vector<VecPosition> cur_map_rfs = map_rfs;
+rfs_marker.points.clear();
+text_marker.points.clear();
+loc_pos_marker.points.clear();
+marker_array.markers.clear();
 
+rfs_marker.header.stamp = ros::Time::now();
+loc_pos_marker.header.stamp = rfs_marker.header.stamp;
+rfs_marker.header.frame_id = map_frame;
+loc_pos_marker.header.frame_id = rfs_marker.header.frame_id;
+rfs_marker.type = visualization_msgs::Marker::POINTS;
+loc_pos_marker.type = visualization_msgs::Marker::ARROW;
+rfs_marker.ns = map_frame+"_nmspace";
+rfs_marker.action = visualization_msgs::Marker::ADD;
+// Set the scale of the marker -- 1x1x1 here means 1m on a side
+rfs_marker.scale.x = 0.05;
+rfs_marker.scale.y = 0.05;
+rfs_marker.scale.z = 0.05;
+// Set the color -- be sure to set alpha to something non-zero!
+//DarkOrchid	153 50 204
+rfs_marker.color.r = 153;
+rfs_marker.color.g = 50;
+rfs_marker.color.b = 204;
+rfs_marker.color.a = 0.3;
+rfs_marker.lifetime = ros::Duration(1000);
+geometry_msgs::Point p;
+geometry_msgs::Pose pose;
+if(cur_map_rfs.size() ){
+  for(int i=0;i < cur_map_rfs.size();i++){
+    rfs_marker.id = i;
+    //在相对于激光头的坐标空间
+    p.x = cur_map_rfs[i].getX();
+    p.y = cur_map_rfs[i].getY();
+    p.z = 0;
+
+    pose.position.x = p.x;
+    pose.position.y = p.y;
+    pose.position.z = 0;
+    ////fort text type,Only scale.z is used. scale.z specifies the height of an uppercase "A".
+    text_marker = rfs_marker;
+    text_marker.ns = "rfs_text_space";
+    text_marker.type = visualization_msgs::Marker::TEXT_VIEW_FACING;
+    text_marker.color.r = 255;
+    text_marker.color.g = 0;
+    text_marker.color.b = 0;
+    text_marker.color.a = 1;
+    text_marker.scale.z = 0.1;
+    text_marker.id = i;
+    stringstream ss ;
+    ss << i;
+    string str;
+    ss >> str;
+    text_marker.text = str ;
+    text_marker.pose = pose;
+    marker_array.markers.push_back(text_marker);
+    rfs_marker.points.push_back(p);
+  }
+
+  geometry_msgs::Pose2D loc_pos = getReckingPos();
+  pose.position.x = loc_pos.x;
+  pose.position.y = loc_pos.y;
+  pose.position.z = 0;
+  //tf::Quaternion qua = tf::createQuaternionFromRPY(0,0,loc_pos.theta);
+  //geometry_msgs::Quaternion geo_qua;
+  //tf::quaternionTFToMsg(qua,geo_qua);
+  //pose.orientation = geo_qua;
+  pose.orientation =tf::createQuaternionMsgFromYaw(loc_pos.theta);
+
+  loc_pos_marker.color.r = 153;
+  loc_pos_marker.color.g = 0;
+  loc_pos_marker.color.b = 0;
+  loc_pos_marker.color.a = 0.3;
+  loc_pos_marker.scale.x = 0.1;//scale.x 是箭头长度，scale.y是箭头宽度和scale.z是箭头高度。
+  loc_pos_marker.scale.y = 0.05;
+  loc_pos_marker.scale.z = 0.00;
+  loc_pos_marker.pose = pose;
+  marker_array.markers.push_back(loc_pos_marker);
+  marker_array.markers.push_back(rfs_marker);
+  map_marker_pub.publish(marker_array);
+}
+
+
+}
+void pfLocalize::pubMarkerRfsPoint(std::vector<VecPosition> rfs,std::string frame,int mark_type,double *color ,double *scale){
+  rfs_marker1.points.clear();
+  marker_array.markers.clear();
+  rfs_marker1.header.stamp = ros::Time::now();
+  rfs_marker1.header.frame_id = frame;
+  rfs_marker1.type = mark_type;
+  rfs_marker1.ns = "mark_rfs_nmspace";
+  rfs_marker1.action = visualization_msgs::Marker::ADD;
+  rfs_marker1.scale.x = *scale;
+  rfs_marker1.scale.y = *(scale+1);
+  rfs_marker1.scale.z = *(scale+2);
+  rfs_marker1.color.r = *color;
+  rfs_marker1.color.g = *(color+1);
+  rfs_marker1.color.b = *(color+2);
+  rfs_marker1.color.a = *(color+3);
+  rfs_marker1.lifetime = ros::Duration(100);
+  geometry_msgs::Point p;
+  if(rfs.size() ){
+    for(int i=0;i < rfs.size();i++){
+      rfs_marker1.id = i;
+      //在相对于激光头的坐标空间
+      p.x = rfs[i].getX();
+      p.y = rfs[i].getY();
+      p.z = 0;
+      rfs_marker1.points.push_back(p);
+    }
+    marker_array1.markers.push_back(rfs_marker1);
+    rfs_marker_pub.publish(marker_array1);
+  }
+}
  void pfLocalize::calGlobalPosThread(){
   //ros::Rate r(100);
   if(!_run_loc_thread){
-    ROS_DEBUG("wait for running.do not start cal GlobalPos Thread");
+    ROS_ERROR("wait for running.do not start cal GlobalPos Thread");
     return;
   }
   static CountTime tim;
@@ -771,6 +894,7 @@ void pfLocalize::createTriangleTemplate(){
   {
     boost::mutex::scoped_lock l(temp_mut);
     cur_map_rfs = map_rfs;
+    pubMarkerRfs();
   }
   static bool first_time = true;
 
@@ -798,7 +922,7 @@ void pfLocalize::createTriangleTemplate(){
      // best.clear();
       //matched_mea_rfs.clear();
       cur_recking_pos = recking_pos;//map2base update cur recking pos for calculating
-      mea_rfs = _rfs;//update cur measured rfs for calculating
+      mea_rfs = getMeasuredRfs();;//update cur measured rfs for calculating
       compensate_timer.end();//the compensate_timer will be restarted by callBackScan fun when the new rfs be caled
       double comp_dt = compensate_timer.getTime()/1000.0;
       ROS_INFO("cal global pos.the rfs used delay time:%.6f(ms)",comp_dt*1000);
@@ -806,36 +930,45 @@ void pfLocalize::createTriangleTemplate(){
     }
     /// transform map2base to map2scan <改进２.0 follow 考虑了base2scan的坐标关系>
     //in tf tree 不一定有map2base的tf,所以我们创建了一个
-    tf::Transform tmp_tf(tf::createQuaternionFromYaw(cur_recking_pos.theta),tf::Vector3(cur_recking_pos.x,cur_recking_pos.y,0) );///map2base
-    tf::StampedTransform tf_map2base (tmp_tf,ros::Time(0),///chq!!!这个时间参数很重要，设置不当会导致transformPose转换失败
+    tf::Transform map2base_tf(tf::createQuaternionFromYaw(cur_recking_pos.theta),tf::Vector3(cur_recking_pos.x,cur_recking_pos.y,0) );///map2base
+    tf::StampedTransform tf_map2base (map2base_tf,ros::Time(0),///chq!!!这个时间参数很重要，设置不当会导致transformPose转换失败
                                      map_frame,base_frame);///map2base
     tf::StampedTransform tf_map2scan;
     tf_map2scan.mult(tf_map2base, tf_base2scan);
     cur_scan_pos.x = tf_map2scan.getOrigin().getX();
     cur_scan_pos.y = tf_map2scan.getOrigin().getY();
     cur_scan_pos.theta = tf::getYaw(tf_map2scan.getRotation() );
-    ROS_INFO("pfLocalize::calGlobalPosThread.%s2%s tf(x,y,angle):%.6f,%.6f,%.6f",
+    ROS_INFO("pfLocalize::calGlobalPosThread.reckpos->scanpos for matching.%s2%s tf(x,y,angle):%.6f,%.6f,%.6f",
              base_frame.c_str(),scan_frame.c_str(),tf_base2scan.getOrigin().x(),tf_base2scan.getOrigin().y(),tf::getYaw(tf_base2scan.getRotation()));
-    ROS_INFO("pfLocalize::calGlobalPosThread.%s2%s tf(x,y,angle):%.6f,%.6f,%.6f",
+    ROS_INFO("pfLocalize::calGlobalPosThread.reckpos->scanpos for matching.%s2%s tf(x,y,angle):%.6f,%.6f,%.6f",
              map_frame.c_str(),base_frame.c_str(),tf_map2base.getOrigin().x(),tf_map2base.getOrigin().y(),tf::getYaw(tf_map2base.getRotation()));
-    ROS_INFO("pfLocalize::calGlobalPosThread.%s2%s tf(x,y,angle):%.6f,%.6f,%.6f",
+    ROS_INFO("pfLocalize::calGlobalPosThread.reckpos->scanpos for matching.%s2%s tf(x,y,angle):%.6f,%.6f,%.6f",
              map_frame.c_str(),scan_frame.c_str(),tf_map2scan.getOrigin().x(),tf_map2scan.getOrigin().y(),tf::getYaw(tf_map2scan.getRotation()));
 
     ///get the matched rfs correspond to map rfs
     getMatchedMeaRfs(cur_scan_pos,mea_rfs,matched_mea_rfs);
+    {
+      if(matched_mea_rfs.size()){
+        std::vector<VecPosition> rfs;
+        for(int j = 0 ;j < matched_mea_rfs.size();j++)
+        {
+          ///!!!need use temp var due to the *.rotate fun would change var itself value
+          VecPosition mea_rfs_temp = mea_rfs[(matched_mea_rfs[j]).second];
+          VecPosition v_a = mea_rfs_temp.rotate(Rad2Deg(cur_scan_pos.theta));
+          v_a+=VecPosition(cur_scan_pos.x,cur_scan_pos.y);
+          rfs.push_back(v_a);
+        }
+        double color[4]={0,200,0.2,0.5};
+        double scale[3]={0.1,0.1,0.1};
+        pubMarkerRfsPoint(rfs,map_frame,visualization_msgs::Marker::POINTS,color,scale);
+      }
+    }
     if(mea_rfs.empty()){
       ROS_ERROR("ERROR!!!pfLocalize::calGlobalPosThread.no measured rfs.Using recking pos!.");
     }
-    geometry_msgs::PoseStamped _pose;
     if( matched_mea_rfs.size() < 3 ){
       ROS_ERROR("WARNING!!!pfLocalize::calGlobalPosThread.matched_mea_rfs size:%d,no enough matched rfs.Using recking pos!.",matched_mea_rfs.size());
-      _pose.header.frame_id=map_frame;
-      _pose.header.stamp = ros::Time::now();
-      _pose.pose.position.x = recking_pos.x;
-      _pose.pose.position.y = recking_pos.y;
-      tf::quaternionTFToMsg(tf::createQuaternionFromYaw(recking_pos.theta),
-                            _pose.pose.orientation);
-      global_pos_pub.publish(_pose);
+       pubGlobalPos(recking_pos);
     }
     else{
       int res = getOptimizeTriangle(cur_scan_pos,matched_mea_rfs,best);
@@ -861,44 +994,39 @@ void pfLocalize::createTriangleTemplate(){
            geometry_msgs::Pose2D pos;
            ///cord_result是scan in map 故需要转换成base in map
            ///map2base = map2scan * inv(base2scan)
-           tf::Transform tmp_tf(tf::createQuaternionFromYaw(angle_result),tf::Vector3(cord_result.getX(),cord_result.getY(),0) );///map2base
-           tf::StampedTransform tf_map2scan (tmp_tf,ros::Time(0),///chq!!!这个时间参数很重要，设置不当会导致transformPose转换失败
+           ///这里认为map2scan 在z方向上的偏移　与　map2base 一致
+           tf::Transform map2scan_tf(tf::createQuaternionFromYaw(angle_result),tf::Vector3(cord_result.getX(),cord_result.getY(),tf_base2scan.getOrigin().z()) );///map2base
+           tf::StampedTransform tf_map2scan (map2scan_tf,ros::Time(0),///chq!!!这个时间参数很重要，设置不当会导致transformPose转换失败
                                             map_frame,scan_frame);///map2base
            tf::StampedTransform tf_map2base;
            tf_map2base.mult(tf_map2scan, tf_base2scan.inverse());
            pos.x = tf_map2base.getOrigin().getX();
            pos.y = tf_map2base.getOrigin().getY();
            pos.theta = tf::getYaw(tf_map2base.getRotation() );
+           ROS_INFO("pfLocalize::calGlobalPosThread.cord result(x,y,angle):(%f,%f,%f)",cord_result.getX(),cord_result.getY(),angle_result);
+           ROS_INFO("pfLocalize::calGlobalPosThread.(1)scanpos->locpos.%s2%s tf(x,y,angle):%.6f,%.6f,%.6f",
+                  base_frame.c_str(),scan_frame.c_str(),tf_base2scan.getOrigin().x(),tf_base2scan.getOrigin().y(),tf::getYaw(tf_base2scan.getRotation()));
+           ROS_INFO("pfLocalize::calGlobalPosThread.(2)scanpos->locpos.%s2%s tf(x,y,angle):%.6f,%.6f,%.6f",
+                  map_frame.c_str(),scan_frame.c_str(),tf_map2scan.getOrigin().x(),tf_map2scan.getOrigin().y(),tf::getYaw(tf_map2scan.getRotation()));
+           ROS_INFO("pfLocalize::calGlobalPosThread.(3)scanpos->locpos.reverse cal %s2%s tf(x,y,angle):%.6f,%.6f,%.6f",
+                  map_frame.c_str(),base_frame.c_str(),tf_map2base.getOrigin().x(),tf_map2base.getOrigin().y(),tf::getYaw(tf_map2base.getRotation()));
 
-           global_pos = pos;
-           _re_deadrecking = true;
-           // global_pos_pub.publish(pos);
-           _pose.header.stamp = ros::Time::now();
-           _pose.pose.position.x = global_pos.x;
-           _pose.pose.position.y = global_pos.y;
-           tf::quaternionTFToMsg(tf::createQuaternionFromYaw(global_pos.theta),
-                                 _pose.pose.orientation);
-           global_pos_pub.publish(_pose);
+           setGlobalPos(pos);
+           setReReckingFlag(true);///!!!!!
+           pubGlobalPos(pos);
+           
 
          }
       }
       else
       {
-        ROS_INFO("calGlobalPosThread.no good rfs which score beyond the thread.do not cal.");
-        _pose.header.frame_id=map_frame;
-        _pose.header.stamp = ros::Time::now();
-        _pose.pose.position.x = recking_pos.x;
-        _pose.pose.position.y = recking_pos.y;
-        tf::quaternionTFToMsg(tf::createQuaternionFromYaw(recking_pos.theta),
-                              _pose.pose.orientation);
-        global_pos_pub.publish(_pose);
-        //global_pos_pub.publish(recking_pos);
-
+        ROS_WARN("calGlobalPosThread.no good rfs which score beyond the thread.do not cal.");
+        pubGlobalPos( recking_pos );
       }
     }
     tim.end();
     double dt = tim.getTime();
-    ROS_INFO("calGolbalPosThread.waster time(ms):%.6f",dt);
+    ROS_INFO("pf_localize::calGolbalPosThread.waster time(ms):%.6f",dt);
    // r.sleep();
     ros::spinOnce();
   //}

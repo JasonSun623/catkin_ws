@@ -21,7 +21,7 @@ pf_slam::pf_slam(){
   sub_mapping_task_start = nh.subscribe("pf_mapping_start",1,&pf_slam::callBackMappingStart,this);
   sub_mapping_task_cancel = nh.subscribe("pf_mapping_cancel",1,&pf_slam::callBackMappingCancel,this);
   sub_mapping_task_stop = nh.subscribe("pf_mapping_stop",1,&pf_slam::callBackMappingStop,this);
-
+  map_marker_pub = nh.advertise<visualization_msgs::MarkerArray>("pf_map",1);
   global_pos_pub = nh.advertise< geometry_msgs::PoseStamped >("pf_slam_pose",1);
   ROS_INFO_STREAM("pf_slam.construct.init done!");
 }
@@ -60,7 +60,7 @@ void pf_slam::callBackMappingStop(const std_msgs::String fname){
   ///save map
   fstream out;
   std::string str_name = fname.data;
-  str_name= str_name+".lmkmap";
+  str_name = str_name + ".lmkmap";
   out.open(str_name.c_str(), ios::out|ios::trunc);
   if (!out)
   {
@@ -133,7 +133,7 @@ void pf_slam::callBackMappingStop(const std_msgs::String fname){
   history_rfs.clear();
   stop();
 
-  ROS_INFO("---------------pf_slam.save map done!save file to:~/.ros/%s(if roslaunch)-----------------------",str_name.c_str());
+  ROS_INFO("---------------pf_slam.save map done!file to ~/.ros/%s-----------------------",str_name.c_str());
 }
 
 void pf_slam::addingNewRfs(geometry_msgs::Pose2D scan_pos, std::vector<VecPosition> new_rfs){
@@ -428,8 +428,89 @@ void pf_slam::getNewRfs(geometry_msgs::Pose2D scan_pos, std::vector<VecPosition>
  }
 
 }
+void pf_slam::pubMarkerRfs(){
+
+visualization_msgs::Marker rfs_marker;
+visualization_msgs::Marker text_marker;
+visualization_msgs::Marker loc_pos_marker;
+visualization_msgs::MarkerArray marker_array;
+rfs_marker.header.stamp = ros::Time::now();
+loc_pos_marker.header.stamp = rfs_marker.header.stamp;
+rfs_marker.header.frame_id = map_frame;
+loc_pos_marker.header.frame_id = rfs_marker.header.frame_id;
+rfs_marker.type = visualization_msgs::Marker::POINTS;
+loc_pos_marker.type = visualization_msgs::Marker::ARROW;
+rfs_marker.ns = map_frame+"_nmspace";
+rfs_marker.action = visualization_msgs::Marker::ADD;
+// Set the scale of the marker -- 1x1x1 here means 1m on a side
+rfs_marker.scale.x = 0.05;
+rfs_marker.scale.y = 0.05;
+rfs_marker.scale.z = 0.05;
+// Set the color -- be sure to set alpha to something non-zero!
+//DarkOrchid	153 50 204
+rfs_marker.color.r = 153;
+rfs_marker.color.g = 50;
+rfs_marker.color.b = 204;
+rfs_marker.color.a = 0.3;
+rfs_marker.lifetime = ros::Duration(1000);
+geometry_msgs::Point p;
+geometry_msgs::Pose pose;
+if(_abs_map_rfs.size() ){
+  for(int i=0;i < _abs_map_rfs.size();i++){
+    rfs_marker.id = i;
+    //在相对于激光头的坐标空间
+    p.x = _abs_map_rfs[i].getX();
+    p.y = _abs_map_rfs[i].getY();
+    p.z = 0;
+
+    pose.position.x = p.x;
+    pose.position.y = p.y;
+    pose.position.z = 0;
+    ////fort text type,Only scale.z is used. scale.z specifies the height of an uppercase "A".
+    text_marker = rfs_marker;
+    text_marker.ns = "rfs_text_space";
+    text_marker.type = visualization_msgs::Marker::TEXT_VIEW_FACING;
+    text_marker.color.r = 255;
+    text_marker.color.g = 0;
+    text_marker.color.b = 0;
+    text_marker.color.a = 1;
+    text_marker.scale.z = 0.1;
+    text_marker.id = i;
+    stringstream ss ;
+    ss << i;
+    string str;
+    ss >> str;
+    text_marker.text = str ;
+    text_marker.pose = pose;
+    marker_array.markers.push_back(text_marker);
+    rfs_marker.points.push_back(p);
+  }
+
+  geometry_msgs::Pose2D loc_pos = getReckingPos();
+  pose.position.x = loc_pos.x;
+  pose.position.y = loc_pos.y;
+  pose.position.z = 0;
+  //tf::Quaternion qua = tf::createQuaternionFromRPY(0,0,loc_pos.theta);
+  //geometry_msgs::Quaternion geo_qua;
+  //tf::quaternionTFToMsg(qua,geo_qua);
+  //pose.orientation = geo_qua;
+  pose.orientation =tf::createQuaternionMsgFromYaw(loc_pos.theta);
+
+  loc_pos_marker.color.r = 153;
+  loc_pos_marker.color.g = 0;
+  loc_pos_marker.color.b = 0;
+  loc_pos_marker.color.a = 0.3;
+  loc_pos_marker.scale.x = 0.1;//scale.x 是箭头长度，scale.y是箭头宽度和scale.z是箭头高度。
+  loc_pos_marker.scale.y = 0.05;
+  loc_pos_marker.scale.z = 0.00;
+  loc_pos_marker.pose = pose;
+  marker_array.markers.push_back(loc_pos_marker);
+  marker_array.markers.push_back(rfs_marker);
+  map_marker_pub.publish(marker_array);
+}
 
 
+}
 
 void pf_slam::calGlobalPosThread(){
 
@@ -491,12 +572,14 @@ void pf_slam::calGlobalPosThread(){
   cur_scan_pos.y = tf_map2scan.getOrigin().getY();
   cur_scan_pos.theta = tf::getYaw(tf_map2scan.getRotation() );
 
-  ROS_INFO("pfLocalize::calGlobalPosThread.reckpos->scanpos for matching.%s2%s tf(x,y,angle):%.6f,%.6f,%.6f",
+  ROS_INFO("pfLocalize::calGlobalPosThread.%s2%s tf(x,y,angle):%.6f,%.6f,%.6f",
            base_frame.c_str(),scan_frame.c_str(),tf_base2scan.getOrigin().x(),tf_base2scan.getOrigin().y(),tf::getYaw(tf_base2scan.getRotation()));
-  ROS_INFO("pfLocalize::calGlobalPosThread.reckpos->scanpos for matching.%s2%s tf(x,y,angle):%.6f,%.6f,%.6f",
+  ROS_INFO("pfLocalize::calGlobalPosThread.%s2%s tf(x,y,angle):%.6f,%.6f,%.6f",
            map_frame.c_str(),base_frame.c_str(),tf_map2base.getOrigin().x(),tf_map2base.getOrigin().y(),tf::getYaw(tf_map2base.getRotation()));
-  ROS_INFO("pfLocalize::calGlobalPosThread.reckpos->scanpos for matching.%s2%s tf(x,y,angle):%.6f,%.6f,%.6f",
+  ROS_INFO("pfLocalize::calGlobalPosThread.%s2%s tf(x,y,angle):%.6f,%.6f,%.6f",
            map_frame.c_str(),scan_frame.c_str(),tf_map2scan.getOrigin().x(),tf_map2scan.getOrigin().y(),tf::getYaw(tf_map2scan.getRotation()));
+
+
 
   ///compensate data time delay
   {
@@ -561,8 +644,7 @@ void pf_slam::calGlobalPosThread(){
          geometry_msgs::Pose2D pos;
          ///cord_result是scan in map 故需要转换成base in map
          ///map2base = map2scan * inv(base2scan)
-         ///这里认为map2scan 在z方向上的偏移　与　map2base 一致!!!
-         tf::Transform tmp_tf(tf::createQuaternionFromYaw(angle_result),tf::Vector3(cord_result.getX(),cord_result.getY(),tf_base2scan.getOrigin().z()) );///map2base
+         tf::Transform tmp_tf(tf::createQuaternionFromYaw(angle_result),tf::Vector3(cord_result.getX(),cord_result.getY(),0) );///map2base
          tf::StampedTransform tf_map2scan (tmp_tf,ros::Time(0),///chq!!!这个时间参数很重要，设置不当会导致transformPose转换失败
                                           map_frame,scan_frame);///map2base
          tf::StampedTransform tf_map2base;
@@ -571,12 +653,13 @@ void pf_slam::calGlobalPosThread(){
          pos.y = tf_map2base.getOrigin().getY();
          pos.theta = tf::getYaw(tf_map2base.getRotation() );
 
-         ROS_INFO("pfLocalize::calGlobalPosThread.scanpos->locpos.%s2%s tf(x,y,angle):%.6f,%.6f,%.6f",
-                base_frame.c_str(),scan_frame.c_str(),tf_base2scan.getOrigin().x(),tf_base2scan.getOrigin().y(),tf::getYaw(tf_base2scan.getRotation()));
-         ROS_INFO("pfLocalize::calGlobalPosThread. scanpos->locpos..%s2%s tf(x,y,angle):%.6f,%.6f,%.6f",
-                map_frame.c_str(),scan_frame.c_str(),tf_map2scan.getOrigin().x(),tf_map2scan.getOrigin().y(),tf::getYaw(tf_map2scan.getRotation()));
-         ROS_INFO("pfLocalize::calGlobalPosThread.scanpos->locpos.reverse cal %s2%s tf(x,y,angle):%.6f,%.6f,%.6f",
-                map_frame.c_str(),base_frame.c_str(),tf_map2base.getOrigin().x(),tf_map2base.getOrigin().y(),tf::getYaw(tf_map2base.getRotation()));
+         ROS_INFO("pfLocalize::calGlobalPosThread.%s2%s tf(x,y,angle):%.6f,%.6f,%.6f",
+                  base_frame.c_str(),scan_frame.c_str(),tf_base2scan.getOrigin().x(),tf_base2scan.getOrigin().y(),tf::getYaw(tf_base2scan.getRotation()));
+         ROS_INFO("pfLocalize::calGlobalPosThread after cal global pos .%s2%s tf(x,y,angle):%.6f,%.6f,%.6f",
+                  map_frame.c_str(),scan_frame.c_str(),tf_map2scan.getOrigin().x(),tf_map2scan.getOrigin().y(),tf::getYaw(tf_map2scan.getRotation()));
+         ROS_INFO("pfLocalize::calGlobalPosThread.after cal global pos.reverse cal %s2%s tf(x,y,angle):%.6f,%.6f,%.6f",
+                  map_frame.c_str(),base_frame.c_str(),tf_map2base.getOrigin().x(),tf_map2base.getOrigin().y(),tf::getYaw(tf_map2base.getRotation()));
+
 
          //在建图模式下，定位误差较大，在全局定位发生较大跳跃时，不使用全局定位结果
          double de_x = fabs(pos.x - loc_pos.x);

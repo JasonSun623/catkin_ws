@@ -5,7 +5,7 @@
 #include <iostream>
 #include <tf/transform_datatypes.h>
 #include <pf_localization/pf_localize.h>
-#include <visualization_msgs/MarkerArray.h>
+
 #include <std_msgs/Int16.h> //callback
 #include <pf_filtercenter/CountTime.hpp>
 #include <pf_localization/Geometry.h>
@@ -128,8 +128,6 @@ public:
 
  void insertSortRfs(std::vector<VecPosition> new_rfs);
  void sortPairRfsDist();
- void pubMarkerRfs();
- void pubGlobalPos( geometry_msgs::Pose2D pos );
 
 private:
  double triangle_side_min_len,triangle_grouping_thread;
@@ -143,6 +141,7 @@ private:
  tf::StampedTransform tf_base2scan;
 
  double scan_range_max;
+ double keep_to_otherrfs_dist,keep_to_otherrfs_angle_deg;//与其他反光板保持的最小距离，角度
  double new_rfs_dist,new_rfs_angle_deg;//是新的反光板的最小间隔距离和角度
  double history_rfs_reject_dist;//与平均值差值　大于此值，不纳入求历史反光板坐标
  int history_update_size_thread;//the cord update min history size
@@ -150,7 +149,7 @@ private:
  double his_rfs_update_thread;
  ros::NodeHandle nh;
  ros::Timer timer_updatehistory ;
- ros::Publisher map_marker_pub;
+
  ros::Publisher global_pos_pub;
  ros::Subscriber sub_mapping_task_start,sub_mapping_task_cancel,sub_mapping_task_stop;
  bool mapping_start,mapping_cancel,init_mapping;//firt to mapping

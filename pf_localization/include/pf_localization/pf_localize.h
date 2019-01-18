@@ -20,7 +20,7 @@
 #include <geometry_msgs/PoseArray.h>
 #include <sensor_msgs/LaserScan.h>
 #include <visualization_msgs/Marker.h>
-
+#include <visualization_msgs/MarkerArray.h>
 #include <tf/LinearMath/Scalar.h>
 #include <tf/LinearMath/Vector3.h>
 #include "tf/transform_broadcaster.h"
@@ -206,6 +206,18 @@ public:
     return map_frame;
   }
   /**
+   * @brief pub map rfs cord
+   */
+  void pubMarkerRfs();
+  /**
+   * @brief pub  rfs marker cord
+   */
+  void pubMarkerRfsPoint(std::vector<VecPosition> rfs,std::string frame,int mark_type,double *color ,double *scale);
+  /**
+   * @brief pub pos
+   */
+  void pubGlobalPos( geometry_msgs::Pose2D pos );
+  /**
    * @brief pub tf from map to cur pos frame
    */
   void pubMapToThisTF( geometry_msgs::Pose2D cur_pos );
@@ -250,6 +262,7 @@ public:
   void callBackScan(const sensor_msgs::LaserScan & scan);
   std::string map_frame,base_frame,scan_frame,odom_frame;
   geometry_msgs::Pose2D cur_recking_pos,cur_scan_pos;
+  ros::Publisher rfs_marker_pub,map_marker_pub;
 private:
   double m_cur_vec_x,m_cur_vec_y,m_cur_w;//the trans velocity and the rot velocity cal by odom data
   double lrange1,lrange2,lrange3,lrange4;
@@ -279,6 +292,10 @@ private:
   geometry_msgs::Pose2D init_pos;//
   geometry_msgs::Pose2D global_pos;//caled by calGlobalPosThread
 
+  visualization_msgs::Marker rfs_marker,rfs_marker1;
+  visualization_msgs::Marker text_marker;
+  visualization_msgs::Marker loc_pos_marker;
+  visualization_msgs::MarkerArray marker_array,marker_array1;
 
   ros::NodeHandle nh;
   ros::Publisher global_pos_pub,global_recking_pos_pub;

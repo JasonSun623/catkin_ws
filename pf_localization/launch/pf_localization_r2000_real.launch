@@ -1,0 +1,36 @@
+<?xml version="1.0"?>
+<launch>
+
+<!-- 
+cal the robot scan pos by the rfs data
+-->
+   <node name="pf_localization" pkg="pf_localization" type="pf_localization_node" output="screen">
+     <!--  input bound for pf_localize-->
+      <param name="map_name" value="$(find pf_localization)/map/rfsforloc20190117.map"/>
+      <!-- first loc pos -->
+      <param name="init_pos_x" value="0.0" />
+      <param name="init_pos_y" value="0.0" />
+      <param name="init_pos_angle" value="0.0" />
+
+      <param name="scan_update_fre" value="26" />
+      <param name="scan_frame" value="base_laser_link" />
+      <param name="base_frame" value="base_footprint" />
+      <param name="odom_frame" value="odom" />
+      <param name="map_frame" value="/map" />
+      <param name="scan_topic" value="/r2000_node/scan" />
+      <param name="odom_topic" value="odom" />
+         <!-- if pub map2odom-->
+      <param name="tf_broadcast" value="true" />
+         <!--  the min permitted dist bet rfs-->
+      <param name="triangle_side_min_len" value="2.0" />
+         <!--if the distance is less than this threshold, it will be classified as a set of reflective plate templates.-->
+      <param name="triangle_grouping_thread" value="20" />
+         <!-- Only if the distance laser head itself is less than the distance threshold will it be matched. -->
+       <param name="search_triangle_thread" value="20" />
+         <!-- If the angle deviation(deg) is less than this threshold, the measurement will be considered to match the template. -->
+       <param name="match_angle_thread" value="10" />
+       <param name="match_dist_thread" value="0.4" />
+         <!-- TF lookup tolerance time(for odom2base lookup) -->
+       <param name="transform_tolerance" value="0.1" />
+   </node>
+</launch>
