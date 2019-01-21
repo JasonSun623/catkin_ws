@@ -59,8 +59,9 @@
 #define MAX_SPEED_LVL1              0.3
 #define MAX_SPEED_LVL2              0.2
 #define MAX_SPEED                   1.2
-
-#define WAYPOINT_POP_DISTANCE_M              0.10    //Distancia mínima para alcanzar punto objetivo m (PurePursuit)
+//chq mod 190121 for rfs reloc check
+//#define WAYPOINT_POP_DISTANCE_M              0.10    //Distancia mínima para alcanzar punto objetivo m (PurePursuit)
+#define WAYPOINT_POP_DISTANCE_M              0.03    //Distancia mínima para alcanzar punto objetivo m (PurePursuit)
 
 #define AGVS_FIRST_DECELERATION_DISTANCE     0.5   // meters -> when the vehicle is arriving to the goal, it has to decelarate at this distance
 #define AGVS_FIRST_DECELERATION_MAXSPEED     0.15  // m/s
@@ -1244,8 +1245,8 @@ public:
     private_node_handle_.param<std::string>("command_type", s_command_type, COMMAND_TWIST_STRING);
     private_node_handle_.param<std::string>("target_frame", target_frame_, "/base_link");
    //PID
-    private_node_handle_.param("max_w", maxT, M_PI);
-    private_node_handle_.param("min_w", minT, -M_PI);
+    private_node_handle_.param("max_w", maxT, M_PI/2);
+    private_node_handle_.param("min_w", minT, -M_PI/2);
     private_node_handle_.param("kp_w", Kp, 1.0);
     private_node_handle_.param("ki_w", Ki, 0.00);
     private_node_handle_.param("kd_w", Kd, 0.000);
@@ -1253,8 +1254,8 @@ public:
       dt = 1.0/desired_freq_;
     else
       dt = 0.1;
-    private_node_handle_.param("max_v", maxS, M_PI);
-    private_node_handle_.param("min_v", minS, -M_PI);
+    private_node_handle_.param("max_v", maxS, 1.5);
+    private_node_handle_.param("min_v", minS, 0.1);
     private_node_handle_.param("kp_v", KpS, 0.8);
     private_node_handle_.param("ki_v", KiS, 0.05);
     private_node_handle_.param("kd_v", KdS, 0.005);

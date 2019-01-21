@@ -184,7 +184,7 @@ class PointPathManager(InteractiveMarkerServer):
 		# Locates and loads the UI file into the widget
 		rp = rospkg.RosPack()		
 		# loads a ui file for the dialog
-		self.points_file_path = os.path.join(rp.get_path('robotnik_pp_planner'), 'config', 'coveragespace_conspeed.txt')
+		self.points_file_path = os.path.join(rp.get_path('robotnik_pp_planner'), 'config', 'coveragespace_yyl3.txt')
 		
 		#rospy.Timer(rospy.Duration(5), self.createNewPoint)
 		self._go_service = rospy.Service('%s/go'%rospy.get_name(), Empty, self.goService)
@@ -272,8 +272,8 @@ class PointPathManager(InteractiveMarkerServer):
 			return
 		
 		for i in self.list_of_points:
-			# line format = 'p1;p1->0.4;0.5;5.2;0.4' (ID, description, x, y, speed)
-			line = '%s;%s;%.3f;%.3f;%.3f\n'%(i.name, i.description, i.pose.position.x, i.pose.position.y, i.speed)
+			# line format =0.5;5.2;0.4' (x, y, speed)
+			line = '%.3f;%.3f;%.3f\n'%(i.pose.position.x, i.pose.position.y, i.speed)
 			file_points.write(line) 
 		
 		rospy.loginfo('agvs_path_marker:savePointsCB: saved %d points'%(len(self.list_of_points)))
@@ -293,18 +293,20 @@ class PointPathManager(InteractiveMarkerServer):
 			return
 		
 		num_of_loaded_points = 0
+		t = 0
 		# Reads and extracts the information of every line
 		line = file_points.readline().replace('\n', '')
 		while line != '':
-			# line format = 'p1;0.5;5.2;0.1;0.4' //[ ID, X, Y,,angle, SPEED]
+			# line format = '0.5;5.2;0.4' //[X, Y,SPEED]
 			a = line.split(';')
-			if len(a) == 5:
+			rospy.loginfo( 'agvs_path_marker::loadPointsCB:raw data:%s'%(a) )
+			if len(a) == 3:
 				
-				new_point = PointPath(self.frame_id, a[0], a[1], speed = float(a[4]))
-				new_point.pose.position.x = float(a[2])
-				new_point.pose.position.y = float(a[3])
-				
-				rospy.loginfo('agvs_path_marker::loadPointsCB: Loading point %s at position %.2lf, %.2lf. speed =  %.2lf'%(a[0], new_point.pose.position.x, new_point.pose.position.y, new_point.speed))
+				new_point = PointPath(self.frame_id, 't', ' ', speed = float(a[2]))
+				new_point.pose.position.x = float(a[0])
+				new_point.pose.position.y = float(a[1])
+				#t=t+1
+				rospy.loginfo('agvs_path_marker::loadPointsCB: Loading point at position %.2lf, %.2lf. speed =  %.2lf'%(new_point.pose.position.x, new_point.pose.position.y, new_point.speed))
 				
 				self.list_of_points.append(new_point)
 				self.insert(new_point, new_point.processFeedback)
@@ -312,12 +314,15 @@ class PointPathManager(InteractiveMarkerServer):
 				self.applyChanges()
 				self.counter_points = self.counter_points + 1
 				num_of_loaded_points = num_of_loaded_points + 1
+				rospy.loginfo('agvs_path_marker::loadPointsCB:raw data1:%s'%(a) )
 			else:
+				rospy.loginfo('agvs_path_marker::loadPointsCB:raw data2:%s'%(a) )
 				rospy.logerr('agvs_path_marker::loadPointsCB: Error processing line %s'%(line))		
 				
-			
+			rospy.loginfo('agvs_path_marker::loadPointsCB:raw data:%s'%(a) )
 			line = file_points.readline().replace('\n', '')
-		
+
+
 		file_points.close()
 		
 		rospy.loginfo('agvs_path_marker::loadPointsCB: Loaded %d points'%(num_of_loaded_points))	
@@ -386,7 +391,7 @@ if __name__=="__main__":
 	_name = rospy.get_name().replace('/','')
 	
 	arg_defaults = {
-	  'frame_id': '/odom',
+	  'frame_id': '/map',
 	  'planner': 'purepursuit_planner'
 	}
 	

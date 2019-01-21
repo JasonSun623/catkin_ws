@@ -8,7 +8,12 @@
  <arg name="map_file" default="$(find robotnik_pp_planner)/maps/coverage_space2.map"/>
 <!--Map Server -->
  <node name="map_server" type="map_server" pkg="map_server" args="$(arg map_file)" />
-  
+
+<!--fireup ekf -->
+<node pkg="robot_localization" type="ekf_localization_node" name="ekf_localization_node" clear_params="true" output="screen">
+  <rosparam command="load" file="$(find robotnik_pp_planner)/launch/ekf.yaml" />
+</node>
+
 
   <arg name="one_deg" value="0.017453" />
   <!-- AMCL -->

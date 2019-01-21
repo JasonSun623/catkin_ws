@@ -3,8 +3,8 @@
 <!-- launch R2D2 base  -->
 <include file="$(find robotnik_pp_planner)/launch/R2D2_base.launch" />
 <!-- fire up loc  -->
-<include file="$(find robotnik_pp_planner)/launch/R2D2_amcl.launch" />
+<!--include file="$(find robotnik_pp_planner)/launch/R2D2_fake_amcl.launch" /-->
 
- <node name="rviz" pkg="rviz" type="rviz" args="-d $(find robotnik_pp_planner)/rviz/R2D2_navigation.rviz" />
+ <node name="rviz" pkg="rviz" type="rviz" args="-d $(find robotnik_pp_planner)/rviz/move.rviz" />
 </launch>
 

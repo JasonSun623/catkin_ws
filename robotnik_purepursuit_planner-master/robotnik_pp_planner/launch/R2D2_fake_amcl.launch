@@ -16,11 +16,10 @@
   <param name="odom_frame_id" value="odom" />
  <remap from="base_pose_ground_truth" to="/wheel_diff_controller/odom" />
 </node>
-
-<!-- the virtual amcl need a transform from map to odom-->
-<!--node pkg="tf" type="static_transform_publisher" name="tf_map_to_odom" args="0 0 0 0 0 0 /map /odom 10" /-->
-<!--node pkg="tf" type="static_transform_publisher" name="odom_map_broadcaster"
-args="0 0 0 0 0 0 /map /odom 30" /-->
+<!--fireup ekf -->
+<!--node pkg="robot_localization" type="ekf_localization_node" name="ekf_localization_node" clear_params="true" output="screen">
+  <rosparam command="load" file="$(find robotnik_pp_planner)/launch/ekf.yaml" />
+</node-->
 
 
 </launch>

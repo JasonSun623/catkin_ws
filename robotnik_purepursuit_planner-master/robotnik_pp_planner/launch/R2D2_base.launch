@@ -11,7 +11,7 @@
   <!-- nofootprint.xacro remove the base_footprint link -->
   <arg name="model" default="$(find robotnik_pp_planner)/urdf/R2D2_base.xacro" />
    <include file="$(find gazebo_ros)/launch/empty_world.launch"> 
-    <arg name="world_name" value="$(find robotnik_pp_planner)/worlds/coveragespace.world"/>
+    <!--arg name="world_name" value="$(find robotnik_pp_planner)/worlds/coveragespace.world"/-->
     <!-- !!!!
          load the wrold and robot (if saved in it )into gazebo.
          if we use the spawn_model node in gazebo_ros pkg(such as following),we need send the

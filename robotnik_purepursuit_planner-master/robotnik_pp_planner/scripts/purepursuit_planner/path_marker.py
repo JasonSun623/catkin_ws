@@ -55,7 +55,7 @@ class PurepursuitClient():
 		# listening for goals.
 		#rospy.loginfo('PurepursuitClient waiting for server start...') #chq
 		rospy.loginfo("PurepursuitClient waiting for server start...") #chq
-		if self.client.wait_for_server(timeout = rospy.Duration(6.0) ):
+		if self.client.wait_for_server(timeout = rospy.Duration(30.0) ):
 			rospy.loginfo("PurepursuitClient watting for server suc!") #chq
 			#if self.getState() != GoalStatus.LOST:
 			#	rospy.loginfo('PurepursuitClient: planner is tracking a goal')
@@ -184,7 +184,7 @@ class PointPathManager(InteractiveMarkerServer):
 		# Locates and loads the UI file into the widget
 		rp = rospkg.RosPack()		
 		# loads a ui file for the dialog
-		self.points_file_path = os.path.join(rp.get_path('robotnik_pp_planner'), 'config', 'coveragespace_test.txt')
+		self.points_file_path = os.path.join(rp.get_path('robotnik_pp_planner'), 'config', 'hy_onemeter.txt')
 		
 		#rospy.Timer(rospy.Duration(5), self.createNewPoint)
 		self._go_service = rospy.Service('%s/go'%rospy.get_name(), Empty, self.goService)
@@ -299,7 +299,7 @@ class PointPathManager(InteractiveMarkerServer):
 			# line format = 'p1;p1->0.4;0.5;5.2;0.4'
 			a = line.split(';')
 			# a = ['p1', 'p1->0.4', '0.5', '0.4', '0.4'] // [ ID, DESCRIPTION, X, Y, SPEED]
-			if len(a) == 5:
+			if len(a) == 5 and a[0] != 'CleanArea':
 				
 				new_point = PointPath(self.frame_id, a[0], a[1], speed = float(a[4]))
 				new_point.pose.position.x = float(a[2])
