@@ -40,8 +40,8 @@ using namespace amcl;
 ////////////////////////////////////////////////////////////////////////////////
 // Default constructor
 AMCLLaser::AMCLLaser(size_t max_beams, map_t* map) : AMCLSensor(), 
-						     max_samples(0), max_obs(0), 
-						     temp_obs(NULL)
+                 max_samples(0), max_obs(0),
+                 temp_obs(NULL)
 {
   this->time = 0.0;
 
@@ -54,10 +54,10 @@ AMCLLaser::AMCLLaser(size_t max_beams, map_t* map) : AMCLSensor(),
 AMCLLaser::~AMCLLaser()
 {
   if(temp_obs){
-	for(int k=0; k < max_samples; k++){
-	  delete [] temp_obs[k];
-	}
-	delete []temp_obs; 
+  for(int k=0; k < max_samples; k++){
+    delete [] temp_obs[k];
+  }
+  delete []temp_obs;
   }
 }
 
@@ -96,13 +96,13 @@ AMCLLaser::SetModelLikelihoodField(double z_hit,
 
 void 
 AMCLLaser::SetModelLikelihoodFieldProb(double z_hit,
-				       double z_rand,
-				       double sigma_hit,
-				       double max_occ_dist,
-				       bool do_beamskip,
-				       double beam_skip_distance,
-				       double beam_skip_threshold, 
-				       double beam_skip_error_threshold)
+               double z_rand,
+               double sigma_hit,
+               double max_occ_dist,
+               bool do_beamskip,
+               double beam_skip_distance,
+               double beam_skip_threshold,
+               double beam_skip_error_threshold)
 {
   this->model_type = LASER_MODEL_LIKELIHOOD_FIELD_PROB;
   this->z_hit = z_hit;
@@ -141,6 +141,7 @@ bool AMCLLaser::UpdateSensor(pf_t *pf, AMCLSensorData *data)
 // Determine the probability for the given pose
 double AMCLLaser::BeamModel(AMCLLaserData *data, pf_sample_set_t* set)
 {
+  ///直接在单一激光射线方向上比较测量障碍物与理论地图障碍物的距离差的大小　作为　权重评价
   AMCLLaser *self;
   int i, j, step;
   double z, pz;
@@ -215,6 +216,7 @@ double AMCLLaser::BeamModel(AMCLLaserData *data, pf_sample_set_t* set)
 
 double AMCLLaser::LikelihoodFieldModel(AMCLLaserData *data, pf_sample_set_t* set)
 {
+  ///使用最近邻搜索，make sure 测量障碍物点的占用概率，作为权重策略
   AMCLLaser *self;
   int i, j, step;
   double z, pz;
@@ -308,6 +310,7 @@ double AMCLLaser::LikelihoodFieldModel(AMCLLaserData *data, pf_sample_set_t* set
 
 double AMCLLaser::LikelihoodFieldModelProb(AMCLLaserData *data, pf_sample_set_t* set)
 {
+  ///与上一个LikelihoodFieldModel模型相比，多了激光（人群 and so on ）概率剔除处理
   AMCLLaser *self;
   int i, j, step;
   double z, pz;
@@ -321,8 +324,10 @@ double AMCLLaser::LikelihoodFieldModelProb(AMCLLaserData *data, pf_sample_set_t*
   self = (AMCLLaser*) data->sensor;
 
   total_weight = 0.0;
-
-  step = ceil((data->range_count) / static_cast<double>(self->max_beams)); 
+  //ceil 是天花板的意思，有向上的意思 返回大于或者等于指定表达式的最小整数
+  //floo 是地面，地板的意思，有下面的意思，所以，此函数是向下取整
+  //round 大约，环绕，在某某四周，附近的意思，所以，可以取其大约的意思，在函数中是四舍五入
+  step = ceil((data->range_count) / static_cast<double>(self->max_beams));
   
   // Step size must be at least 1
   if(step < 1)
@@ -372,7 +377,7 @@ double AMCLLaser::LikelihoodFieldModelProb(AMCLLaserData *data, pf_sample_set_t*
       fprintf(stderr, "Reallocing temp weights %d - %d\n", self->max_samples, self->max_obs);
     }
   }
-
+  ///遍历整个粒子集合，重新计算权重
   // Compute the sample weights
   for (j = 0; j < set->sample_count; j++)
   {
@@ -383,11 +388,11 @@ double AMCLLaser::LikelihoodFieldModelProb(AMCLLaserData *data, pf_sample_set_t*
     pose = pf_vector_coord_add(self->laser_pose, pose);
 
     log_p = 0;
-    
+    /// !!!chq every sample check loop reset the  beam_ind
     beam_ind = 0;
-    
+
     for (i = 0; i < data->range_count; i += step, beam_ind++)
-    {
+    {//range_count = laser range.size() chq
       obs_range = data->ranges[i][0];
       obs_bearing = data->ranges[i][1];
 
@@ -414,14 +419,14 @@ double AMCLLaser::LikelihoodFieldModelProb(AMCLLaserData *data, pf_sample_set_t*
       
       // Part 1: Get distance from the hit to closest obstacle.
       // Off-map penalized as max distance
-      
+      // 测量到地图边界　惩罚为最大距离对应的概率
       if(!MAP_VALID(self->map, mi, mj)){
         pz += self->z_hit * max_dist_prob;
        }
       else{
         z = self->map->cells[MAP_INDEX(self->map,mi,mj)].occ_dist;
         if(z < beam_skip_distance){
-          obs_count[beam_ind] += 1;
+          obs_count[beam_ind] += 1;//
         }
         pz += self->z_hit * exp(-(z * z) / z_hit_denom);
       }
@@ -467,29 +472,27 @@ double AMCLLaser::LikelihoodFieldModelProb(AMCLLaserData *data, pf_sample_set_t*
     //if that's the case we integrate all the beams and hope the filter might converge to 
     //the right solution
     bool error = false; 
-
+    ///如果剔除的激光数量超过error_skip阈值，认为收敛到错误位置
     if(skipped_beam_count >= (beam_ind * self->beam_skip_error_threshold)){
       fprintf(stderr, "Over %f%% of the observations were not in the map - pf may have converged to wrong pose - integrating all observations\n", (100 * self->beam_skip_error_threshold));
       error = true; 
     }
 
     for (j = 0; j < set->sample_count; j++)
-      {
+    {
       sample = set->samples + j;
       pose = sample->pose;
 
       log_p = 0;
 
-	for (beam_ind = 0; beam_ind < self->max_beams; beam_ind++){
-	  if(error || obs_mask[beam_ind]){
-	    log_p += log(self->temp_obs[j][beam_ind]);
-	  }
-	}
-	
-	sample->weight *= exp(log_p);
-	
-	total_weight += sample->weight;
-      }      
+      for (beam_ind = 0; beam_ind < self->max_beams; beam_ind++){
+        if(error || obs_mask[beam_ind]){
+          log_p += log(self->temp_obs[j][beam_ind]);
+        }
+      }
+      sample->weight *= exp(log_p);
+      total_weight += sample->weight;
+    }
   }
 
   delete [] obs_count; 

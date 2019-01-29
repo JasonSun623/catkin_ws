@@ -32,6 +32,9 @@
 #include "pf_kdtree.h"
 
 #ifdef __cplusplus
+
+
+
 extern "C" {
 #endif
 
@@ -146,6 +149,15 @@ void pf_free(pf_t *pf);
 
 // Initialize the filter using a guassian
 void pf_init(pf_t *pf, pf_vector_t mean, pf_matrix_t cov);
+
+///chq use the method of pf_init to generator a guassian pdf sample
+/*
+ * output pose:pdf pose
+*/
+pf_vector_t pf_get_one_guassian_sample(pf_t *pf, pf_vector_t mean, pf_matrix_t cov);
+
+///chq reset the pf set when get full sample
+void resetThePfSet(pf_t *pf, pf_vector_t* v_mean);
 
 // Initialize the filter using some model
 void pf_init_model(pf_t *pf, pf_init_model_fn_t init_fn, void *init_data);

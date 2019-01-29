@@ -142,9 +142,10 @@ void pf_init(pf_t *pf, pf_vector_t mean, pf_matrix_t cov)
   pf_kdtree_clear(set->kdtree);
 
   set->sample_count = pf->max_samples;
+  ///disable by chq
 
   pdf = pf_pdf_gaussian_alloc(mean, cov);
-    
+
   // Compute the new sample poses
   for (i = 0; i < set->sample_count; i++)
   {
@@ -155,7 +156,23 @@ void pf_init(pf_t *pf, pf_vector_t mean, pf_matrix_t cov)
     // Add sample to histogram
     pf_kdtree_insert(set->kdtree, sample->pose, sample->weight);
   }
+  #if 0
+  double search_radius = 5;
+  for (i = 0; i < set->sample_count; i++){
+    for(;;)
+    {
+      double x = mean[0]+drand48()*2*search_radius - search_radius;
+      double y = mean[1]+drand48()*2*search_radius - search_radius;
 
+      // Check that it's a free cell
+      int i,j;
+      i = MAP_GXWX(map,x);
+      j = MAP_GYWY(map,y);
+      if(MAP_VALID(map,i,j) && (map->cells[MAP_INDEX(map,i,j)].occ_state == -1))
+        break;
+    }
+  }
+  #endif
   pf->w_slow = pf->w_fast = 0.0;
 
   pf_pdf_gaussian_free(pdf);
@@ -167,6 +184,51 @@ void pf_init(pf_t *pf, pf_vector_t mean, pf_matrix_t cov)
   pf_init_converged(pf);
 
   return;
+}
+
+pf_vector_t pf_get_one_guassian_sample(pf_t *pf, pf_vector_t mean, pf_matrix_t cov){
+  pf_vector_t pose;
+  pf_pdf_gaussian_t *pdf;
+  pdf = pf_pdf_gaussian_alloc(mean, cov);
+  pose = pf_pdf_gaussian_sample(pdf);
+  return pose;
+}
+
+void resetThePfSet(pf_t *pf, pf_vector_t* v_mean){
+  int i;
+  int max_count = pf->max_samples;
+  if(!max_count)return;
+  pf_sample_set_t *set;
+  pf_sample_t *sample;
+
+  set = pf->sets + pf->current_set;
+
+  // Create the kd tree for adaptive sampling
+  pf_kdtree_clear(set->kdtree);
+
+  set->sample_count = pf->max_samples;
+  // Compute the new sample poses
+  double weight = 1.0 / max_count;
+  for (i = 0; i < max_count; i++)
+  {
+    // Add sample to histogram
+    //printf("pf.resetThePfSet.pf_kdtree_insert.v_mean[%d]:(%.6f,%.6f,%.6f) w:%.6f\n",i,v_mean[i].v[0],v_mean[i].v[1],v_mean[i].v[2],weight);
+    sample = set->samples + i;
+    sample->weight = weight;
+    sample->pose = v_mean[i];
+    // Add sample to histogram
+    pf_kdtree_insert(set->kdtree, sample->pose, sample->weight);
+
+  }
+
+  pf->w_slow = pf->w_fast = 0.0;
+  // Re-compute cluster statistics
+  //printf("pf.resetThePfSet.pf_cluster_stats\n");
+  pf_cluster_stats(pf, set);
+ // printf("pf.resetThePfSet.pf_init_converged\n");
+  //set converged to 0
+  pf_init_converged(pf);
+
 }
 
 
@@ -190,7 +252,6 @@ void pf_init_model(pf_t *pf, pf_init_model_fn_t init_fn, void *init_data)
     sample = set->samples + i;
     sample->weight = 1.0 / pf->max_samples;
     sample->pose = (*init_fn) (init_data);
-
     // Add sample to histogram
     pf_kdtree_insert(set->kdtree, sample->pose, sample->weight);
   }

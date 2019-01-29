@@ -1018,6 +1018,7 @@ AmclNode::globalLocalizationCallback(std_srvs::Empty::Request& req,
   }
   boost::recursive_mutex::scoped_lock gl(configuration_mutex_);
   ROS_INFO("Initializing with uniform distribution");
+  //传入uniformPoseGenerator函数，在采样个数限定下,每次调用生成一个地图内的随机位置
   pf_init_model(pf_, (pf_init_model_fn_t)AmclNode::uniformPoseGenerator,
                 (void *)map_);
   ROS_INFO("Global initialisation done!");
@@ -1495,6 +1496,7 @@ AmclNode::handleInitialPoseMessage(const geometry_msgs::PoseWithCovarianceStampe
 
   tf::Pose pose_old, pose_new;
   tf::poseMsgToTF(msg.pose.pose, pose_old);
+  ///map2base * base2odom = map2oodm chq
   pose_new = pose_old * tx_odom;
 
   // Transform into the global frame
@@ -1535,6 +1537,7 @@ AmclNode::handleInitialPoseMessage(const geometry_msgs::PoseWithCovarianceStampe
 void
 AmclNode::applyInitialPose()
 {
+#if 0
   boost::recursive_mutex::scoped_lock cfl(configuration_mutex_);
   if( initial_pose_hyp_ != NULL && map_ != NULL ) {
     pf_init(pf_, initial_pose_hyp_->pf_pose_mean, initial_pose_hyp_->pf_pose_cov);
@@ -1542,5 +1545,52 @@ AmclNode::applyInitialPose()
 
     delete initial_pose_hyp_;
     initial_pose_hyp_ = NULL;
+  }
+#endif
+  boost::recursive_mutex::scoped_lock cfl(configuration_mutex_);
+  if( initial_pose_hyp_ != NULL && map_ != NULL ) {
+
+     int i;
+     pf_vector_t pose;
+     pf_vector_t mean = initial_pose_hyp_->pf_pose_mean;
+     pf_matrix_t cov = initial_pose_hyp_->pf_pose_cov;
+     pf_vector_t mean_search;
+     int max_sample = pf_->max_samples;
+     pf_vector_t v_mean[max_sample];
+
+     mean_search.v[2] = mean.v[2];
+     double search_radius = 5.0;//距离搜索范围，值越大，搜索范围越大，可能导致的匹配误差越大
+     double angle_error_para = 0.6;//角度搜索范围系数[0-1]，比例越大，全局性越好，但是匹配误差也会越大
+     for (i = 0; i < max_sample; i++)
+     {
+       double x,y,angle;
+       int q,p;
+       while(1)
+       {
+         x = mean.v[0] + drand48()*2*search_radius - search_radius;
+         y = mean.v[1] + drand48()*2*search_radius - search_radius;
+         angle = mean.v[2] + angle_error_para *(drand48()*2*M_PI - M_PI);//
+         angle = normalize(angle);
+         // Check that it's a free cell
+         q = MAP_GXWX(map_,x);
+         p = MAP_GYWY(map_,y);
+         if(MAP_VALID(map_,q,p) && (map_->cells[MAP_INDEX(map_,q,p)].occ_state == -1))
+           break;
+       }
+       //std::cout << "AmclNode::applyInitialPose.search (x,y): (" << x << y <<") \n";
+       mean_search.v[0] = x;
+       mean_search.v[1] = y;
+       mean_search.v[2] = angle;
+       //结合了之前init算法的优势，建立高斯密度函数，在随机点处高斯采样
+       pose = pf_get_one_guassian_sample(pf_,mean_search, cov);
+       //std::cout << "AmclNode::applyInitialPose.pf_get_one_guassian_sample.pose(x,y): (" << pose.v[0] << pose.v[1] <<") \n";
+       v_mean[i] = pose;
+     }
+     //std::cout << "AmclNode::applyInitialPose.bef resetThePfSet \n";
+     resetThePfSet(pf_,v_mean);
+
+     pf_init_ = false;
+     delete initial_pose_hyp_;
+     initial_pose_hyp_ = NULL;
   }
 }
