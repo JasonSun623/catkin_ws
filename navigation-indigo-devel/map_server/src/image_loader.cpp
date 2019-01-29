@@ -108,6 +108,8 @@ loadMapFromFile(nav_msgs::GetMap::Response* resp,
 
   // Copy pixel data into the map structure
   pixels = (unsigned char*)(img->pixels);
+  //加载图像时yuy轴坐标数据关系是倒过来的，即图像索引００　对应坐标比索引0,h对应的坐标大
+  //所以为了保持　数组０,０坐标最小　w,h最大，所以图像数据读取时，y轴索引倒过来
   for(j = 0; j < resp->map.info.height; j++)
   {
     for (i = 0; i < resp->map.info.width; i++)
@@ -129,6 +131,7 @@ loadMapFromFile(nav_msgs::GetMap::Response* resp,
 
       if(mode==RAW){//This mode will output x for each pixel, so output values are [0, 255].
           value = color_avg;
+           ///chq 图片的左上角对应地图数据是map[0][height_size -1],这样左下角地图数据是map[0][0],地图数组数据左下角坐标最小，右上角最大，与实际相对应
           resp->map.data[MAP_IDX(resp->map.info.width,i,resp->map.info.height - j - 1)] = value;
           continue;
       }
@@ -151,7 +154,7 @@ loadMapFromFile(nav_msgs::GetMap::Response* resp,
         double ratio = (occ - free_th) / (occ_th - free_th);
         value = 99 * ratio;
       }
-           
+      ///chq 图片的左上角对应地图数据是map[0][height_size -1],这样左下角地图数据是map[0][0],地图数组数据左下角坐标最小，右上角最大，与实际相对应
       resp->map.data[MAP_IDX(resp->map.info.width,i,resp->map.info.height - j - 1)] = value;
     }
   }

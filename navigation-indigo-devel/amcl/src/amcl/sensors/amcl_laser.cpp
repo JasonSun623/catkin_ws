@@ -179,13 +179,16 @@ double AMCLLaser::BeamModel(AMCLLaserData *data, pf_sample_set_t* set)
 
       // Part 1: good, but noisy, hit
       z = obs_range - map_range;
+      //测量障碍物与地图障碍物位置距离(pow(z,2))越近，概率分配越大
       pz += self->z_hit * exp(-(z * z) / (2 * self->sigma_hit * self->sigma_hit));
 
       // Part 2: short reading from unexpected obstacle (e.g., a person)
+      // 地图障碍物在测量障碍物后方，认为测量障碍物可能是人等随机障碍物，分配概率大些
       if(z < 0)
         pz += self->z_short * self->lambda_short * exp(-self->lambda_short*obs_range);
 
       // Part 3: Failure to detect obstacle, reported as max-range
+      // 如果测量距离等于激光最大测量范围值，加入Z_MAX概率权重
       if(obs_range == data->range_max)
         pz += self->z_max * 1.0;
 
@@ -230,15 +233,15 @@ double AMCLLaser::LikelihoodFieldModel(AMCLLaserData *data, pf_sample_set_t* set
   for (j = 0; j < set->sample_count; j++)
   {
     sample = set->samples + j;
-    pose = sample->pose;
+    pose = sample->pose;//遍历每个粒子，这是粒子对应的位姿，是经运动模型更新后先验位姿
 
     // Take account of the laser pose relative to the robot
-    pose = pf_vector_coord_add(self->laser_pose, pose);
+    pose = pf_vector_coord_add(self->laser_pose, pose);///相对激光头[head]位置转到绝对激光位置
 
     p = 1.0;
 
     // Pre-compute a couple of things
-    double z_hit_denom = 2 * self->sigma_hit * self->sigma_hit;
+    double z_hit_denom = 2 * self->sigma_hit * self->sigma_hit;//测量噪声的方差chq
     double z_rand_mult = 1.0/data->range_max;
 
     step = (data->range_count - 1) / (self->max_beams - 1);
@@ -246,13 +249,15 @@ double AMCLLaser::LikelihoodFieldModel(AMCLLaserData *data, pf_sample_set_t* set
     // Step size must be at least 1
     if(step < 1)
       step = 1;
-
+    // 开始通过利用与最近物体的欧氏距离计算激光模型似然的算法，
+    // 对所有特征（激光数据）进行遍历
     for (i = 0; i < data->range_count; i += step)
     {
       obs_range = data->ranges[i][0];
       obs_bearing = data->ranges[i][1];
 
       // This model ignores max range readings
+      // 似然域测量模型简单地将最大距离读数丢弃
       if(obs_range >= data->range_max)
         continue;
 
@@ -263,7 +268,7 @@ double AMCLLaser::LikelihoodFieldModel(AMCLLaserData *data, pf_sample_set_t* set
       pz = 0.0;
 
       // Compute the endpoint of the beam
-      hit.v[0] = pose.v[0] + obs_range * cos(pose.v[2] + obs_bearing);
+      hit.v[0] = pose.v[0] + obs_range * cos(pose.v[2] + obs_bearing);///相对激光点[endpoint]位置转到绝对激光点位置
       hit.v[1] = pose.v[1] + obs_range * sin(pose.v[2] + obs_bearing);
 
       // Convert to map grid coords.
@@ -277,6 +282,7 @@ double AMCLLaser::LikelihoodFieldModel(AMCLLaserData *data, pf_sample_set_t* set
         z = self->map->max_occ_dist;
       else
         z = self->map->cells[MAP_INDEX(self->map,mi,mj)].occ_dist;
+      //将正态分布与均匀分布混合后得到的似然结果
       // Gaussian model
       // NOTE: this should have a normalization of 1/(sqrt(2pi)*sigma)
       pz += self->z_hit * exp(-(z * z) / z_hit_denom);
@@ -410,14 +416,14 @@ double AMCLLaser::LikelihoodFieldModelProb(AMCLLaserData *data, pf_sample_set_t*
       // Off-map penalized as max distance
       
       if(!MAP_VALID(self->map, mi, mj)){
-	pz += self->z_hit * max_dist_prob;
-      }
+        pz += self->z_hit * max_dist_prob;
+       }
       else{
-	z = self->map->cells[MAP_INDEX(self->map,mi,mj)].occ_dist;
-	if(z < beam_skip_distance){
-	  obs_count[beam_ind] += 1;
-	}
-	pz += self->z_hit * exp(-(z * z) / z_hit_denom);
+        z = self->map->cells[MAP_INDEX(self->map,mi,mj)].occ_dist;
+        if(z < beam_skip_distance){
+          obs_count[beam_ind] += 1;
+        }
+        pz += self->z_hit * exp(-(z * z) / z_hit_denom);
       }
        
       // Gaussian model
@@ -432,10 +438,10 @@ double AMCLLaser::LikelihoodFieldModelProb(AMCLLaserData *data, pf_sample_set_t*
       // TODO: outlier rejection for short readings
             
       if(!do_beamskip){
-	log_p += log(pz);
+        log_p += log(pz);
       }
       else{
-	self->temp_obs[j][beam_ind] = pz; 
+         self->temp_obs[j][beam_ind] = pz;
       }
     }
     if(!do_beamskip){
@@ -448,11 +454,11 @@ double AMCLLaser::LikelihoodFieldModelProb(AMCLLaserData *data, pf_sample_set_t*
     int skipped_beam_count = 0; 
     for (beam_ind = 0; beam_ind < self->max_beams; beam_ind++){
       if((obs_count[beam_ind] / static_cast<double>(set->sample_count)) > beam_skip_threshold){
-	obs_mask[beam_ind] = true;
+        obs_mask[beam_ind] = true;
       }
       else{
-	obs_mask[beam_ind] = false;
-	skipped_beam_count++; 
+        obs_mask[beam_ind] = false;
+        skipped_beam_count++;
       }
     }
 
@@ -469,10 +475,10 @@ double AMCLLaser::LikelihoodFieldModelProb(AMCLLaserData *data, pf_sample_set_t*
 
     for (j = 0; j < set->sample_count; j++)
       {
-	sample = set->samples + j;
-	pose = sample->pose;
+      sample = set->samples + j;
+      pose = sample->pose;
 
-	log_p = 0;
+      log_p = 0;
 
 	for (beam_ind = 0; beam_ind < self->max_beams; beam_ind++){
 	  if(error || obs_mask[beam_ind]){

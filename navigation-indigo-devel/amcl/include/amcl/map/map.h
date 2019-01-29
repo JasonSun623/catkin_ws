@@ -130,10 +130,15 @@ void map_draw_wifi(map_t *map, struct _rtk_fig_t *fig, int index);
  **************************************************************************/
 
 // Convert from map index to world coords
+//the origin point is set in the center of the map (convertmap func) chq
 #define MAP_WXGX(map, i) (map->origin_x + ((i) - map->size_x / 2) * map->scale)
 #define MAP_WYGY(map, j) (map->origin_y + ((j) - map->size_y / 2) * map->scale)
 
 // Convert from world coords to map coords
+//floor()是向负无穷大舍入，floor(-10.5) == -11；
+//ceil()是向正无穷大舍入，ceil(-10.5) == -10
+
+
 #define MAP_GXWX(map, x) (floor((x - map->origin_x) / map->scale + 0.5) + map->size_x / 2)
 #define MAP_GYWY(map, y) (floor((y - map->origin_y) / map->scale + 0.5) + map->size_y / 2)
 

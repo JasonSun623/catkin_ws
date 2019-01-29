@@ -320,7 +320,7 @@ AmclNode::AmclNode() :
         resample_count_(0),
         odom_(NULL),
         laser_(NULL),
-	      private_nh_("~"),
+        private_nh_("~"),
         initial_pose_hyp_(NULL),
         first_map_received_(false),
         first_reconfigure_call_(true)
@@ -423,7 +423,7 @@ AmclNode::AmclNode() :
   pose_pub_ = nh_.advertise<geometry_msgs::PoseWithCovarianceStamped>("amcl_pose", 2, true);
   particlecloud_pub_ = nh_.advertise<geometry_msgs::PoseArray>("particlecloud", 2, true);
   global_loc_srv_ = nh_.advertiseService("global_localization", 
-					 &AmclNode::globalLocalizationCallback,
+           &AmclNode::globalLocalizationCallback,
                                          this);
   nomotion_update_srv_= nh_.advertiseService("request_nomotion_update", &AmclNode::nomotionUpdateCallback, this);
   set_map_srv_= nh_.advertiseService("set_map", &AmclNode::setMapCallback, this);
@@ -441,7 +441,8 @@ AmclNode::AmclNode() :
   if(use_map_topic_) {
     map_sub_ = nh_.subscribe("map", 1, &AmclNode::mapReceived, this);
     ROS_INFO("Subscribed to map topic.");
-  } else {
+  }
+  else {
     requestMap();
   }
   m_force_update = false;
@@ -572,9 +573,9 @@ void AmclNode::reconfigureCB(AMCLConfig &config, uint32_t level)
   else if(laser_model_type_ == LASER_MODEL_LIKELIHOOD_FIELD_PROB){
     ROS_INFO("Initializing likelihood field model; this can take some time on large maps...");
     laser_->SetModelLikelihoodFieldProb(z_hit_, z_rand_, sigma_hit_,
-					laser_likelihood_max_dist_, 
-					do_beamskip_, beam_skip_distance_, 
-					beam_skip_threshold_, beam_skip_error_threshold_);
+          laser_likelihood_max_dist_,
+          do_beamskip_, beam_skip_distance_,
+          beam_skip_threshold_, beam_skip_error_threshold_);
     ROS_INFO("Done initializing likelihood field model with probabilities.");
   }
   else if(laser_model_type_ == LASER_MODEL_LIKELIHOOD_FIELD){
@@ -709,7 +710,8 @@ void AmclNode::savePoseToServer()
   private_nh_.setParam("initial_cov_aa", 
                                   last_published_pose.pose.covariance[6*5+5]);
   
-  std::cout << "chq.amcl.savePoseToServer done!"<<std::endl;
+  //disable temp
+  //std::cout << "chq.amcl.savePoseToServer done!"<<std::endl;
 
 
   
@@ -754,7 +756,7 @@ void AmclNode::updatePoseFromServer()
   if(!std::isnan(tmp_pos))
     init_cov_[2] = tmp_pos;
   else
-    ROS_WARN("ignoring NAN in initial covariance AA");	
+    ROS_WARN("ignoring NAN in initial covariance AA");
 }
 
 void 
@@ -863,9 +865,9 @@ AmclNode::handleMapMessage(const nav_msgs::OccupancyGrid& msg)
   else if(laser_model_type_ == LASER_MODEL_LIKELIHOOD_FIELD_PROB){
     ROS_INFO("Initializing likelihood field model; this can take some time on large maps...");
     laser_->SetModelLikelihoodFieldProb(z_hit_, z_rand_, sigma_hit_,
-					laser_likelihood_max_dist_, 
-					do_beamskip_, beam_skip_distance_, 
-					beam_skip_threshold_, beam_skip_error_threshold_);
+               laser_likelihood_max_dist_,
+          do_beamskip_, beam_skip_distance_,
+          beam_skip_threshold_, beam_skip_error_threshold_);
     ROS_INFO("Done initializing likelihood field model.");
   }
   else
@@ -932,7 +934,8 @@ AmclNode::convertMap( const nav_msgs::OccupancyGrid& map_msg )
 
 AmclNode::~AmclNode()
 {
-  system("cd ~ && roslaunch para.launch");
+//for testing auto save init pos now disable temp
+  //system("cd ~ && roslaunch para.launch");
   delete dsrv_;
   freeMapDependentMemory();
   delete laser_scan_filter_;
@@ -1027,9 +1030,9 @@ bool
 AmclNode::nomotionUpdateCallback(std_srvs::Empty::Request& req,
                                      std_srvs::Empty::Response& res)
 {
-	m_force_update = true;
-	//ROS_INFO("Requesting no-motion update");
-	return true;
+  m_force_update = true;
+  //ROS_INFO("Requesting no-motion update");
+  return true;
 }
 
 bool
@@ -1047,12 +1050,14 @@ AmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
 {
   last_laser_received_ts_ = ros::Time::now();
   if( map_ == NULL ) {
+    ROS_ERROR("AmclNode::laserReceived.map is null return!");//CHQ 20190128
     return;
   }
   boost::recursive_mutex::scoped_lock lr(configuration_mutex_);
   int laser_index = -1;
 
   // Do we have the base->base_laser Tx yet?
+  /// for more than a laser ///chq
   if(frame_to_laser_.find(laser_scan->header.frame_id) == frame_to_laser_.end())
   {
     ROS_DEBUG("Setting up laser %d (frame_id=%s)\n", (int)frame_to_laser_.size(), laser_scan->header.frame_id.c_str());
@@ -1081,7 +1086,7 @@ AmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
     laser_pose_v.v[0] = laser_pose.getOrigin().x();
     laser_pose_v.v[1] = laser_pose.getOrigin().y();
     // laser mounting angle gets computed later -> set to 0 here!
-    laser_pose_v.v[2] = 0;
+    laser_pose_v.v[2] = 0;///??????chq unknown
     lasers_[laser_index]->SetLaserPose(laser_pose_v);
     ROS_DEBUG("Received laser's pose wrt robot: %.3f %.3f %.3f",
               laser_pose_v.v[0],
@@ -1110,7 +1115,7 @@ AmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
   {
     // Compute change in pose
     //delta = pf_vector_coord_sub(pose, pf_odom_pose_);
-    delta.v[0] = pose.v[0] - pf_odom_pose_.v[0];
+    delta.v[0] = pose.v[0] - pf_odom_pose_.v[0];//pose: this time laser pose ,pf_odom_pose_:last time pose
     delta.v[1] = pose.v[1] - pf_odom_pose_.v[1];
     delta.v[2] = angle_diff(pose.v[2], pf_odom_pose_.v[2]);
 
@@ -1158,6 +1163,7 @@ AmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
     odata.delta = delta;
 
     // Use the action data to update the filter
+    // 用运动模型来更新现有的每一个粒子的位姿（这里得到的只是当前时刻的先验位姿）
     odom_->UpdateAction(pf_, (AMCLSensorData*)&odata);
 
     // Pose at last filter update
@@ -1265,6 +1271,7 @@ AmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
 
   if(resampled || force_publication)
   {
+    /// //遍历所有粒子簇，找出权重均值最大的簇，其平均位姿就是我们要求的机器人后验位姿，到此一次循环已经所有完成
     // Read out the current hypotheses
     double max_weight = 0.0;
     int max_weight_hyp = -1;
@@ -1341,7 +1348,7 @@ AmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
          puts("");
          }
        */
-
+      ///将位姿、粒子集、协方差矩阵等进行更新、发布
       pose_pub_.publish(p);
       last_published_pose = p;
 
@@ -1361,6 +1368,15 @@ AmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
         tf::Stamped<tf::Pose> tmp_tf_stamped (tmp_tf.inverse(),
                                               laser_scan->header.stamp,
                                               base_frame_id_);
+       //transformPose Transform a Stamped Pose Message into the target frame
+       //This can throw all that lookupTransform can throw as well as tf::InvalidTransform
+        //void transformPose(
+        //const std::string& target_frame,
+        //const geometry_msgs::PoseStamped& stamped_in,
+        //geometry_msgs::PoseStamped& stamped_out) const;
+       //chq odom2map =odom2pos * pos2map = odom2pos * inv(map2pos)
+        //transformPose所作的事　是　将base_link下的数据(pos2map)　转换到　目标　odom上去
+        // 即　获得　odom 到base_link的转换　乘以 　base_link下的数据
         this->tf_->transformPose(odom_frame_id_,
                                  tmp_tf_stamped,
                                  odom_to_map);
@@ -1381,6 +1397,7 @@ AmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
         // tolerance time so that odom can be used
         ros::Time transform_expiration = (laser_scan->header.stamp +
                                           transform_tolerance_);
+        //chq map2odom = inv(odom2map)
         tf::StampedTransform tmp_tf_stamped(latest_tf_.inverse(),
                                             transform_expiration,
                                             global_frame_id_, odom_frame_id_);

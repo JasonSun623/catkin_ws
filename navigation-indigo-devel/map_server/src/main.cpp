@@ -379,6 +379,7 @@ class MapServer
         exit(-1);
       }
       else{
+        ///read .map fromat ap
         if(sep_tmp[sep_tmp.size()-1] == "map"){
           //read .map map
           //default conf
@@ -391,7 +392,7 @@ class MapServer
           map = map_;
           map.LoadFromFile(fname,&map_resp_,res);
          }
-        //read image map
+        ///read image map
         else{
           ROS_INFO("Map_server.Reading .yaml default file");
           deprecated = (res != 0);

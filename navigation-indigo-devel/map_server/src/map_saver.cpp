@@ -34,9 +34,10 @@
 #include "nav_msgs/GetMap.h"
 #include "tf/LinearMath/Matrix3x3.h"
 #include "geometry_msgs/Quaternion.h"
-
+#include <fstream>
+#include <iostream>
 using namespace std;
- 
+#define MAP_IDX(sx, i, j) ((sx) * (j) + (i))
 /**
  * @brief Map generation node.
  */
@@ -58,7 +59,7 @@ class MapGenerator
                map->info.height,
                map->info.resolution);
 
-
+     ///step 1---------------------------- save to pgm format
       std::string mapdatafile = mapname_ + ".pgm";
       ROS_INFO("Writing map occupancy data to %s", mapdatafile.c_str());
       FILE* out = fopen(mapdatafile.c_str(), "w");
@@ -99,7 +100,6 @@ occupied_thresh: 0.65
 free_thresh: 0.196
 
        */
-
       geometry_msgs::Quaternion orientation = map->info.origin.orientation;
       tf::Matrix3x3 mat(tf::Quaternion(orientation.x, orientation.y, orientation.z, orientation.w));
       double yaw, pitch, roll;
@@ -110,7 +110,71 @@ free_thresh: 0.196
 
       fclose(yaml);
 
-      ROS_INFO("Done\n");
+      ROS_INFO("Step 1 Save pgm map Done!\n");
+
+      ///-----------------step 2 save to .map format added by chq
+      std::string map_file = mapname_ + ".map";
+      ROS_INFO("Writing map occupancy data to %s", map_file.c_str());
+      ofstream out_map;
+      out_map.open(map_file.c_str(), ios::out|ios::trunc);
+      if (!out_map)
+      {
+        ROS_ERROR("Couldn't save map file to %s", map_file.c_str());
+        return;
+      }
+      double origin[3] = {
+        map->info.origin.position.x ,
+        map->info.origin.position.y ,
+        map->info.origin.position.z
+      };
+      int h = map->info.height;
+      int w = map->info.width;
+      double res = map->info.resolution;
+      std::vector<pair<int,int> > mPoints,mUnKnownPoints;
+      //首先整理数据，障碍物数据　与　位置数据　分别各归为一类
+      int v;
+      int w_x,w_y;
+      //这里的索引对应的就是地图数据索引　而不是　图像索引
+      //so 00 refer to lef down cord data
+      //w h refer to topup cord data
+      for(int j = 0; j < h; j++)
+      {
+        for (int i = 0; i < w; i++)
+        {
+           v = map->data[MAP_IDX( w,i, j)];
+           w_x = (int)(1000.0*(origin[0] + i * res));//origin[0-2] refer to  the low -left 2d pos(*1000 refer to  m to mm)
+           w_y = (int)(1000.0*(origin[1] + j * res));
+           if (v == 0) { //occ [0,0.1)
+             //blank do nothing
+           } else if (v == +100) { //occ (0.65,1]
+             mPoints.push_back( std::make_pair(w_x,w_y) );
+           }
+           ///!-------为了节省内存，不保存unknowndata--------!////
+           ///else { //occ [0.1,0.65]
+           ///  mUnKnownPoints.push_back( std::make_pair(w_x,w_y) );
+           ///}
+        }
+      }
+      //cal max pos to store
+      w_x = (int)(1000.0*(origin[0] + w * res));//origin[0-2] refer to  the low -left 2d pos(*1000 refer to  m to mm)
+      w_y = (int)(1000.0*(origin[1] + h * res));
+      //然后分开存储
+      //store base info
+      int allsize = mPoints.size()+mUnKnownPoints.size();
+      out_map << "2D-Map" << std::endl;
+      out_map << "MinPos: " << (int)(origin[0]*1000) << " " << (int)(origin[1]*1000) << std::endl;
+      out_map << "MaxPos: " << w_x  << " " << w_y << std::endl;
+      out_map << "NumPoints: " << allsize << std::endl;
+      out_map << "Resolution: "<< res*1000 << std::endl;//m to mm
+      out_map <<"DATA"<<std::endl;
+      for(int i = 0 ; i<mPoints.size();i++ ){
+        out_map << mPoints[i].first << " " << mPoints[i].second<<std::endl;
+      }
+      out_map <<"UNKNOWN DATA"<<std::endl;
+      for(int i = 0 ; i < mUnKnownPoints.size(); i++ ){
+        out_map << mUnKnownPoints[i].first << " " << mUnKnownPoints[i].second<<std::endl;
+      }
+      ROS_INFO("Step 2 Save .map format map Done!\n");
       saved_map_ = true;
     }
 

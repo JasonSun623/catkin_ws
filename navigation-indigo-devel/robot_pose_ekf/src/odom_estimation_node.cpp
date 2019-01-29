@@ -192,17 +192,17 @@ namespace estimation
     // activate odom
     if (!odom_active_) {
       if (!odom_initializing_){
-	odom_initializing_ = true;
-	odom_init_stamp_ = odom_stamp_;
-	ROS_INFO("Initializing Odom sensor");      
+        odom_initializing_ = true;
+        odom_init_stamp_ = odom_stamp_;
+        ROS_INFO("Initializing Odom sensor");
       }
       if ( filter_stamp_ >= odom_init_stamp_){
-	odom_active_ = true;
-	odom_initializing_ = false;
-	ROS_INFO("Odom sensor activated");      
+        odom_active_ = true;
+        odom_initializing_ = false;
+        ROS_INFO("Odom sensor activated");
       }
       else ROS_DEBUG("Waiting to activate Odom, because Odom measurements are still %f sec in the future.", 
-		    (odom_init_stamp_ - filter_stamp_).toSec());
+        (odom_init_stamp_ - filter_stamp_).toSec());
     }
     
     if (debug_){
@@ -227,7 +227,7 @@ namespace estimation
     imu_stamp_ = imu->header.stamp;
     tf::Quaternion orientation;
     quaternionMsgToTF(imu->orientation, orientation);
-    imu_meas_ = tf::Transform(orientation, tf::Vector3(0,0,0));
+    imu_meas_ = tf::Transform(orientation, tf::Vector3(0,0,0));///dat in imu chq
     for (unsigned int i=0; i<3; i++)
       for (unsigned int j=0; j<3; j++)
         imu_covariance_(i+1, j+1) = imu->orientation_covariance[3*i+j];
@@ -244,36 +244,37 @@ namespace estimation
       return;
     }
     StampedTransform base_imu_offset;
-    robot_state_.lookupTransform(base_footprint_frame_, imu->header.frame_id, imu_stamp_, base_imu_offset);
-    imu_meas_ = imu_meas_ * base_imu_offset;
+    robot_state_.lookupTransform(base_footprint_frame_, imu->header.frame_id, imu_stamp_, base_imu_offset);///imu in base  chq
+    imu_meas_ = imu_meas_ * base_imu_offset;///??? data in imu * imu in base === data in base chq
 
     imu_time_  = Time::now();
 
     // manually set covariance untile imu sends covariance
     if (imu_covariance_(1,1) == 0.0){
-      SymmetricMatrix measNoiseImu_Cov(3);  measNoiseImu_Cov = 0;
+      SymmetricMatrix measNoiseImu_Cov(3);
+      measNoiseImu_Cov = 0;
       measNoiseImu_Cov(1,1) = pow(0.00017,2);  // = 0.01 degrees / sec
       measNoiseImu_Cov(2,2) = pow(0.00017,2);  // = 0.01 degrees / sec
       measNoiseImu_Cov(3,3) = pow(0.00017,2);  // = 0.01 degrees / sec
       imu_covariance_ = measNoiseImu_Cov;
     }
 
-    my_filter_.addMeasurement(StampedTransform(imu_meas_.inverse(), imu_stamp_, base_footprint_frame_, "imu"), imu_covariance_);
+    my_filter_.addMeasurement(StampedTransform(imu_meas_.inverse(), imu_stamp_, base_footprint_frame_, "imu"), imu_covariance_);///chq tf::Transform (input), stamp_ ( timestamp ), frame_id_ (frame_id), child_frame_id_(child_frame_id)
     
     // activate imu
     if (!imu_active_) {
       if (!imu_initializing_){
-	imu_initializing_ = true;
-	imu_init_stamp_ = imu_stamp_;
-	ROS_INFO("Initializing Imu sensor");      
+        imu_initializing_ = true;
+        imu_init_stamp_ = imu_stamp_;
+        ROS_INFO("Initializing Imu sensor");
       }
       if ( filter_stamp_ >= imu_init_stamp_){
-	imu_active_ = true;
-	imu_initializing_ = false;
-	ROS_INFO("Imu sensor activated");      
+        imu_active_ = true;
+        imu_initializing_ = false;
+        ROS_INFO("Imu sensor activated");
       }
       else ROS_DEBUG("Waiting to activate IMU, because IMU measurements are still %f sec in the future.", 
-		    (imu_init_stamp_ - filter_stamp_).toSec());
+        (imu_init_stamp_ - filter_stamp_).toSec());
     }
     
     if (debug_){
@@ -306,17 +307,17 @@ namespace estimation
     // activate vo
     if (!vo_active_) {
       if (!vo_initializing_){
-	vo_initializing_ = true;
-	vo_init_stamp_ = vo_stamp_;
-	ROS_INFO("Initializing Vo sensor");      
+  vo_initializing_ = true;
+  vo_init_stamp_ = vo_stamp_;
+  ROS_INFO("Initializing Vo sensor");
       }
       if (filter_stamp_ >= vo_init_stamp_){
-	vo_active_ = true;
-	vo_initializing_ = false;
-	ROS_INFO("Vo sensor activated");      
+  vo_active_ = true;
+  vo_initializing_ = false;
+  ROS_INFO("Vo sensor activated");
       }
       else ROS_DEBUG("Waiting to activate VO, because VO measurements are still %f sec in the future.", 
-		    (vo_init_stamp_ - filter_stamp_).toSec());
+        (vo_init_stamp_ - filter_stamp_).toSec());
     }
     
     if (debug_){
@@ -347,17 +348,17 @@ namespace estimation
     // activate gps
     if (!gps_active_) {
       if (!gps_initializing_){
-	    gps_initializing_ = true;
-	    gps_init_stamp_ = gps_stamp_;
-	    ROS_INFO("Initializing GPS sensor");      
+      gps_initializing_ = true;
+      gps_init_stamp_ = gps_stamp_;
+      ROS_INFO("Initializing GPS sensor");
       }
       if (filter_stamp_ >= gps_init_stamp_){
-	    gps_active_ = true;
-	    gps_initializing_ = false;
-	    ROS_INFO("GPS sensor activated");      
+      gps_active_ = true;
+      gps_initializing_ = false;
+      ROS_INFO("GPS sensor activated");
       }
       else ROS_DEBUG("Waiting to activate GPS, because GPS measurements are still %f sec in the future.", 
-		    (gps_init_stamp_ - filter_stamp_).toSec());
+        (gps_init_stamp_ - filter_stamp_).toSec());
     }
     
     if (debug_){
@@ -376,7 +377,7 @@ namespace estimation
     // check for timing problems
     if ( (odom_initializing_ || odom_active_) && (imu_initializing_ || imu_active_) ){
       double diff = fabs( Duration(odom_stamp_ - imu_stamp_).toSec() );
-      if (diff > 1.0) ROS_ERROR("Timestamps of odometry and imu are %f seconds apart.", diff);
+      if (diff > 1.0)  ROS_ERROR("Timestamps of odometry and imu are %f seconds apart.", diff);
     }
     
     // initial value for filter stamp; keep this stamp when no sensors are active
@@ -451,12 +452,12 @@ namespace estimation
 
       // initialize filer with odometry frame
       if (imu_active_ && gps_active_ && !my_filter_.isInitialized()) {
-	Quaternion q = imu_meas_.getRotation();
+        Quaternion q = imu_meas_.getRotation();
         Vector3 p = gps_meas_.getOrigin();
         Transform init_meas_ = Transform(q, p);
         my_filter_.initialize(init_meas_, gps_stamp_);
         ROS_INFO("Kalman filter initialized with gps and imu measurement");
-      }	
+      }
       else if ( odom_active_  && !gps_used_ && !my_filter_.isInitialized()){
         my_filter_.initialize(odom_meas_, odom_stamp_);
         ROS_INFO("Kalman filter initialized with odom measurement");

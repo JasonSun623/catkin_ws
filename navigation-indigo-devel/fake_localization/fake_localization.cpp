@@ -101,12 +101,12 @@ class FakeOdomNode
 
       ros::NodeHandle private_nh("~");
       private_nh.param("odom_frame_id", odom_frame_id_, std::string("odom"));
-      private_nh.param("base_frame_id", base_frame_id_, std::string("base_link")); 
+      private_nh.param("base_frame_id", base_frame_id_, std::string("base_link"));
       private_nh.param("global_frame_id", global_frame_id_, std::string("/map"));
       private_nh.param("delta_x", delta_x_, 0.0);
       private_nh.param("delta_y", delta_y_, 0.0);
       private_nh.param("delta_yaw", delta_yaw_, 0.0);      
-      private_nh.param("transform_tolerance", transform_tolerance_, 0.1);      
+      private_nh.param("transform_tolerance", transform_tolerance_, 0.1);
       m_particleCloud.header.stamp = ros::Time::now();
       m_particleCloud.header.frame_id = global_frame_id_;
       m_particleCloud.poses.resize(1);
@@ -115,9 +115,15 @@ class FakeOdomNode
       m_offsetTf = tf::Transform(tf::createQuaternionFromRPY(0, 0, -delta_yaw_ ), tf::Point(-delta_x_, -delta_y_, 0.0));
 
       stuff_sub_ = nh.subscribe("base_pose_ground_truth", 100, &FakeOdomNode::stuffFilter, this);
+
+
       filter_sub_ = new message_filters::Subscriber<nav_msgs::Odometry>(nh, "", 100);
       filter_ = new tf::MessageFilter<nav_msgs::Odometry>(*filter_sub_, *m_tfListener, base_frame_id_, 100);
       filter_->registerCallback(boost::bind(&FakeOdomNode::update, this, _1));
+
+
+
+
 
       // subscription to "2D Pose Estimate" from RViz:
       m_initPoseSub = new message_filters::Subscriber<geometry_msgs::PoseWithCovarianceStamped>(nh, "initialpose", 1);
@@ -170,14 +176,17 @@ class FakeOdomNode
     }
 
     void update(const nav_msgs::OdometryConstPtr& message){
+      //ROS_INFO("chq.fake_localization.update start...");
       tf::Pose txi;
       tf::poseMsgToTF(message->pose.pose, txi);
       txi = m_offsetTf * txi;
+     // ROS_INFO("fake_localizaiotn.upodate.meg.frame:%s,txi.frame:%s",message->header.frame_id.c_str(),);
 
       tf::Stamped<tf::Pose> odom_to_map;
       try
       {
         m_tfListener->transformPose(odom_frame_id_, tf::Stamped<tf::Pose>(txi.inverse(), message->header.stamp, base_frame_id_), odom_to_map);
+        // odom2map = odom2baslink * baselink2map
       }
       catch(tf::TransformException &e)
       {
@@ -207,6 +216,7 @@ class FakeOdomNode
       m_particleCloud.header = m_currentPos.header;
       m_particleCloud.poses[0] = m_currentPos.pose.pose;
       m_particlecloudPub.publish(m_particleCloud);
+      //ROS_INFO("chq.fake_localization.update.m_particlecloud Pub");
     }
 
     void initPoseReceived(const geometry_msgs::PoseWithCovarianceStampedConstPtr& msg){
@@ -226,9 +236,9 @@ class FakeOdomNode
         ROS_WARN("Failed to lookup transform!");
         return;
       }
-
-      tf::Transform delta = pose * baseInMap;
-      m_offsetTf = delta * m_offsetTf;
+      ROS_INFO("chq.suc to set offset so that current pose is set to \"initialpose\"");
+      tf::Transform delta = pose * baseInMap;//chq map2baselink(change)*baselink2map(history) = map change
+      m_offsetTf = delta * m_offsetTf;// chq offset = change * offset
 
     }
 };
