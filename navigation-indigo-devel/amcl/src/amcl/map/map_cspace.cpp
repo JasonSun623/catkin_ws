@@ -139,13 +139,13 @@ void map_update_cspace(map_t *map, double max_occ_dist)
     {
       if(map->cells[MAP_INDEX(map, i, j)].occ_state == +1)
       {
-	map->cells[MAP_INDEX(map, i, j)].occ_dist = 0.0;
+  map->cells[MAP_INDEX(map, i, j)].occ_dist = 0.0;//如果占用占用距离值为０
 	cell.src_j_ = cell.j_ = j;
 	marked[MAP_INDEX(map, i, j)] = 1;
-	Q.push(cell);
+  Q.push(cell);//对占用栅格周围栅格最占用几率处理
       }
       else
-	map->cells[MAP_INDEX(map, i, j)].occ_dist = max_occ_dist;
+  map->cells[MAP_INDEX(map, i, j)].occ_dist = max_occ_dist;//当前栅格未被占用，设为最远占用距离
     }
   }
 

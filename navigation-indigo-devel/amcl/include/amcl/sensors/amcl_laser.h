@@ -97,6 +97,9 @@ class AMCLLaser : public AMCLSensor
   // Determine the probability for the given pose
   private: static double BeamModel(AMCLLaserData *data, 
                                    pf_sample_set_t* set);
+  //evaluate a pose by laser scan chq
+
+  public: double evaluateOnePose(AMCLLaserData*  data, pf_vector_t pose);
   // Determine the probability for the given pose
   private: static double LikelihoodFieldModel(AMCLLaserData *data, 
                                               pf_sample_set_t* set);

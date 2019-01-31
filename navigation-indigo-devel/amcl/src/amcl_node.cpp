@@ -67,9 +67,47 @@
 #include <boost/foreach.hpp>
 
  #include<stdlib.h>//chq add for launching dump to file to save last pos 
+
+#include "GALGO_Lib/Galgo.hpp"
+
 #define NEW_UNIFORM_SAMPLING 1
 
 using namespace amcl;
+///GA For InIt POS Optimize
+//objective class example
+template <typename T>
+class InitLocObjective
+{
+public:
+   // objective function example : Rosenbrock function
+   // minimizing f(x,y) = (1 - x)^2 + 100 * (y - x^2)^2
+   static std::vector<T> Objective(const std::vector<T>& x)
+   {
+     laser = (AMCLLaser*) data->sensor;
+     pf_vector_t pose;
+     pose.v[0] = x[0]; pose.v[1] = x[1]; pose.v[2] = x[2];
+     T obj = laser->evaluateOnePose(data,pose);
+     //ROS_INFO("GA.Obj.pose:(%.6f,%.6f,%.6f) objv:%.6f",pose.v[0],pose.v[1],pose.v[2],obj);
+     //// NB: GALGO maximize by default
+      return {obj};
+   }
+   //std::vector<T> ScanConstraint(const std::vector<T>& x)
+   //{
+   //   return {x[0]*x[1]+x[0]-x[1]+1.5,10-x[0]*x[1]};
+   //}
+   static AMCLLaser *laser;
+   static AMCLLaserData*  data;
+private:
+
+
+};
+
+///!!!!!!!!!!!!!!!!!we must init it
+template<typename T>
+AMCLLaser* InitLocObjective<T>::laser = NULL;
+
+template<typename T>
+AMCLLaserData* InitLocObjective<T>::data = NULL;
 
 // Pose hypothesis
 typedef struct
@@ -152,6 +190,8 @@ class AmclNode
     bool setMapCallback(nav_msgs::SetMap::Request& req,
                         nav_msgs::SetMap::Response& res);
 
+    int tailoringScan(const sensor_msgs::LaserScanConstPtr& laser_scan,AMCLSensor *sensor,AMCLLaserData& ldata);
+
     void laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan);
     void initialPoseReceived(const geometry_msgs::PoseWithCovarianceStampedConstPtr& msg);
     void handleInitialPoseMessage(const geometry_msgs::PoseWithCovarianceStamped& msg);
@@ -212,6 +252,8 @@ class AmclNode
 
     AMCLOdom* odom_;
     AMCLLaser* laser_;
+
+    AMCLLaserData glo_ldata;//for init pos by GA alogrithm
 
     ros::Duration cloud_pub_interval;
     ros::Time last_cloud_pub_time;
@@ -1046,6 +1088,73 @@ AmclNode::setMapCallback(nav_msgs::SetMap::Request& req,
   return true;
 }
 
+int AmclNode::tailoringScan(const sensor_msgs::LaserScanConstPtr& laser_scan,AMCLSensor *sensor,AMCLLaserData& ldata){
+int result  = -1;
+ldata.sensor = sensor;
+ldata.range_count = laser_scan->ranges.size();
+
+// To account for lasers that are mounted upside-down, we determine the
+// min, max, and increment angles of the laser in the base frame.
+//
+// Construct min and max angles of laser, in the base_link frame.
+tf::Quaternion q;
+q.setRPY(0.0, 0.0, laser_scan->angle_min);
+tf::Stamped<tf::Quaternion> min_q(q, laser_scan->header.stamp,
+                                  laser_scan->header.frame_id);
+q.setRPY(0.0, 0.0, laser_scan->angle_min + laser_scan->angle_increment);
+tf::Stamped<tf::Quaternion> inc_q(q, laser_scan->header.stamp,
+                                  laser_scan->header.frame_id);
+try
+{
+  tf_->transformQuaternion(base_frame_id_, min_q, min_q);
+  tf_->transformQuaternion(base_frame_id_, inc_q, inc_q);
+}
+catch(tf::TransformException& e)
+{
+  ROS_WARN("Unable to transform min/max laser angles into base frame: %s",
+           e.what());
+  return result;
+}
+
+double angle_min = tf::getYaw(min_q);
+double angle_increment = tf::getYaw(inc_q) - angle_min;
+
+// wrapping angle to [-pi .. pi]
+angle_increment = fmod(angle_increment + 5*M_PI, 2*M_PI) - M_PI;
+
+//ROS_DEBUG("Laser %d angles in base frame: min: %.3f inc: %.3f", laser_index, angle_min, angle_increment);
+
+// Apply range min/max thresholds, if the user supplied them
+if(laser_max_range_ > 0.0)
+  ldata.range_max = std::min(laser_scan->range_max, (float)laser_max_range_);
+else
+  ldata.range_max = laser_scan->range_max;
+double range_min;
+if(laser_min_range_ > 0.0)
+  range_min = std::max(laser_scan->range_min, (float)laser_min_range_);
+else
+  range_min = laser_scan->range_min;
+// The AMCLLaserData destructor will free this memory
+ldata.ranges = new double[ldata.range_count][2];
+ROS_ASSERT(ldata.ranges);
+for(int i=0;i<ldata.range_count;i++)
+{
+  // amcl doesn't (yet) have a concept of min range.  So we'll map short
+  // readings to max range.
+  if(laser_scan->ranges[i] <= range_min)
+    ldata.ranges[i][0] = ldata.range_max;
+  else
+    ldata.ranges[i][0] = laser_scan->ranges[i];
+  // Compute bearing
+  ldata.ranges[i][1] = angle_min +
+          (i * angle_increment);
+}
+result = 0;
+return result;
+}
+
+
+
 void
 AmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
 {
@@ -1172,9 +1281,17 @@ AmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
   }
 
   bool resampled = false;
+
+  ///for  init loc by ga
+  AMCLLaserData ldata;
+  int result = tailoringScan(laser_scan,lasers_[laser_index],ldata);
+  if(result < 0 ) return;
+  glo_ldata = ldata;
+
   // If the robot has moved, update the filter
   if(lasers_update_[laser_index])
   {
+#if 0
     AMCLLaserData ldata;
     ldata.sensor = lasers_[laser_index];
     ldata.range_count = laser_scan->ranges.size();
@@ -1235,6 +1352,12 @@ AmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
       ldata.ranges[i][1] = angle_min +
               (i * angle_increment);
     }
+  #endif
+    ///added by chq -start
+    AMCLLaserData ldata;
+    int result = tailoringScan(laser_scan,lasers_[laser_index],ldata);
+    if(result < 0 ) return;
+    ///added by chq -end
 
     lasers_[laser_index]->UpdateSensor(pf_, (AMCLSensorData*)&ldata);
 
@@ -1547,6 +1670,7 @@ AmclNode::applyInitialPose()
     initial_pose_hyp_ = NULL;
   }
 #endif
+#if 0
   boost::recursive_mutex::scoped_lock cfl(configuration_mutex_);
   if( initial_pose_hyp_ != NULL && map_ != NULL ) {
 
@@ -1593,4 +1717,62 @@ AmclNode::applyInitialPose()
      delete initial_pose_hyp_;
      initial_pose_hyp_ = NULL;
   }
+#endif
+  ///method 0 ga alogrithm
+  boost::recursive_mutex::scoped_lock cfl(configuration_mutex_);
+  if( initial_pose_hyp_ != NULL && map_ != NULL ) {
+    double search_radius = 5.0;//距离搜索范围，值越大，搜索范围越大，可能导致的匹配误差越大
+    double angle_error_para = 0.5;//角度搜索范围系数[0-1]，比例越大，全局性越好，但是匹配误差也会越大
+    pf_vector_t mean_result;
+    pf_vector_t mean = initial_pose_hyp_->pf_pose_mean;
+    // an initial value can be added inside the initializer list after the upper bound
+    // both parameter will be encoded using 16 bits (default value)
+    // this value can be modified but has to remain between 1 and 64
+    // example using 20 and 32 bits and initial values of 0.5 and 1.0:
+    // galgo::Parameter<double,20> par1({0.0,1.0,0.5});
+    // galgo::Parameter<double,32> par2({0.0,13.0,1.0});
+    galgo::Parameter<double,16> para1({mean.v[0]-search_radius, mean.v[0]+search_radius,mean.v[0]});
+    galgo::Parameter<double,16> para2({mean.v[1]-search_radius, mean.v[1]+search_radius,mean.v[1]});
+    galgo::Parameter<double,10> para3({mean.v[2]-angle_error_para*M_PI,mean.v[2]+angle_error_para*M_PI,mean.v[2]});
+
+    InitLocObjective<double> t;
+    ros::Rate r(10);
+    int cnt = 0;
+    while(glo_ldata.range_count <= 0 && cnt < 50 ){
+      ROS_WARN("AmclNode::applyInitialPose.waitting scan data valid...");
+      r.sleep();
+      cnt++;
+    }
+    if(glo_ldata.range_count <= 0){
+      ROS_ERROR("AmclNode::applyInitialPose.wait scan time out . do nothing return...");
+      return;
+    }
+    t.data = &glo_ldata;
+    //GeneticAlgorithm(Func<T> objective, int popsize, int nbgen, bool output, const Parameter<T,N>&...args)
+    galgo::GeneticAlgorithm<double> ga( InitLocObjective<double>::Objective,50,20,true,para1,para2,para3);
+   // ga.tolerance= 0.0001;
+    ga.Selection =SUS; // stochastic universal sampling (SUS)
+    ga.CrossOver =P2XO;// uniform cross-over (UXO)
+    ga.Mutation = UNM;//uniform mutation
+
+    ga.covrate = 0.95;
+    ga.mutrate = 0.9;
+    ga.precision = 6;////number of decimals for <outputting> results
+    // setting constraints
+    //ga.Constraint = MyObj<double>::MyConstraint;
+    //ga.tolerance = -0.05*0.05;//terminal condition to stop the algorithm
+    //ga.precision = 2;
+    ga.run();
+
+    galgo::CHR<double> result(ga.result()) ;
+    std::vector<double> para = result.get()->getParam();
+    std::vector<double> err = result.get()->getResult();
+    mean_result.v[0] = para[0];mean_result.v[1] = para[1];mean_result.v[1] = para[1];
+
+    pf_init(pf_, mean_result, initial_pose_hyp_->pf_pose_cov);
+    pf_init_ = false;
+    delete initial_pose_hyp_;
+    initial_pose_hyp_ = NULL;
+ }
+
 }

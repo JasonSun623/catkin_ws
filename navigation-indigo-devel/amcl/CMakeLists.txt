@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(amcl)
-
+## Compile as C++11, supported in ROS Kinetic and newer
+add_compile_options(-std=c++11)
 find_package(catkin REQUIRED
         COMPONENTS
             message_filters
@@ -56,7 +57,9 @@ target_link_libraries(amcl_sensors amcl_map amcl_pf)
 
 
 add_executable(amcl
-                       src/amcl_node.cpp)
+                       src/amcl_node.cpp
+                       #src/GALGO_Lib/Galgo.cpp
+                       )
 add_dependencies(amcl
   ${${PROJECT_NAME}_EXPORTED_TARGETS}
   ${catkin_EXPORTED_TARGETS}
