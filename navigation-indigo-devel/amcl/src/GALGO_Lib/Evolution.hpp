@@ -59,7 +59,8 @@ void SUS(galgo::Population<T>& x)
    T dist = fitsum / matsize;
    // initializing pointer
    T ptr = galgo::uniform<T>(0.0, dist);
-   
+   //第１个概率在0-1/N之间，然后后面的旋转概率递增，每次＋1/N
+   //从开头向后索引累计适应度概率和，与每次的选择概率做比较，超过则当前索引被选中
    // selecting mating population
    for (int i = 0; i < matsize; ++i) {
    

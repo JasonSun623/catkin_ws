@@ -117,7 +117,7 @@ template <typename T> template <int I, int...N>
 inline typename std::enable_if<I < sizeof...(N), void>::type 
 GeneticAlgorithm<T>::init(const TUP<T,N...>& tp) 
 {
-  std::cout << "oh god!\n";
+
    // getting Ith parameter in tuple
    auto par = std::get<I>(tp);
    // getting Ith parameter initial data
@@ -128,7 +128,6 @@ GeneticAlgorithm<T>::init(const TUP<T,N...>& tp)
    upperBound.push_back(data[1]);
    // if parameter has initial value
    if (data.size() > 2) {
-      std::cout << "oh init \n";
       initialSet.push_back(data[2]);
    }
    // setting indexes for chromosome breakdown

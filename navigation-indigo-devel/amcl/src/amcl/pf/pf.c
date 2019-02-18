@@ -78,6 +78,7 @@ pf_t *pf_alloc(int min_samples, int max_samples,
     set = pf->sets + j;
       
     set->sample_count = max_samples;
+    //calloc Allocate NMEMB : max_samples elements of SIZE bytes:sizeof(pf_sample_t) each, all initialized to 0
     set->samples = calloc(max_samples, sizeof(pf_sample_t));
 
     for (i = 0; i < set->sample_count; i++)

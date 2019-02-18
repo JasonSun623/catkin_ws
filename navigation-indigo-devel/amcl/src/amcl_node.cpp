@@ -252,7 +252,7 @@ class AmclNode
 
     AMCLOdom* odom_;
     AMCLLaser* laser_;
-
+    std::string init_loc_method;
     AMCLLaserData glo_ldata;//for init pos by GA alogrithm
 
     ros::Duration cloud_pub_interval;
@@ -406,6 +406,7 @@ AmclNode::AmclNode() :
   private_nh_.param("laser_likelihood_max_dist", laser_likelihood_max_dist_, 2.0);
   std::string tmp_model_type;
   private_nh_.param("laser_model_type", tmp_model_type, std::string("likelihood_field"));
+  private_nh_.param<std::string>("init_loc_method",init_loc_method,"rand_pf");//raw / rand_pf / ga
   if(tmp_model_type == "beam")
     laser_model_type_ = LASER_MODEL_BEAM;
   else if(tmp_model_type == "likelihood_field")
@@ -859,7 +860,7 @@ AmclNode::handleMapMessage(const nav_msgs::OccupancyGrid& msg)
   lasers_.clear();
   lasers_update_.clear();
   frame_to_laser_.clear();
-
+  //marker cell occupy state
   map_ = convertMap(msg);
 
 #if NEW_UNIFORM_SAMPLING
@@ -868,13 +869,13 @@ AmclNode::handleMapMessage(const nav_msgs::OccupancyGrid& msg)
   for(int i = 0; i < map_->size_x; i++)
     for(int j = 0; j < map_->size_y; j++)
       if(map_->cells[MAP_INDEX(map_,i,j)].occ_state == -1)
-        free_space_indices.push_back(std::make_pair(i,j));
+        free_space_indices.push_back(std::make_pair(i,j));//if not obs then marker freespace
 #endif
   // Create the particle filter
   pf_ = pf_alloc(min_particles_, max_particles_,
                  alpha_slow_, alpha_fast_,
                  (pf_init_model_fn_t)AmclNode::uniformPoseGenerator,
-                 (void *)map_);
+                 (void *)map_);//chq create pf
   pf_->pop_err = pf_err_;
   pf_->pop_z = pf_z_;
 
@@ -888,7 +889,7 @@ AmclNode::handleMapMessage(const nav_msgs::OccupancyGrid& msg)
   pf_init_pose_cov.m[0][0] = init_cov_[0];
   pf_init_pose_cov.m[1][1] = init_cov_[1];
   pf_init_pose_cov.m[2][2] = init_cov_[2];
-  pf_init(pf_, pf_init_pose_mean, pf_init_pose_cov);
+  pf_init(pf_, pf_init_pose_mean, pf_init_pose_cov);//create init pf sample chq
   pf_init_ = false;
 
   // Instantiate the sensor objects
@@ -963,12 +964,12 @@ AmclNode::convertMap( const nav_msgs::OccupancyGrid& map_msg )
   ROS_ASSERT(map->cells);
   for(int i=0;i<map->size_x * map->size_y;i++)
   {
-    if(map_msg.data[i] == 0)
+    if(map_msg.data[i] == 0)       //free
       map->cells[i].occ_state = -1;
-    else if(map_msg.data[i] == 100)
+    else if(map_msg.data[i] == 100)//obs
       map->cells[i].occ_state = +1;
     else
-      map->cells[i].occ_state = 0;
+      map->cells[i].occ_state = 0;//unkonwn
   }
 
   return map;
@@ -1660,119 +1661,132 @@ AmclNode::handleInitialPoseMessage(const geometry_msgs::PoseWithCovarianceStampe
 void
 AmclNode::applyInitialPose()
 {
-#if 0
-  boost::recursive_mutex::scoped_lock cfl(configuration_mutex_);
-  if( initial_pose_hyp_ != NULL && map_ != NULL ) {
-    pf_init(pf_, initial_pose_hyp_->pf_pose_mean, initial_pose_hyp_->pf_pose_cov);
-    pf_init_ = false;
 
-    delete initial_pose_hyp_;
-    initial_pose_hyp_ = NULL;
-  }
-#endif
-#if 0
-  boost::recursive_mutex::scoped_lock cfl(configuration_mutex_);
-  if( initial_pose_hyp_ != NULL && map_ != NULL ) {
+  if (init_loc_method == "rand_pf")
+  {
+  //#if 0
+    boost::recursive_mutex::scoped_lock cfl(configuration_mutex_);
+    if( initial_pose_hyp_ != NULL && map_ != NULL ) {
+       int i;
+       pf_vector_t pose;
+       pf_vector_t mean = initial_pose_hyp_->pf_pose_mean;
+       pf_matrix_t cov = initial_pose_hyp_->pf_pose_cov;
+       pf_vector_t mean_search;
+       int max_sample = pf_->max_samples;
+       pf_vector_t v_mean[max_sample];
 
-     int i;
-     pf_vector_t pose;
-     pf_vector_t mean = initial_pose_hyp_->pf_pose_mean;
-     pf_matrix_t cov = initial_pose_hyp_->pf_pose_cov;
-     pf_vector_t mean_search;
-     int max_sample = pf_->max_samples;
-     pf_vector_t v_mean[max_sample];
-
-     mean_search.v[2] = mean.v[2];
-     double search_radius = 5.0;//距离搜索范围，值越大，搜索范围越大，可能导致的匹配误差越大
-     double angle_error_para = 0.6;//角度搜索范围系数[0-1]，比例越大，全局性越好，但是匹配误差也会越大
-     for (i = 0; i < max_sample; i++)
-     {
-       double x,y,angle;
-       int q,p;
-       while(1)
+       mean_search.v[2] = mean.v[2];
+       double search_radius = 5.0;//距离搜索范围，值越大，搜索范围越大，可能导致的匹配误差越大
+       double angle_error_para = 0.6;//角度搜索范围系数[0-1]，比例越大，全局性越好，但是匹配误差也会越大
+       for (i = 0; i < max_sample; i++)
        {
-         x = mean.v[0] + drand48()*2*search_radius - search_radius;
-         y = mean.v[1] + drand48()*2*search_radius - search_radius;
-         angle = mean.v[2] + angle_error_para *(drand48()*2*M_PI - M_PI);//
-         angle = normalize(angle);
-         // Check that it's a free cell
-         q = MAP_GXWX(map_,x);
-         p = MAP_GYWY(map_,y);
-         if(MAP_VALID(map_,q,p) && (map_->cells[MAP_INDEX(map_,q,p)].occ_state == -1))
-           break;
+         double x,y,angle;
+         int q,p;
+         while(1)
+         {
+           x = mean.v[0] + drand48()*2*search_radius - search_radius;
+           y = mean.v[1] + drand48()*2*search_radius - search_radius;
+           angle = mean.v[2] + angle_error_para *(drand48()*2*M_PI - M_PI);//
+           angle = normalize(angle);
+           // Check that it's a free cell
+           q = MAP_GXWX(map_,x);
+           p = MAP_GYWY(map_,y);
+           if(MAP_VALID(map_,q,p) && (map_->cells[MAP_INDEX(map_,q,p)].occ_state == -1))
+             break;
+         }
+         //std::cout << "AmclNode::applyInitialPose.search (x,y): (" << x << y <<") \n";
+         mean_search.v[0] = x;
+         mean_search.v[1] = y;
+         mean_search.v[2] = angle;
+         //结合了之前init算法的优势，建立高斯密度函数，在随机点处高斯采样
+         pose = pf_get_one_guassian_sample(pf_,mean_search, cov);
+         //std::cout << "AmclNode::applyInitialPose.pf_get_one_guassian_sample.pose(x,y): (" << pose.v[0] << pose.v[1] <<") \n";
+         v_mean[i] = pose;
        }
-       //std::cout << "AmclNode::applyInitialPose.search (x,y): (" << x << y <<") \n";
-       mean_search.v[0] = x;
-       mean_search.v[1] = y;
-       mean_search.v[2] = angle;
-       //结合了之前init算法的优势，建立高斯密度函数，在随机点处高斯采样
-       pose = pf_get_one_guassian_sample(pf_,mean_search, cov);
-       //std::cout << "AmclNode::applyInitialPose.pf_get_one_guassian_sample.pose(x,y): (" << pose.v[0] << pose.v[1] <<") \n";
-       v_mean[i] = pose;
-     }
-     //std::cout << "AmclNode::applyInitialPose.bef resetThePfSet \n";
-     resetThePfSet(pf_,v_mean);
+       //std::cout << "AmclNode::applyInitialPose.bef resetThePfSet \n";
+       resetThePfSet(pf_,v_mean);
 
-     pf_init_ = false;
-     delete initial_pose_hyp_;
-     initial_pose_hyp_ = NULL;
+       pf_init_ = false;
+       delete initial_pose_hyp_;
+       initial_pose_hyp_ = NULL;
+    }
+    //#endif
   }
-#endif
-  ///method 0 ga alogrithm
-  boost::recursive_mutex::scoped_lock cfl(configuration_mutex_);
-  if( initial_pose_hyp_ != NULL && map_ != NULL ) {
-    double search_radius = 5.0;//距离搜索范围，值越大，搜索范围越大，可能导致的匹配误差越大
-    double angle_error_para = 0.5;//角度搜索范围系数[0-1]，比例越大，全局性越好，但是匹配误差也会越大
-    pf_vector_t mean_result;
-    pf_vector_t mean = initial_pose_hyp_->pf_pose_mean;
-    // an initial value can be added inside the initializer list after the upper bound
-    // both parameter will be encoded using 16 bits (default value)
-    // this value can be modified but has to remain between 1 and 64
-    // example using 20 and 32 bits and initial values of 0.5 and 1.0:
-    // galgo::Parameter<double,20> par1({0.0,1.0,0.5});
-    // galgo::Parameter<double,32> par2({0.0,13.0,1.0});
-    galgo::Parameter<double,16> para1({mean.v[0]-search_radius, mean.v[0]+search_radius,mean.v[0]});
-    galgo::Parameter<double,16> para2({mean.v[1]-search_radius, mean.v[1]+search_radius,mean.v[1]});
-    galgo::Parameter<double,10> para3({mean.v[2]-angle_error_para*M_PI,mean.v[2]+angle_error_para*M_PI,mean.v[2]});
+  else if (init_loc_method == "ga"){
+    //#if 0
+    ///method 0 ga alogrithm
+    boost::recursive_mutex::scoped_lock cfl(configuration_mutex_);
+    if( initial_pose_hyp_ != NULL && map_ != NULL ) {
+      ///TODO 种群规模太大会出现问题　待解决
+      int pop_num =200;//population()
+      int generation  = 50;//gen num
+      double search_radius = 6.0;//距离搜索范围，值越大，搜索范围越大，可能导致的匹配误差越大
+      double angle_error_para = 0.6;//角度搜索范围系数[0-1]，比例越大，全局性越好，但是匹配误差也会越大
+      pf_vector_t mean_result;
+      pf_vector_t mean = initial_pose_hyp_->pf_pose_mean;
+      // an initial value can be added inside the initializer list after the upper bound
+      // both parameter will be encoded using 16 bits (default value)
+      // this value can be modified but has to remain between 1 and 64
+      // example using 20 and 32 bits and initial values of 0.5 and 1.0:
+      // galgo::Parameter<double,20> par1({0.0,1.0,0.5});
+      // galgo::Parameter<double,32> par2({0.0,13.0,1.0});
+      /// 初始值很重要
+      galgo::Parameter<double,32> para1({mean.v[0]-search_radius, mean.v[0]+search_radius,mean.v[0]});//min max init_value
+      galgo::Parameter<double,32> para2({mean.v[1]-search_radius, mean.v[1]+search_radius,mean.v[1]});
+      galgo::Parameter<double,10> para3({mean.v[2]-angle_error_para*M_PI,mean.v[2]+angle_error_para*M_PI,mean.v[2]});
+      //galgo::Parameter<double,10> para3({-M_PI,M_PI,mean.v[2]});
+      InitLocObjective<double> t;
+      ros::Rate r(10);
+      int cnt = 0;
+      while(glo_ldata.range_count <= 0 && cnt < 50 ){
+        ROS_WARN("AmclNode::applyInitialPose.waitting scan data valid...");
+        r.sleep();
+        cnt++;
+      }
+      if(glo_ldata.range_count <= 0){
+        ROS_ERROR("AmclNode::applyInitialPose.wait scan time out . do nothing return...");
+        return;
+      }
+      t.data = &glo_ldata;
+      //GeneticAlgorithm(Func<T> objective, int popsize, int nbgen, bool output, const Parameter<T,N>&...args)
+      galgo::GeneticAlgorithm<double> ga( InitLocObjective<double>::Objective,pop_num,generation,true,para1,para2,para3);
+     // ga.tolerance= 0.0001;
+      ga.Selection =SUS; // stochastic universal sampling (SUS)//sus 随机遍历采样
+      ga.CrossOver =P2XO;// uniform cross-over (UXO)//
+      ga.Mutation = UNM; // uniform mutation
 
-    InitLocObjective<double> t;
-    ros::Rate r(10);
-    int cnt = 0;
-    while(glo_ldata.range_count <= 0 && cnt < 50 ){
-      ROS_WARN("AmclNode::applyInitialPose.waitting scan data valid...");
-      r.sleep();
-      cnt++;
-    }
-    if(glo_ldata.range_count <= 0){
-      ROS_ERROR("AmclNode::applyInitialPose.wait scan time out . do nothing return...");
-      return;
-    }
-    t.data = &glo_ldata;
-    //GeneticAlgorithm(Func<T> objective, int popsize, int nbgen, bool output, const Parameter<T,N>&...args)
-    galgo::GeneticAlgorithm<double> ga( InitLocObjective<double>::Objective,50,20,true,para1,para2,para3);
-   // ga.tolerance= 0.0001;
-    ga.Selection =SUS; // stochastic universal sampling (SUS)
-    ga.CrossOver =P2XO;// uniform cross-over (UXO)
-    ga.Mutation = UNM;//uniform mutation
+      ga.covrate = 0.9;
+      ga.mutrate = 0.1;
+      ga.precision = 6;////number of decimals for <outputting> results
+      // setting constraints
+      //ga.Constraint = MyObj<double>::MyConstraint;
+      //ga.tolerance = -0.05*0.05;//terminal condition to stop the algorithm
+      //ga.precision = 2;
+      ga.run();
 
-    ga.covrate = 0.95;
-    ga.mutrate = 0.9;
-    ga.precision = 6;////number of decimals for <outputting> results
-    // setting constraints
-    //ga.Constraint = MyObj<double>::MyConstraint;
-    //ga.tolerance = -0.05*0.05;//terminal condition to stop the algorithm
-    //ga.precision = 2;
-    ga.run();
+      galgo::CHR<double> result(ga.result()) ;
+      std::vector<double> para = result.get()->getParam();
+      std::vector<double> err = result.get()->getResult();
+      mean_result.v[0] = para[0];mean_result.v[1] = para[1];mean_result.v[1] = para[1];
 
-    galgo::CHR<double> result(ga.result()) ;
-    std::vector<double> para = result.get()->getParam();
-    std::vector<double> err = result.get()->getResult();
-    mean_result.v[0] = para[0];mean_result.v[1] = para[1];mean_result.v[1] = para[1];
+      pf_init(pf_, mean_result, initial_pose_hyp_->pf_pose_cov);
+      pf_init_ = false;
+      delete initial_pose_hyp_;
+      initial_pose_hyp_ = NULL;
+   }
+  //#endif
+  }
+  else //raw or other ,use raw method
+  {
+    //#if 0
+      boost::recursive_mutex::scoped_lock cfl(configuration_mutex_);
+      if( initial_pose_hyp_ != NULL && map_ != NULL ) {
+        pf_init(pf_, initial_pose_hyp_->pf_pose_mean, initial_pose_hyp_->pf_pose_cov);
+        pf_init_ = false;
 
-    pf_init(pf_, mean_result, initial_pose_hyp_->pf_pose_cov);
-    pf_init_ = false;
-    delete initial_pose_hyp_;
-    initial_pose_hyp_ = NULL;
- }
-
+        delete initial_pose_hyp_;
+        initial_pose_hyp_ = NULL;
+      }
+    //#endif
+  }
 }

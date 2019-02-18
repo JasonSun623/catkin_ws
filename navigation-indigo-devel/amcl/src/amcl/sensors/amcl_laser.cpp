@@ -220,7 +220,8 @@ double AMCLLaser::evaluateOnePose(AMCLLaserData*  data, pf_vector_t pose){
   double z, pz;
   AMCLLaser *self;
   self = (AMCLLaser*) data->sensor;
-  static double his_best_p = -999999;
+  double worst =  -999999;
+  static double his_best_p = worst;
   static pf_vector_t his_best_pose = pose ;
   pf_vector_t hit;
   pf_vector_t map2base = pose;
@@ -244,7 +245,9 @@ double AMCLLaser::evaluateOnePose(AMCLLaserData*  data, pf_vector_t pose){
   // 开始通过利用与最近物体的欧氏距离计算激光模型似然的算法，
   // 对所有特征（激光数据）进行遍历
   //printf("evaluate one scan.scan size:%d,step:%d\n",data->range_count,step);
-  for (i = 0; i < data->range_count; i += step)
+  ///!!!step 间隔过大　不利于收敛（大部分数据没用上），故这里设为１(but influence speed)
+  //for (i = 0; i < data->range_count; i += step)
+  for (i = 0; i < data->range_count; i += 1)
   {
     //printf("AMCLLaser::evaluateOnePose.loop start \n");
     obs_range = data->ranges[i][0];
@@ -267,8 +270,8 @@ double AMCLLaser::evaluateOnePose(AMCLLaserData*  data, pf_vector_t pose){
     mi = MAP_GXWX(self->map, pose.v[0]);
     mj = MAP_GYWY(self->map, pose.v[1]);
     if(!MAP_VALID(self->map, mi, mj)){
-      printf("AMCLLaser::evaluateOnePose.para outbound.return 0");
-      return 0.0;
+      printf("AMCLLaser::evaluateOnePose.para outbound.return worst value\n");
+      return worst;
     }
 
     hit.v[0] = pose.v[0] + obs_range * cos(pose.v[2] + obs_bearing);///相对激光点[endpoint]位置转到绝对激光点位置
@@ -313,6 +316,7 @@ double AMCLLaser::evaluateOnePose(AMCLLaserData*  data, pf_vector_t pose){
   if(p >= 0 ){
     printf("hyoou!\n");
   }
+#if 0
   if(p > his_best_p){
 
     his_best_p = p;
@@ -321,7 +325,7 @@ double AMCLLaser::evaluateOnePose(AMCLLaserData*  data, pf_vector_t pose){
            pose.v[0],pose.v[1],pose.v[2],his_best_pose.v[0], his_best_pose.v[1],his_best_pose.v[2],
            p,his_best_p);
   }
-
+#endif
 
   return p;
 }
@@ -364,7 +368,7 @@ double AMCLLaser::LikelihoodFieldModel(AMCLLaserData *data, pf_sample_set_t* set
       step = 1;
     // 开始通过利用与最近物体的欧氏距离计算激光模型似然的算法，
     // 对所有特征（激光数据）进行遍历
-    for (i = 0; i < data->range_count; i += step)
+    for (i = 0; i < data->range_count; i += 1)
     {
       obs_range = data->ranges[i][0];
       obs_bearing = data->ranges[i][1];
