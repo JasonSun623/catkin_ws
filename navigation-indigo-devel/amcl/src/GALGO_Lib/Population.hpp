@@ -116,8 +116,10 @@ void Population<T>::creation()
       curpop[i]->create();
       curpop[i]->evaluate();
    }
+   //
    // updating population
    this->updating();
+
 }
 
 /*-------------------------------------------------------------------------------------------------*/
@@ -153,6 +155,7 @@ void Population<T>::elitism()
 
    if (ptr->elitpop > 0) {
       // copying elit chromosomes into new population
+     //将curpop.cbegin()->curpop.cend()中的数据　分别放入匿函数之中进行运算，结果逐一放入从newpop.begin()开始的地址中去
       std::transform(curpop.cbegin(), curpop.cend(), newpop.begin(), [](const CHR<T>& chr)->CHR<T>{return std::make_shared<Chromosome<T>>(*chr);});
    }
 }

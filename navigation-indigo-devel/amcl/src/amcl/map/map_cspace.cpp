@@ -43,20 +43,20 @@ class CachedDistanceMap
       distances_ = new double *[cell_radius_+2];
       for(int i=0; i<=cell_radius_+1; i++)
       {
-	distances_[i] = new double[cell_radius_+2];
+        distances_[i] = new double[cell_radius_+2];
         for(int j=0; j<=cell_radius_+1; j++)
-	{
-	  distances_[i][j] = sqrt(i*i + j*j);
-	}
+        {
+          distances_[i][j] = sqrt(i*i + j*j);
+        }
       }
     }
     ~CachedDistanceMap()
     {
       if(distances_)
       {
-	for(int i=0; i<=cell_radius_+1; i++)
-	  delete[] distances_[i];
-	delete[] distances_;
+      for(int i=0; i<=cell_radius_+1; i++)
+        delete[] distances_[i];
+      delete[] distances_;
       }
     }
     double** distances_;
@@ -87,10 +87,10 @@ get_distance_map(double scale, double max_dist)
 }
 
 void enqueue(map_t* map, unsigned int i, unsigned int j, 
-	     unsigned int src_i, unsigned int src_j,
-	     std::priority_queue<CellData>& Q,
-	     CachedDistanceMap* cdm,
-	     unsigned char* marked)
+         unsigned int src_i, unsigned int src_j,
+         std::priority_queue<CellData>& Q,
+         CachedDistanceMap* cdm,
+         unsigned char* marked)
 {
   if(marked[MAP_INDEX(map, i, j)])
     return;
@@ -139,13 +139,13 @@ void map_update_cspace(map_t *map, double max_occ_dist)
     {
       if(map->cells[MAP_INDEX(map, i, j)].occ_state == +1)
       {
-  map->cells[MAP_INDEX(map, i, j)].occ_dist = 0.0;//如果占用占用距离值为０
-	cell.src_j_ = cell.j_ = j;
-	marked[MAP_INDEX(map, i, j)] = 1;
-  Q.push(cell);//对占用栅格周围栅格最占用几率处理
+        map->cells[MAP_INDEX(map, i, j)].occ_dist = 0.0;//如果占用占用距离值为０
+        cell.src_j_ = cell.j_ = j;
+        marked[MAP_INDEX(map, i, j)] = 1;
+        Q.push(cell);//对占用栅格周围栅格最占用几率处理
       }
       else
-  map->cells[MAP_INDEX(map, i, j)].occ_dist = max_occ_dist;//当前栅格未被占用，设为最远占用距离
+        map->cells[MAP_INDEX(map, i, j)].occ_dist = max_occ_dist;//当前栅格未被占用，设为最远占用距离
     }
   }
 
@@ -154,20 +154,20 @@ void map_update_cspace(map_t *map, double max_occ_dist)
     CellData current_cell = Q.top();
     if(current_cell.i_ > 0)
       enqueue(map, current_cell.i_-1, current_cell.j_, 
-	      current_cell.src_i_, current_cell.src_j_,
-	      Q, cdm, marked);
+          current_cell.src_i_, current_cell.src_j_,
+          Q, cdm, marked);
     if(current_cell.j_ > 0)
       enqueue(map, current_cell.i_, current_cell.j_-1, 
-	      current_cell.src_i_, current_cell.src_j_,
-	      Q, cdm, marked);
+          current_cell.src_i_, current_cell.src_j_,
+          Q, cdm, marked);
     if((int)current_cell.i_ < map->size_x - 1)
       enqueue(map, current_cell.i_+1, current_cell.j_, 
-	      current_cell.src_i_, current_cell.src_j_,
-	      Q, cdm, marked);
+          current_cell.src_i_, current_cell.src_j_,
+          Q, cdm, marked);
     if((int)current_cell.j_ < map->size_y - 1)
       enqueue(map, current_cell.i_, current_cell.j_+1, 
-	      current_cell.src_i_, current_cell.src_j_,
-	      Q, cdm, marked);
+          current_cell.src_i_, current_cell.src_j_,
+          Q, cdm, marked);
 
     Q.pop();
   }

@@ -30,7 +30,7 @@
 
 #include "pf_vector.h"
 #include "pf_kdtree.h"
-
+#include <stdbool.h>
 #ifdef __cplusplus
 
 
@@ -90,11 +90,11 @@ typedef struct
 
 
 // Information for a set of samples
-typedef struct _pf_sample_set_t
+typedef struct _pf_sample_set_t//a set of pf_sample_t
 {
   // The samples
   int sample_count;
-  pf_sample_t *samples;
+  pf_sample_t *samples;//pf_sample_t: a sample included para: pose weight
 
   // A kdtree encoding the histogram
   pf_kdtree_t *kdtree;
@@ -158,9 +158,12 @@ pf_vector_t pf_get_one_guassian_sample(pf_t *pf, pf_vector_t mean, pf_matrix_t c
 
 ///chq reset the pf set when get full sample
 void resetThePfSet(pf_t *pf, pf_vector_t* v_mean);
-
+void clustingPfSet(pf_t *pf);
+void resetAndClustingPfSet(pf_t *pf,int size,pf_vector_t* rand_pos_set, bool clusting);
 // Initialize the filter using some model
 void pf_init_model(pf_t *pf, pf_init_model_fn_t init_fn, void *init_data);
+// Initialize the filter by split map chq
+//void pf_init_model(pf_t *pf, void *init_data);
 
 // Update the filter with some new action
 void pf_update_action(pf_t *pf, pf_action_model_fn_t action_fn, void *action_data);

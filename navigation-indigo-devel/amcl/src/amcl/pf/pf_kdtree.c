@@ -87,6 +87,7 @@ pf_kdtree_t *pf_kdtree_alloc(int max_size)
 
 ////////////////////////////////////////////////////////////////////////////////
 // Destroy a tree
+// 释放树
 void pf_kdtree_free(pf_kdtree_t *self)
 {
   free(self->nodes);
@@ -97,6 +98,7 @@ void pf_kdtree_free(pf_kdtree_t *self)
 
 ////////////////////////////////////////////////////////////////////////////////
 // Clear all entries from the tree
+// 清除所用结点
 void pf_kdtree_clear(pf_kdtree_t *self)
 {
   self->root = NULL;
@@ -109,6 +111,7 @@ void pf_kdtree_clear(pf_kdtree_t *self)
 
 ////////////////////////////////////////////////////////////////////////////////
 // Insert a pose into the tree.
+// 插入一个位姿到树中
 void pf_kdtree_insert(pf_kdtree_t *self, pf_vector_t pose, double value)
 {
   int key[3];
@@ -147,6 +150,7 @@ void pf_kdtree_insert(pf_kdtree_t *self, pf_vector_t pose, double value)
 ////////////////////////////////////////////////////////////////////////////////
 // Determine the probability estimate for the given pose. TODO: this
 // should do a kernel density estimate rather than a simple histogram.
+// 找到给定位姿的概率或权重
 double pf_kdtree_get_prob(pf_kdtree_t *self, pf_vector_t pose)
 {
   int key[3];
@@ -156,7 +160,7 @@ double pf_kdtree_get_prob(pf_kdtree_t *self, pf_vector_t pose)
   key[1] = floor(pose.v[1] / self->size[1]);
   key[2] = floor(pose.v[2] / self->size[2]);
 
-  node = pf_kdtree_find_node(self, self->root, key);
+  node = pf_kdtree_find_node(self, self->root, key);// 在树中搜索结点
   if (node == NULL)
     return 0.0;
   return node->value;
@@ -183,6 +187,7 @@ int pf_kdtree_get_cluster(pf_kdtree_t *self, pf_vector_t pose)
 
 ////////////////////////////////////////////////////////////////////////////////
 // Compare keys to see if they are equal
+// 判断key值是否相等
 int pf_kdtree_equal(pf_kdtree_t *self, int key_a[], int key_b[])
 {
   //double a, b;
@@ -212,6 +217,7 @@ int pf_kdtree_equal(pf_kdtree_t *self, int key_a[], int key_b[])
 
 ////////////////////////////////////////////////////////////////////////////////
 // Insert a node into the tree
+// 插入一个结点到树中,
 pf_kdtree_node_t *pf_kdtree_insert_node(pf_kdtree_t *self, pf_kdtree_node_t *parent,
                                         pf_kdtree_node_t *node, int key[], double value)
 {
@@ -249,6 +255,7 @@ pf_kdtree_node_t *pf_kdtree_insert_node(pf_kdtree_t *self, pf_kdtree_node_t *par
     }
 
     // The keys are not equal, so split this node
+    // 否则 新建子节点
     else
     {
       // Find the dimension with the largest variance and do a mean
@@ -261,7 +268,7 @@ pf_kdtree_node_t *pf_kdtree_insert_node(pf_kdtree_t *self, pf_kdtree_node_t *par
         if (split > max_split)
         {
           max_split = split;
-          node->pivot_dim = i;
+          node->pivot_dim = i;// 找到差值最大的那一维
         }
       }
       assert(node->pivot_dim >= 0);
@@ -302,6 +309,7 @@ pf_kdtree_node_t *pf_kdtree_insert_node(pf_kdtree_t *self, pf_kdtree_node_t *par
 
 ////////////////////////////////////////////////////////////////////////////////
 // Recursive node search
+// 树中查找某结点
 pf_kdtree_node_t *pf_kdtree_find_node(pf_kdtree_t *self, pf_kdtree_node_t *node, int key[])
 {
   if (node->leaf)
@@ -322,7 +330,7 @@ pf_kdtree_node_t *pf_kdtree_find_node(pf_kdtree_t *self, pf_kdtree_node_t *node,
     assert(node->children[1] != NULL);
 
     // If the keys are different...
-    if (key[node->pivot_dim] < node->pivot_value)
+    if (key[node->pivot_dim] < node->pivot_value) //由于总有一个子节点和父节点的kye和value一样，最后的迭代总会到叶节点上
       return pf_kdtree_find_node(self, node->children[0], key);
     else
       return pf_kdtree_find_node(self, node->children[1], key);

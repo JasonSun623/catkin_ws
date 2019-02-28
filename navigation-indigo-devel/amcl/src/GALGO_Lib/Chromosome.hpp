@@ -12,6 +12,9 @@ namespace galgo {
 template <typename T>
 class Chromosome
 {
+  //static_assert 声明可以出现在命名空间和块作用域中（如同块声明），也可以在类体中（如同成员声明）
+  //static_assert ( bool_constexpr , message )
+  //若 bool_constexpr 返回 true ，则此声明无效果。否则发布编译时错误，而若存在message ，则包含其文本于诊断消息中。message 可省略。
    static_assert(std::is_same<float,T>::value || std::is_same<double,T>::value, "variable type can only be float or double, please amend.");
 
 public:
@@ -68,6 +71,7 @@ private:
    std::vector<T> param;                     // estimated parameter(s)
    std::vector<T> result;                    // chromosome objective function(s) result
    std::string chr;                          // string of bits representing chromosome
+   //const var :类内初始化(c++11支持)
    const GeneticAlgorithm<T>* ptr = nullptr; // pointer to genetic algorithm
 public:
    T fitness;                                // chromosome fitness, objective function(s) result that can be modified (adapted to constraint(s), set to positive values, etc...)
@@ -184,7 +188,9 @@ inline void Chromosome<T>::setGene(int k)
    // generating a new gene
    std::string s = ptr->param[k]->encode();
    // adding or replacing gene in chromosome
+   // chr 从ptr->idx[k]开始向后s.size()长　替换为s的从0到s.size()长　的　字符
    chr.replace(ptr->idx[k], s.size(), s, 0, s.size());
+
 }
 
 /*-------------------------------------------------------------------------------------------------*/

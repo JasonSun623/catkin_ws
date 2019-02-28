@@ -27,7 +27,7 @@ void RWS(galgo::Population<T>& x)
    for (int i = 0, end = x.matsize(); i < end; ++i) {
       // generating a random fitness sum in [0,fitsum)
       T fsum = galgo::uniform<T>(0.0, fitsum);
-
+      //每次随机选择一个适应度累计和值A，从索引０开始向后累计适应度值，知道大小超过随机适应度值A,则当前索引被选中
       int j = 0;
       while (fsum >= 0.0) {
          #ifndef NDEBUG
@@ -87,6 +87,9 @@ void SUS(galgo::Population<T>& x)
 /*-------------------------------------------------------------------------------------------------*/
 
 // classic linear rank-based selection
+//基于线性排序的选择方法  可参考文献　遗传算法中选择策略的分析
+//对种群的个体的对应目标值进行排序，然后个体的适应度仅仅与序位有关，而不是实际的目标值。
+//排序的时候可以采用线性或者非线性排序方法，引入种群均匀尺度，提供控制压力的简单方法，能表现更好的鲁棒性
 template <typename T>
 void RNK(galgo::Population<T>& x)
 {
@@ -126,6 +129,7 @@ void RNK(galgo::Population<T>& x)
 /*-------------------------------------------------------------------------------------------------*/
 
 // linear rank-based selection with selective pressure
+//带选择压力的线性排序的选择方法
 template <typename T>
 void RSP(galgo::Population<T>& x)
 {
@@ -294,6 +298,7 @@ void P2XO(const galgo::Population<T>& x, galgo::CHR<T>& chr1, galgo::CHR<T>& chr
 template <typename T>
 void UXO(const galgo::Population<T>& x, galgo::CHR<T>& chr1, galgo::CHR<T>& chr2)
 {
+  //每一位都有交叉概率
    // choosing randomly 2 chromosomes from mating population
    int idx1 = galgo::uniform<int>(0, x.matsize());
    int idx2 = galgo::uniform<int>(0, x.matsize());

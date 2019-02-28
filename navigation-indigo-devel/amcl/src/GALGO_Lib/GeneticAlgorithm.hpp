@@ -33,13 +33,13 @@ private:
 public: 
    // objective function pointer
    Func<T> Objective; 
-   // selection method initialized to roulette wheel selection                                   
+   // selection method initialized to roulette wheel selection
    void (*Selection)(Population<T>&) = RWS;  
-   // cross-over method initialized to 1-point cross-over                                
+   // cross-over method initialized to 1-point cross-over
    void (*CrossOver)(const Population<T>&, CHR<T>&, CHR<T>&) = P1XO;
    // mutation method initialized to single-point mutation 
    void (*Mutation)(CHR<T>&) = SPM;  
-   // adaptation to constraint(s) method                                        
+   // adaptation to constraint(s) method
    void (*Adaptation)(Population<T>&) = nullptr; 
    // constraint(s)                               
    std::vector<T> (*Constraint)(const std::vector<T>&) = nullptr; 
@@ -72,6 +72,7 @@ private:
    bool output;   // control if results must be outputted
 
    // end of recursion for initializing parameter(s) data
+   ///chq if cond  I == sizeof...(N) is full ,then the init return type is [void]
    template <int I = 0, int...N>
    typename std::enable_if<I == sizeof...(N), void>::type init(const TUP<T,N...>&); 
    // recursion for initializing parameter(s) data
@@ -95,14 +96,17 @@ GeneticAlgorithm<T>::GeneticAlgorithm(Func<T> objective, int popsize, int nbgen,
    this->nbbit = sum(N...);
    this->nbgen = nbgen;
    // getting number of parameters in the pack
-   this->nbparam = sizeof...(N);
+   this->nbparam = sizeof...(N);///变长模板参数个数
    this->popsize = popsize;
    this->matsize = popsize;
    this->output = output;
    // unpacking parameter pack in tuple
-   TUP<T,N...> tp(args...);
+   TUP<T,N...> tp(args...);    ///不定长函数参数
    // initializing parameter(s) data
    this->init(tp);
+   std::cout << "GAL::GAL.nbbit: " << this->nbbit
+             << "nbparam: " << this->nbparam
+              <<std::endl ;
 }
 
 /*-------------------------------------------------------------------------------------------------*/
@@ -123,6 +127,7 @@ GeneticAlgorithm<T>::init(const TUP<T,N...>& tp)
    // getting Ith parameter initial data
    const std::vector<T>& data = par.getData();
    // copying parameter data
+   ////C++ 11 对于在容器中添加类的对象时, 相比于push_back,emplace_back可以避免额外类的复制和移动操作.
    param.emplace_back(new decltype(par)(par));
    lowerBound.push_back(data[0]);
    upperBound.push_back(data[1]);

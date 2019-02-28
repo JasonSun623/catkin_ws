@@ -49,6 +49,9 @@ pf_t *pf_alloc(int min_samples, int max_samples,
                pf_init_model_fn_t random_pose_fn, void *random_pose_data)
 {
   int i, j;
+  //chq pf_t :not only included the type pf_sample_set_t
+  //but also included para like min_samples and max_samples.
+  //it is a type included entire info about pf for amcl
   pf_t *pf;
   pf_sample_set_t *set;
   pf_sample_t *sample;
@@ -65,7 +68,7 @@ pf_t *pf_alloc(int min_samples, int max_samples,
 
   // Control parameters for the population size calculation.  [err] is
   // the max error between the true distribution and the estimated
-  // distribution.  [z] is the upper standard normal quantile for (1 -
+  // distribution.  [z] is the upper standard normal quantile(标准正态分位数) for (1 -
   // p), where p is the probability that the error on the estimated
   // distrubition will be less than [err].
   pf->pop_err = 0.01;
@@ -76,10 +79,9 @@ pf_t *pf_alloc(int min_samples, int max_samples,
   for (j = 0; j < 2; j++)
   {
     set = pf->sets + j;
-      
     set->sample_count = max_samples;
     //calloc Allocate NMEMB : max_samples elements of SIZE bytes:sizeof(pf_sample_t) each, all initialized to 0
-    set->samples = calloc(max_samples, sizeof(pf_sample_t));
+    set->samples = calloc(max_samples, sizeof(pf_sample_t));//set->samples: a pf_samplet_t ptr type
 
     for (i = 0; i < set->sample_count; i++)
     {
@@ -195,6 +197,70 @@ pf_vector_t pf_get_one_guassian_sample(pf_t *pf, pf_vector_t mean, pf_matrix_t c
   return pose;
 }
 
+void clustingPfSet(pf_t *pf){
+  pf_sample_set_t *set;
+  pf_sample_t *sample;
+  //pf有两个集合，选择当前在用的集合
+  set = pf->sets + pf->current_set;
+  int size = set->sample_count;
+  // Create the kd tree for adaptive sampling
+  pf_kdtree_clear(set->kdtree);
+
+  // Compute the new sample poses
+  int i = 0;
+  for (; i < size; i++)
+  {
+    sample = set->samples+i;
+    pf_kdtree_insert(set->kdtree, sample->pose, sample->weight);
+  }
+  pf->w_slow = pf->w_fast = 0.0;
+  // Re-compute cluster statistics
+  //printf("pf.resetAndClustingPfSet.pf_cluster_stats\n");
+  pf_cluster_stats(pf, set);
+  //printf("pf.resetAndClustingPfSet.pf_init_converged\n");
+  //set converged to 0
+  pf_init_converged(pf);
+}
+void resetAndClustingPfSet(pf_t *pf,int size,pf_vector_t* rand_pos_set, bool clusting){
+  int i;
+
+
+  //printf("pf.resetAndClustingPfSet.start...");
+  //printf("pf.resetAndClustingPfSet.size:%d\n",size);
+  if(!size)return;
+  pf_sample_set_t *set;
+  pf_sample_t *sample;
+  //pf有两个集合，选择当前在用的集合
+  set = pf->sets + pf->current_set;
+
+  // Create the kd tree for adaptive sampling
+  pf_kdtree_clear(set->kdtree);
+
+  set->sample_count = size;
+  // Compute the new sample poses
+  double weight = 1.0 / size;
+  for (i = 0; i < size; i++)
+  {
+    // Add sample to histogram
+    //printf("pf.resetThePfSet.pf_kdtree_insert.v_mean[%d]:(%.6f,%.6f,%.6f) w:%.6f\n",i,v_mean[i].v[0],v_mean[i].v[1],v_mean[i].v[2],weight);
+    sample = set->samples + i;
+    sample->weight = weight;
+    sample->pose = rand_pos_set[i];
+    // Add sample to histogram
+    pf_kdtree_insert(set->kdtree, sample->pose, sample->weight);
+
+  }
+  pf->w_slow = pf->w_fast = 0.0;
+  if(!clusting)return;
+  // Re-compute cluster statistics
+  //printf("pf.resetAndClustingPfSet.pf_cluster_stats\n");
+  pf_cluster_stats(pf, set);
+  //printf("pf.resetAndClustingPfSet.pf_init_converged\n");
+  //set converged to 0
+  pf_init_converged(pf);
+}
+
+
 void resetThePfSet(pf_t *pf, pf_vector_t* v_mean){
   int i;
   int max_count = pf->max_samples;
@@ -207,7 +273,7 @@ void resetThePfSet(pf_t *pf, pf_vector_t* v_mean){
   // Create the kd tree for adaptive sampling
   pf_kdtree_clear(set->kdtree);
 
-  set->sample_count = pf->max_samples;
+  set->sample_count = max_count;
   // Compute the new sample poses
   double weight = 1.0 / max_count;
   for (i = 0; i < max_count; i++)
@@ -221,7 +287,6 @@ void resetThePfSet(pf_t *pf, pf_vector_t* v_mean){
     pf_kdtree_insert(set->kdtree, sample->pose, sample->weight);
 
   }
-
   pf->w_slow = pf->w_fast = 0.0;
   // Re-compute cluster statistics
   //printf("pf.resetThePfSet.pf_cluster_stats\n");
@@ -267,6 +332,11 @@ void pf_init_model(pf_t *pf, pf_init_model_fn_t init_fn, void *init_data)
 
   return;
 }
+//init model by split map
+//chq 将地图拆分成很多小块，每块执行一次粒子聚合，每块得到分值最高粒子，然后再进行一次聚合。保证每一块都有建议解
+//void pf_init_model(pf_t *pf, void *init_data){
+
+//}
 
 void pf_init_converged(pf_t *pf){
   pf_sample_set_t *set;
@@ -334,7 +404,7 @@ void pf_update_sensor(pf_t *pf, pf_sensor_model_fn_t sensor_fn, void *sensor_dat
 
   // Compute the sample weights
   total = (*sensor_fn) (sensor_data, set);
-  
+  printf("pf_update_sensor.total:%.9f\n",total);
   if (total > 0.0)
   {
     // Normalize weights
@@ -425,7 +495,7 @@ void pf_update_resample(pf_t *pf)
   {
     sample_b = set_b->samples + set_b->sample_count++;
 
-    if(drand48() < w_diff)
+    if(drand48() < w_diff)//生成一个新的位置
       sample_b->pose = (pf->random_pose_fn)(pf->random_pose_data);
     else
     {
@@ -463,7 +533,7 @@ void pf_update_resample(pf_t *pf)
       }
       assert(i<set_a->sample_count);
 
-      sample_a = set_a->samples + i;
+      sample_a = set_a->samples + i;//轮盘赌方式选择一个老数据
 
       assert(sample_a->weight > 0);
 
@@ -499,7 +569,7 @@ void pf_update_resample(pf_t *pf)
   pf_cluster_stats(pf, set_b);
 
   // Use the newly created sample set
-  pf->current_set = (pf->current_set + 1) % 2; 
+  pf->current_set = (pf->current_set + 1) % 2;// after resampled ,更新为 set: set_b
 
   pf_update_converged(pf);
 
@@ -535,6 +605,8 @@ int pf_resample_limit(pf_t *pf, int k)
 
 
 // Re-compute the cluster statistics for a sample set
+// 计算粒子集合的聚类统计特性
+// 对属于同一kdtree类别的样本进行累计期望，并求均值，作为该cluster的均值。　同时求所有样本的期望和均值作为set集合期望均值
 void pf_cluster_stats(pf_t *pf, pf_sample_set_t *set)
 {
   int i, j, k, cidx;
@@ -561,10 +633,10 @@ void pf_cluster_stats(pf_t *pf, pf_sample_set_t *set)
     cluster->cov = pf_matrix_zero();
 
     for (j = 0; j < 4; j++)
-      cluster->m[j] = 0.0;
+      cluster->m[j] = 0.0;//mean
     for (j = 0; j < 2; j++)
       for (k = 0; k < 2; k++)
-        cluster->c[j][k] = 0.0;
+        cluster->c[j][k] = 0.0;//covariance
   }
 
   // Initialize overall filter stats
@@ -586,6 +658,7 @@ void pf_cluster_stats(pf_t *pf, pf_sample_set_t *set)
     //printf("%d %f %f %f\n", i, sample->pose.v[0], sample->pose.v[1], sample->pose.v[2]);
 
     // Get the cluster label for this sample
+    // 获得该样本的所属类标签
     cidx = pf_kdtree_get_cluster(set->kdtree, sample->pose);
     assert(cidx >= 0);
     if (cidx >= set->cluster_max_count)
@@ -602,17 +675,19 @@ void pf_cluster_stats(pf_t *pf, pf_sample_set_t *set)
     weight += sample->weight;
 
     // Compute mean
+    //属于同一　cluster index 的样本　会累计权重
     cluster->m[0] += sample->weight * sample->pose.v[0];
     cluster->m[1] += sample->weight * sample->pose.v[1];
     cluster->m[2] += sample->weight * cos(sample->pose.v[2]);
     cluster->m[3] += sample->weight * sin(sample->pose.v[2]);
-
+   //不区分cluster　index的总累计
     m[0] += sample->weight * sample->pose.v[0];
     m[1] += sample->weight * sample->pose.v[1];
     m[2] += sample->weight * cos(sample->pose.v[2]);
     m[3] += sample->weight * sin(sample->pose.v[2]);
 
     // Compute covariance in linear components
+    /// 属于同一　cluster index 的样本　会累计cov
     for (j = 0; j < 2; j++)
       for (k = 0; k < 2; k++)
       {
@@ -622,6 +697,7 @@ void pf_cluster_stats(pf_t *pf, pf_sample_set_t *set)
   }
 
   // Normalize
+  /// 对每个cluster的位置和协方差　按照权重归一化
   for (i = 0; i < set->cluster_count; i++)
   {
     cluster = set->clusters + i;
@@ -649,6 +725,7 @@ void pf_cluster_stats(pf_t *pf, pf_sample_set_t *set)
   }
 
   // Compute overall filter stats
+  /// 所有样本数据归一化
   set->mean.v[0] = m[0] / weight;
   set->mean.v[1] = m[1] / weight;
   set->mean.v[2] = atan2(m[3], m[2]);

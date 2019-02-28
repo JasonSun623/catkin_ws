@@ -122,7 +122,7 @@ bool AMCLLaser::UpdateSensor(pf_t *pf, AMCLSensorData *data)
 {
   if (this->max_beams < 2)
     return false;
-
+  printf("AMCLLaser::UpdateSensor.this->model_type(0:beam 1:field 2:prob):%d\n",this->model_type);
   // Apply the laser sensor model
   if(this->model_type == LASER_MODEL_BEAM)
     pf_update_sensor(pf, (pf_sensor_model_fn_t) BeamModel, data);
@@ -247,7 +247,14 @@ double AMCLLaser::evaluateOnePose(AMCLLaserData*  data, pf_vector_t pose){
   //printf("evaluate one scan.scan size:%d,step:%d\n",data->range_count,step);
   ///!!!step 间隔过大　不利于收敛（大部分数据没用上），故这里设为１(but influence speed)
   //for (i = 0; i < data->range_count; i += step)
-  for (i = 0; i < data->range_count; i += 1)
+  static bool cnt = 0;
+  if(!cnt){
+    printf("evaluate one scan.data->range_max:%d\n",data->range_max);
+    cnt = true;
+  }
+  
+  
+  for (i = 0; i < data->range_count; i += step)
   {
     //printf("AMCLLaser::evaluateOnePose.loop start \n");
     obs_range = data->ranges[i][0];
@@ -255,7 +262,9 @@ double AMCLLaser::evaluateOnePose(AMCLLaserData*  data, pf_vector_t pose){
 
     // This model ignores max range readings
     // 似然域测量模型简单地将最大距离读数丢弃
-    if(obs_range >= data->range_max)
+    double max_err_bound_thread  = 0.05;
+    double min_err_bound_thread  = 0.05;
+    if(obs_range >= data->range_max - max_err_bound_thread || obs_range <= min_err_bound_thread  )
       continue;
 
     // Check for NaN
@@ -347,6 +356,11 @@ double AMCLLaser::LikelihoodFieldModel(AMCLLaserData *data, pf_sample_set_t* set
   total_weight = 0.0;
 
   // Compute the sample weights
+  printf("AMCLLaser::LikelihoodFieldModel.set->sample_count:%d."
+         "laser data->range_count:%d.laser max_beams:%d\n",
+         set->sample_count,
+         data->range_count,
+         self->max_beams);
   for (j = 0; j < set->sample_count; j++)
   {
     sample = set->samples + j;
@@ -368,7 +382,8 @@ double AMCLLaser::LikelihoodFieldModel(AMCLLaserData *data, pf_sample_set_t* set
       step = 1;
     // 开始通过利用与最近物体的欧氏距离计算激光模型似然的算法，
     // 对所有特征（激光数据）进行遍历
-    for (i = 0; i < data->range_count; i += 1)
+    //printf("AMCLLaser::LikelihoodFieldModel.step:%d\n",step);
+    for (i = 0; i < data->range_count; i += step)
     {
       obs_range = data->ranges[i][0];
       obs_bearing = data->ranges[i][1];
