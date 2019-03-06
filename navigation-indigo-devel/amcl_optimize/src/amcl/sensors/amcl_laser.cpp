@@ -454,7 +454,7 @@ double AMCLLaser::LikelihoodFieldModelProb(AMCLLaserData *data, pf_sample_set_t*
     }
 
     if(realloc){
-      self->reallocTempData(set->sample_count, self->max_beams);     
+      self->reallocTempData(set->sample_count, self->max_beams);
       fprintf(stderr, "Reallocing temp weights %d - %d\n", self->max_samples, self->max_obs);
     }
   }

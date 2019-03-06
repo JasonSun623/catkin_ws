@@ -1207,7 +1207,7 @@ void AmclNode::LocalLocBySplitMap(double search_w,double search_h,double init_x,
   std::vector<std::pair<double,double> >  mid_pos_set;
 
   pf_vector_t bestPos;
-  pf_global_loc->max_samples = min_particles_;
+  pf_global_loc->max_samples = max_particles_;
 
   //uniformly split the map , get every mid pos
   //and the sub map's width and height in sub map
@@ -1222,8 +1222,8 @@ void AmclNode::LocalLocBySplitMap(double search_w,double search_h,double init_x,
   int count = 0;
   pf_vector_t v_submap_pos[pf_global_loc->max_samples];
   pf_vector_t v_map_pos[mid_pos_num];
-  //假设搜索长宽是10m,100m2,分成最大粒子数块，如500块，则每块是长宽2e-1m2,one grid is qual to 2.5e-3m2,差不每块80个栅格，
-  //每个栅格，在角度上是-180-180度，共计360，如果每10度一个随机数据，则每块粒子最大数目是36*80个
+  //假设搜索长宽是10m,100m2,分成最大粒子数块，如2000块，则每块是长宽0.05m2,one grid is qual to 2.5e-3m2,差不每块5e-2/2.5*e-3 = 20个栅格，
+  //每个栅格，在角度上是-180-180度，共计360，如果每10度一个随机数据，则每块粒子最大数目是36*20=720个
   int split_sample_size = 80;
   for(int i = 0; i < mid_pos_num; i++){
         x = mid_pos_set[i].first;
@@ -1233,10 +1233,10 @@ void AmclNode::LocalLocBySplitMap(double search_w,double search_h,double init_x,
       //ROS_INFO("AmclNode::LocalLocBySplitMap.bef generateRandomPfSet.loop_index:%d.",loop_index++);
       int set_size = generateRandomPfSet(v_submap_pos,split_sample_size,mid_pos,search_width,search_height);
       if(!set_size)continue;
-      if(i%10 == 0){
+      if(i%20 == 0){
         double pec = (double)i/(double)mid_pos_num;
         pec*=100;
-        ROS_INFO("AmclNode::LocalLocBySplitMap.search percent:%d",(int)pec);
+        ROS_INFO("AmclNode::LocalLocBySplitMap.search percent:%d%%",(int)pec);
       }
       //reset th pf weight
       //ROS_INFO("AmclNode::LocalLocBySplitMap.bef resetAndClustingPfSet.");
@@ -1344,31 +1344,33 @@ void AmclNode::globalLocBySplitMap(void){
   int count = 0;
   pf_vector_t v_submap_pos[pf_global_loc->max_samples];
   pf_vector_t v_map_pos[mid_pos_num];
-  //假设搜索长宽是10m,100m2,分成最大粒子数块，如500块，则每块是长宽2e-1m2,one grid is qual to 2.5e-3m2,差不每块80个栅格，
-  //每个栅格，在角度上是-180-180度，共计360，如果每10度一个随机数据，则每块粒子最大数目是36*80个
-
+  //假设搜索长宽是200,4e4m2,分成最大粒子数块，如2e3块，则每块是长宽20m2,长宽大致是4.47约为5m
   int grid_size_x = map_->size_x;
   int grid_size_y = map_->size_y;
   double scale = map_->scale;
   int max_sam = pf_global_loc->max_samples;
-  int one_splitmap_size = grid_size_x * grid_size_y /max_sam ;
-  int every_grid_need_num = 30;//can set manually
-      one_splitmap_size *= every_grid_need_num;
-  int split_sample_size = one_splitmap_size < max_sam ? one_splitmap_size:max_sam;//the smaller the sub map, the smaller the sample num
+  //the area of  one sbumap
+  double one_split_area = (double)(scale*grid_size_x) * (double) (scale*grid_size_y) / max_sam ;
+  //the specified sampled num of one area submap
+  double one_area_num = 36;
+  //the sampled num for one sub map
+  int split_area_num = one_split_area * one_area_num;
 
+  int split_sample_size = split_area_num < max_sam ? split_area_num:max_sam;
+  //粗定位
   for(int i = 0; i < mid_pos_num; i++){
         x = mid_pos_set[i].first;
         y = mid_pos_set[i].second;
         mid_pos = std::make_pair(x,y);
-      //in every sub map ,generate random pos samples
-     // ROS_INFO("globalLocBySplitMap.bef generateRandomPfSet.loop_index:%d.",loop_index++);
+       //in every sub map ,generate random pos samples
+       //ROS_INFO("globalLocBySplitMap.bef generateRandomPfSet.loop_index:%d.",loop_index++);
       int set_size = generateRandomPfSet(v_submap_pos,split_sample_size,mid_pos,search_width,search_height);
 
       if(!set_size)continue;
       if(i%100 == 0){
         double pec = (double)i/(double)mid_pos_num;
-        pec*=100;
-        ROS_INFO("AmclNode::GlobalLocBySplitMap.search percent:%d",(int)pec);
+        pec *= 100;
+        ROS_INFO("AmclNode::GlobalLocBySplitMap.search percent:%d %%",(int)pec);
       }
       //reset th pf weight
       //ROS_INFO("globalLocBySplitMap.bef resetAndClustingPfSet.");
@@ -1394,37 +1396,42 @@ void AmclNode::globalLocBySplitMap(void){
       }
     }
 
-  ROS_INFO("globalLocBySplitMap.global sample set size:%d,now do global clusting...:",count);
+    ROS_INFO("globalLocBySplitMap.global sample set size:%d,now do global clusting...:",count);
 
-  //reset the pf weight bef evaluting the pf and do not clustering
-  resetAndClustingPfSet(pf_global_loc,count,v_map_pos,false);
-  evaluatePfByLaser(pf_global_loc,lasers,ldata);
-  // clustering the pf to get comprehensive loc result but do not set uniform weight
-  // so we can get a max best clustered result
-  clustingPfSet(pf_global_loc,false);
-  result = getBestSample(pf_global_loc,bestPos);
-  if(result < 0) {
-    ROS_ERROR("globalposeinit.get last best pos failed!return");
-    return;
-  }
-  // after get a best result ,we need to  set the paticle cloud  be around the best pose
-  // Otherwise, the particles will be distributed over a wide area when re evaluted,
-  // which may lead to subsequent particle divergence.
+    //reset the pf weight bef evaluting the pf and do not clustering
+    resetAndClustingPfSet(pf_global_loc,count,v_map_pos,false);
+    evaluatePfByLaser(pf_global_loc,lasers,ldata);
+    // clustering the pf to get comprehensive loc result but do not set uniform weight
+    // so we can get a max best clustered result
+    clustingPfSet(pf_global_loc,false);
+    result = getBestSample(pf_global_loc,bestPos);
+    if(result < 0) {
+      ROS_ERROR("globalposeinit.get last best pos failed!return");
+      return;
+    }
+    double w = sqrt(grid_size_x * grid_size_y /max_sam);
+    double h = w;
+    //局部区域精确定位
+    LocalLocBySplitMap(w,h,bestPos.v[0],bestPos.v[1]);
+//  // after get a best result ,we need to  set the paticle cloud  be around the best pose
+//  // Otherwise, the particles will be distributed over a wide area when re evaluted,
+//  // which may lead to subsequent particle divergence.
 
-  pf_vector_t* new_map_pos = new pf_vector_t[pf_->min_samples];
-  for(int i = 0;i < pf_->min_samples;i++){
-    new_map_pos[i].v[0] = bestPos.v[0]+0.2*(drand48()*2-1);
-    new_map_pos[i].v[1] = bestPos.v[1]+0.2*(drand48()*2-1);
-    new_map_pos[i].v[2] = bestPos.v[2]+10.0/180.0*M_PI*(drand48()*2-1);
-  }
-  resetAndClustingPfSet(pf_,pf_->min_samples,new_map_pos,false);
-  delete []new_map_pos;
-  //applyInitialPose(lasers,ldata,bestPos);
-   //result = getBestSample(bestPos);
-//  if(result>=0)
-//    pubPoseAndTF(cur_laser_scan,bestPos);
-  pf_update_resample(pf_);
-  pf_init_ = false;
+//  pf_vector_t* new_map_pos = new pf_vector_t[pf_->min_samples];
+//  for(int i = 0;i < pf_->min_samples;i++){
+//    new_map_pos[i].v[0] = bestPos.v[0]+0.2*(drand48()*2-1);
+//    new_map_pos[i].v[1] = bestPos.v[1]+0.2*(drand48()*2-1);
+//    new_map_pos[i].v[2] = bestPos.v[2]+10.0/180.0*M_PI*(drand48()*2-1);
+//  }
+//  resetAndClustingPfSet(pf_,pf_->min_samples,new_map_pos,false);
+//  delete []new_map_pos;
+//  //applyInitialPose(lasers,ldata,bestPos);
+//   //result = getBestSample(bestPos);
+////  if(result>=0)
+////    pubPoseAndTF(cur_laser_scan,bestPos);
+//  pf_update_resample(pf_);
+//  pf_init_ = false;
+    ROS_INFO("globalLocBySplitMap.done...");
 }
 //split a sub map
 void
@@ -1432,6 +1439,11 @@ AmclNode::uniformSplitSubMap(pf_t *pf,std::vector<std::pair<double,double> > & m
                 double &search_width,double &search_height, double init_x, double init_y){
   double x,y;
   int pf_samplecount = pf->max_samples;
+  //因为限定了pf_global_loc->max_samples的大小等于单个栅格采样数目*地图大小，故可以划分每个栅格作为采样点
+  if( pf_samplecount <= 0 ){
+    ROS_ERROR("AmclNode::uniformSplitSubMap.pf->max_samples <= 0.0.return!");
+    return;
+  }
   if(map_->scale <= 0.0){
     ROS_ERROR("AmclNode::uniformSplitSubMap.map_->scale <= 0.0.return!");
     return;
@@ -1442,12 +1454,6 @@ AmclNode::uniformSplitSubMap(pf_t *pf,std::vector<std::pair<double,double> > & m
   mid_pos_set.clear();
   int q,p;
   int k ;
-  //因为限定了pf_global_loc->max_samples的大小等于单个栅格采样数目*地图大小，故可以划分每个栅格作为采样点
-  if( pf_samplecount <= 0 ){
-    ROS_ERROR("AmclNode::uniformSplitSubMap.pf->max_samples <= 0.0.return!");
-    return;
-  }
-
     q = MAP_GXWX(map_,init_x);
     p = MAP_GYWY(map_,init_y);
     //if pos is valid and is free ,suc
