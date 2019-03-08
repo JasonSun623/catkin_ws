@@ -158,7 +158,8 @@ pf_vector_t pf_get_one_guassian_sample(pf_t *pf, pf_vector_t mean, pf_matrix_t c
 
 ///chq reset the pf set when get full sample
 void resetThePfSet(pf_t *pf, pf_vector_t* v_mean);
-void clustingPfSet(pf_t *pf);
+void resetOneCluster(pf_t *pf,pf_vector_t pose);
+void clustingPfSet(pf_t *pf, bool if_set_uniform_w);
 void resetAndClustingPfSet(pf_t *pf,int size,pf_vector_t* rand_pos_set, bool clusting);
 // Initialize the filter using some model
 void pf_init_model(pf_t *pf, pf_init_model_fn_t init_fn, void *init_data);

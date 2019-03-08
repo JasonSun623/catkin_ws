@@ -196,13 +196,30 @@ pf_vector_t pf_get_one_guassian_sample(pf_t *pf, pf_vector_t mean, pf_matrix_t c
   pose = pf_pdf_gaussian_sample(pdf);
   return pose;
 }
+void resetOneCluster(pf_t *pf,pf_vector_t pose){
+  pf_sample_set_t *set;
+  pf_sample_t *sample;
+  //pf有两个集合，选择当前在用的集合
+  set = pf->sets + pf->current_set;
+  pf_kdtree_clear(set->kdtree);
+  set->sample_count = 1;
 
-void clustingPfSet(pf_t *pf){
+  sample = set->samples;
+  sample->weight = 1.0;
+  sample->pose = pose;
+  pf_kdtree_insert(set->kdtree, sample->pose, sample->weight);
+  pf->w_slow = pf->w_fast = 0.0;
+   pf_cluster_stats(pf, set);
+  pf_init_converged(pf);
+}
+
+void clustingPfSet(pf_t *pf,bool if_set_uniform_w){
   pf_sample_set_t *set;
   pf_sample_t *sample;
   //pf有两个集合，选择当前在用的集合
   set = pf->sets + pf->current_set;
   int size = set->sample_count;
+  if(!size)return;
   // Create the kd tree for adaptive sampling
   pf_kdtree_clear(set->kdtree);
 
@@ -211,6 +228,7 @@ void clustingPfSet(pf_t *pf){
   for (; i < size; i++)
   {
     sample = set->samples+i;
+    if(if_set_uniform_w)sample->weight = 1.0/(double)size;
     pf_kdtree_insert(set->kdtree, sample->pose, sample->weight);
   }
   pf->w_slow = pf->w_fast = 0.0;
@@ -332,19 +350,15 @@ void pf_init_model(pf_t *pf, pf_init_model_fn_t init_fn, void *init_data)
 
   return;
 }
-//init model by split map
-//chq 将地图拆分成很多小块，每块执行一次粒子聚合，每块得到分值最高粒子，然后再进行一次聚合。保证每一块都有建议解
-//void pf_init_model(pf_t *pf, void *init_data){
 
-//}
-
+//初始化收敛状态
 void pf_init_converged(pf_t *pf){
   pf_sample_set_t *set;
   set = pf->sets + pf->current_set;
   set->converged = 0; 
   pf->converged = 0; 
 }
-
+//计算滤波器是否收敛
 int pf_update_converged(pf_t *pf)
 {
   int i;
@@ -466,8 +480,8 @@ void pf_update_resample(pf_t *pf)
   // (e.g., http://www.network-theory.co.uk/docs/gslref/GeneralDiscreteDistributions.html)
   c = (double*)malloc(sizeof(double)*(set_a->sample_count+1));
   c[0] = 0.0;
-  for(i=0;i<set_a->sample_count;i++)
-    c[i+1] = c[i]+set_a->samples[i].weight;
+  for(i = 0; i < set_a->sample_count; i++)
+    c[i+1] = c[i] + set_a->samples[i].weight;
 
   // Create the kd tree for adaptive sampling
   pf_kdtree_clear(set_b->kdtree);
@@ -494,8 +508,9 @@ void pf_update_resample(pf_t *pf)
   while(set_b->sample_count < pf->max_samples)
   {
     sample_b = set_b->samples + set_b->sample_count++;
-
-    if(drand48() < w_diff)//生成一个新的位置
+    ///chq The bigger the deviation,
+    //the greater the possibility of generating a new pos.
+    if(drand48() < w_diff)
       sample_b->pose = (pf->random_pose_fn)(pf->random_pose_data);
     else
     {
@@ -533,7 +548,7 @@ void pf_update_resample(pf_t *pf)
       }
       assert(i<set_a->sample_count);
 
-      sample_a = set_a->samples + i;//轮盘赌方式选择一个老数据
+      sample_a = set_a->samples + i;///轮盘赌方式选择一个老数据
 
       assert(sample_a->weight > 0);
 
@@ -552,7 +567,8 @@ void pf_update_resample(pf_t *pf)
       break;
   }
   
-  // Reset averages, to avoid spiraling off into complete randomness.
+  /// Reset averages, to avoid spiraling off(螺旋式) into complete randomness.
+  //
   if(w_diff > 0.0)
     pf->w_slow = pf->w_fast = 0.0;
 

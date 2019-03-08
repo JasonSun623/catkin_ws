@@ -221,8 +221,6 @@ double AMCLLaser::evaluateOnePose(AMCLLaserData*  data, pf_vector_t pose){
   AMCLLaser *self;
   self = (AMCLLaser*) data->sensor;
   double worst =  -999999;
-  static double his_best_p = worst;
-  static pf_vector_t his_best_pose = pose ;
   pf_vector_t hit;
   pf_vector_t map2base = pose;
   // Take account of the laser pose relative to the robot
@@ -233,9 +231,7 @@ double AMCLLaser::evaluateOnePose(AMCLLaserData*  data, pf_vector_t pose){
   //    self->laser_pose.v[0],self->laser_pose.v[1],self->laser_pose.v[2],
   //    pose.v[0],pose.v[1],pose.v[2]) ;
  p = 0;
-  // Pre-compute a couple of things
-  double z_hit_denom = 2 * self->sigma_hit * self->sigma_hit;//测量噪声的方差chq
-  double z_rand_mult = 1.0/data->range_max;
+
 
   step = (data->range_count - 1) / (self->max_beams - 1);
 
@@ -246,24 +242,22 @@ double AMCLLaser::evaluateOnePose(AMCLLaserData*  data, pf_vector_t pose){
   // 对所有特征（激光数据）进行遍历
   //printf("evaluate one scan.scan size:%d,step:%d\n",data->range_count,step);
   ///!!!step 间隔过大　不利于收敛（大部分数据没用上），故这里设为１(but influence speed)
-  //for (i = 0; i < data->range_count; i += step)
   static bool cnt = 0;
   if(!cnt){
-    printf("evaluate one scan.data->range_max:%d\n",data->range_max);
+    printf("evaluate one scan.data->range_max:%.3f\n",data->range_max);
     cnt = true;
   }
   
-  
+  double max_err_bound_thread  = 0.05;
+  double min_err_bound_thread  = 0.05;
+  int mi, mj;
   for (i = 0; i < data->range_count; i += step)
   {
     //printf("AMCLLaser::evaluateOnePose.loop start \n");
     obs_range = data->ranges[i][0];
     obs_bearing = data->ranges[i][1];
-
     // This model ignores max range readings
     // 似然域测量模型简单地将最大距离读数丢弃
-    double max_err_bound_thread  = 0.05;
-    double min_err_bound_thread  = 0.05;
     if(obs_range >= data->range_max - max_err_bound_thread || obs_range <= min_err_bound_thread  )
       continue;
 
@@ -271,23 +265,9 @@ double AMCLLaser::evaluateOnePose(AMCLLaserData*  data, pf_vector_t pose){
     if(obs_range != obs_range)
       continue;
 
-    pz = 0.0;
-    //printf("AMCLLaser::evaluateOnePose.sum start.p:%.6f \n",pz);
-    // Compute the endpoint of the beam
-
-    int mi, mj;
-    mi = MAP_GXWX(self->map, pose.v[0]);
-    mj = MAP_GYWY(self->map, pose.v[1]);
-    if(!MAP_VALID(self->map, mi, mj)){
-      printf("AMCLLaser::evaluateOnePose.para outbound.return worst value\n");
-      return worst;
-    }
-
     hit.v[0] = pose.v[0] + obs_range * cos(pose.v[2] + obs_bearing);///相对激光点[endpoint]位置转到绝对激光点位置
     hit.v[1] = pose.v[1] + obs_range * sin(pose.v[2] + obs_bearing);
 
-    // Convert to map grid coords.
-   // int mi, mj;
     mi = MAP_GXWX(self->map, hit.v[0]);
     mj = MAP_GYWY(self->map, hit.v[1]);
 
@@ -301,41 +281,12 @@ double AMCLLaser::evaluateOnePose(AMCLLaserData*  data, pf_vector_t pose){
      // printf("AMCLLaser::evaluateOnePose.obs cord outbound.use prob value\n");
       z = self->map->cells[MAP_INDEX(self->map,mi,mj)].occ_dist;
     }
-    //将正态分布与均匀分布混合后得到的似然结果
-    // Gaussian model
-    // NOTE: this should have a normalization of 1/(sqrt(2pi)*sigma)
-    //pz += self->z_hit * exp(-(z * z) / z_hit_denom);
-    pz = -z;
-    //printf("AMCLLaser::evaluateOnePose.z:%.6f,pz+1:%.6f\n",z,pz);
-    // Part 2: random measurements
+    p += -z;
 
-    //pz += self->z_rand * z_rand_mult;
-    //printf("AMCLLaser::evaluateOnePose.pz+2:%.6f\n",pz);
-    // TODO: outlier rejection for short readings
-
-    //assert(pz <= 1.0);
-    //assert(pz >= 0.0);
-    //      p *= pz;
-    // here we have an ad-hoc weighting scheme for combining beam probs
-    // works well, though...
-    //p += pz*pz*pz; /// disable by chq
-    p += pz;
-    //printf("AMCLLaser::evaluateOnePose.every beam pz: %.6f,p: %.6f \n",pz,p);
   }
-  if(p >= 0 ){
-    printf("hyoou!\n");
-  }
-#if 0
-  if(p > his_best_p){
-
-    his_best_p = p;
-    his_best_pose = pose;
-    printf("AMCLLaser::evaluateOnePose.cur pose<->histbestpose:(%.6f,%.6f,%.6f)-(%.6f,%.6f,%.6f) p<->best_p:(%.6f-%.6f)\n",
-           pose.v[0],pose.v[1],pose.v[2],his_best_pose.v[0], his_best_pose.v[1],his_best_pose.v[2],
-           p,his_best_p);
-  }
-#endif
-
+//  if(p >= 0 ){
+//    printf("hyoou!\n");
+//  }
   return p;
 }
 double AMCLLaser::LikelihoodFieldModel(AMCLLaserData *data, pf_sample_set_t* set)
