@@ -24,7 +24,7 @@
 #include <vector>
 #include <map>
 #include <cmath>
-
+#include <stdio.h>
 #include <boost/bind.hpp>
 #include <boost/thread/mutex.hpp>
 
@@ -87,22 +87,127 @@ class InitLocObjective
 public:
    // objective function example : Rosenbrock function
    // minimizing f(x,y) = (1 - x)^2 + 100 * (y - x^2)^2
+#if 0
    static std::vector<T> Objective(const std::vector<T>& x)
    {
-     laser = (AMCLLaser*) data->sensor;
+
      pf_vector_t pose;
-     pose.v[0] = x[0]; pose.v[1] = x[1]; pose.v[2] = x[2];
+     pose.v[0] = x[0];
+     pose.v[1] = x[1];
+     pose.v[2] = x[2];
+     T obj = evaluateOnePose(pose);
+     //ROS_INFO("GA.Obj.pose:(%.6f,%.6f,%.6f) objv:%.6f",pose.v[0],pose.v[1],pose.v[2],obj);
+     //// NB: GALGO maximize by default
+     return {obj};
+   }
+
+   static T evaluateOnePose(pf_vector_t pose){
+     int i, j, step;
+     double obs_range, obs_bearing;
+     T p;
+     double z, pz;
+     double worst =  -999999;
+     pf_vector_t hit;
+     pf_vector_t map2base = pose;
+     // Take account of the laser pose relative to the robot
+     //map2base * base2laser = map2laser.
+     pose = pf_vector_coord_add(laser_pose, map2base);///相对激光头[head]位置转到绝对激光位置
+     //printf("AMCLLaser::evaluateOnePose.map2base:(%.6f,%.6f,%.6f).base2laser:(%.6f,%.6f,%.6f).map2laser:(%.6f,%.6f,%.6f)\n",
+     //    map2base.v[0],map2base.v[1],map2base.v[2],
+     //    self->laser_pose.v[0],self->laser_pose.v[1],self->laser_pose.v[2],
+     //    pose.v[0],pose.v[1],pose.v[2]) ;
+    p = 0;
+
+
+     step = (data.range_count - 1) / (max_beams - 1);
+
+     // Step size must be at least 1
+     if(step < 1)
+       step = 1;
+     // 开始通过利用与最近物体的欧氏距离计算激光模型似然的算法，
+     // 对所有特征（激光数据）进行遍历
+     //printf("evaluate one scan.scan size:%d,step:%d\n",data->range_count,step);
+     ///!!!step 间隔过大　不利于收敛（大部分数据没用上），故这里设为１(but influence speed)
+     static bool cnt = 0;
+     if(!cnt){
+       printf("evaluate one scan.data->range_max:%.3f\n",data.range_max);
+       cnt = true;
+     }
+
+     double max_err_bound_thread  = 0.05;
+     double min_err_bound_thread  = 0.05;
+     int mi, mj;
+     int use_beams_cnt = 0;
+     double sum_temp = 0.0;
+     for (i = 0; i < data.range_count; i += step)
+     {
+       //printf("AMCLLaser::evaluateOnePose.loop start \n");
+       obs_range = data.ranges[i][0];
+       obs_bearing = data.ranges[i][1];
+       // This model ignores max range readings
+       // 似然域测量模型简单地将最大距离读数丢弃
+       if(obs_range >= data.range_max - max_err_bound_thread || obs_range <= min_err_bound_thread  )
+         continue;
+
+       // Check for NaN
+       if(obs_range != obs_range)
+         continue;
+       use_beams_cnt++;
+       hit.v[0] = pose.v[0] + obs_range * cos(pose.v[2] + obs_bearing);///相对激光点[endpoint]位置转到绝对激光点位置
+       hit.v[1] = pose.v[1] + obs_range * sin(pose.v[2] + obs_bearing);
+
+       mi = MAP_GXWX(map, hit.v[0]);
+       mj = MAP_GYWY(map, hit.v[1]);
+
+       // Part 1: Get distance from the hit to closest obstacle.
+       // Off-map penalized as max distance
+       if(!MAP_VALID(map, mi, mj)){
+        // printf("AMCLLaser::evaluateOnePose.obs cord outbound.use min prob value\n");
+         z = map->max_occ_dist;
+       }
+       else{
+        // printf("AMCLLaser::evaluateOnePose.obs cord outbound.use prob value\n");
+         z =map->cells[MAP_INDEX(map,mi,mj)].occ_dist;
+       }
+       if(z == 0.0){
+          printf("oh.my god\n");
+       }
+       sum_temp+=z;
+       p += -z;
+
+     }
+   //  if(p >= 0 ){
+   //    printf("hyoou!\n");
+   //  }
+     //printf("ga.evalute use_beams_cnt:%d\n",use_beams_cnt);
+     if(sum_temp <= 0)
+       printf("oh.my god\n");
+     return p;
+   }
+
+   //static AMCLLaser *laser;
+
+   static AMCLLaserData  data;
+
+   static pf_vector_t laser_pose;
+   static int max_beams;
+   static map_t* map;
+
+#endif
+   static std::vector<T> Objective(const std::vector<T>& x)
+   {
+//     laser = (AMCLLaser*) data.sensor;
+     pf_vector_t pose;
+     pose.v[0] = x[0];
+     pose.v[1] = x[1];
+     pose.v[2] = x[2];
      T obj = laser->evaluateOnePose(data,pose);
      //ROS_INFO("GA.Obj.pose:(%.6f,%.6f,%.6f) objv:%.6f",pose.v[0],pose.v[1],pose.v[2],obj);
      //// NB: GALGO maximize by default
       return {obj};
    }
-   //std::vector<T> ScanConstraint(const std::vector<T>& x)
-   //{
-   //   return {x[0]*x[1]+x[0]-x[1]+1.5,10-x[0]*x[1]};
-   //}
    static AMCLLaser *laser;
-   static AMCLLaserData*  data;
+   static AMCLLaserData  *data;
 private:
 
 
@@ -113,7 +218,17 @@ template<typename T>
 AMCLLaser* InitLocObjective<T>::laser = NULL;
 
 template<typename T>
-AMCLLaserData* InitLocObjective<T>::data = NULL;
+AMCLLaserData* InitLocObjective<T>::data=NULL;
+#if 0
+template<typename T>
+pf_vector_t InitLocObjective<T>::laser_pose;
+
+template<typename T>
+int InitLocObjective<T>::max_beams;
+
+template<typename T>
+map_t* InitLocObjective<T>::map=NULL;
+#endif
 
 // Pose hypothesis
 typedef struct
@@ -185,6 +300,7 @@ class AmclNode
     // Pose-generating function used to uniformly distribute particles over
     // the map
     static pf_vector_t uniformPoseGenerator(void* arg);
+    static pf_vector_t limitUniformPoseGenerator(void* pf,void* arg);
 #if NEW_UNIFORM_SAMPLING
     static std::vector<std::pair<int,int> > free_space_indices;
 #endif
@@ -221,17 +337,18 @@ class AmclNode
     double getYaw(tf::Pose& t);
 
     //for global search pos chq
+    void LocalLocByGaAlogrithm(double search_radius, pf_vector_t init_pos);
     void LocalLocBySplitMap(double search_w,double search_h,double init_x,double init_y);
     void globalLocBySplitMap(void);
     void uniformSplitSubMap(pf_t *pf,std::vector<std::pair<double,double> > & mid_pos_set,
                     double &search_width,double &search_height, double init_x, double init_y);
     void uniformSplitMap(pf_t *pf,std::vector<std::pair<double,double> > & mid_pos_set,double &search_width,double &search_height);
     //按照给定的单位面积内采样粒子数　生成随机粒子
-    int generatePfBySampleDensity(pf_vector_t* out_pf_set,map_t* map,int den,std::pair<double,double> mid_pos);
+    //int generatePfBySampleDensity(pf_vector_t* out_pf_set,map_t* map,int den,std::pair<double,double> mid_pos);
     int generateRandomPfSet(pf_vector_t* out_pf_set,int gennum, std::pair<double,double>mid_pos,double search_width,double search_height);
     void updatePfByLaser(AMCLLaser* laser,AMCLLaserData& ldata );
     void evaluatePfByLaser(pf_t *pf,AMCLLaser* laser,AMCLLaserData& ldata);
-    int getBestSample(pf_t *pf,pf_vector_t& best_pose);
+    int getBestSample(pf_t *pf,pf_vector_t& best_pose,double& best_weight);
     int getBestClusterSample(pf_t *pf,pf_vector_t& best_pose);
 
 
@@ -338,6 +455,9 @@ class AmclNode
     int particles_per_m2;//每平方多少个粒子
     double alpha1_, alpha2_, alpha3_, alpha4_, alpha5_;
     double alpha_slow_, alpha_fast_;
+    ///chq add for gen a limit random pos
+    static double resample_search_radius_;
+
     double z_hit_, z_short_, z_max_, z_rand_, sigma_hit_, lambda_short_;
   //beam skip related params
     bool do_beamskip_;
@@ -370,7 +490,7 @@ class AmclNode
     ros::Duration laser_check_interval_;
     void checkLaserReceived(const ros::TimerEvent& event);
 };
-
+double AmclNode::resample_search_radius_ = 1;
 std::vector<std::pair<int,int> > AmclNode::free_space_indices;
 
 #define USAGE "USAGE: amcl"
@@ -470,7 +590,7 @@ AmclNode::AmclNode() :
   private_nh_.param("laser_likelihood_max_dist", laser_likelihood_max_dist_, 2.0);
   std::string tmp_model_type;
   private_nh_.param("laser_model_type", tmp_model_type, std::string("likelihood_field"));
-  private_nh_.param<std::string>("init_loc_method",init_loc_method,"rand_pf");//raw / rand_pf / ga
+  private_nh_.param<std::string>("init_loc_method",init_loc_method,"ga");//raw / rand_pf / ga
   if(tmp_model_type == "beam")
     laser_model_type_ = LASER_MODEL_BEAM;
   else if(tmp_model_type == "likelihood_field")
@@ -509,20 +629,24 @@ AmclNode::AmclNode() :
   private_nh_.param("resample_interval", resample_interval_, 2);
   double tmp_tol;
   private_nh_.param("transform_tolerance", tmp_tol, 0.1);
+  ///chq慢速平均权重滤波器的指数衰减率，
+  //用于决定何时通过添加随机姿态进行恢复操作，0.0表示禁用
+  private_nh_.param("resample_search_radius", resample_search_radius_, 2.0);///chq a rand pos gen range
   private_nh_.param("recovery_alpha_slow", alpha_slow_, 0.001);
   private_nh_.param("recovery_alpha_fast", alpha_fast_, 0.1);
+
   private_nh_.param("tf_broadcast", tf_broadcast_, true);
 
   ///ga for init loc
-  private_nh_.param("ga/pop_num", ga_pop_num, 100);
-  private_nh_.param("ga/generation", ga_generation, 50);
-  private_nh_.param("ga/search_radius", ga_search_radius, 7.5);
-  private_nh_.param("ga/angle_error_para", ga_angle_error_para, 0.6);
-  private_nh_.param("ga/x_encode_len", ga_x_encode_len, 32);
-  private_nh_.param("ga/y_encode_len", ga_y_encode_len, 32);
-  private_nh_.param("ga/angle_encode_len", ga_angle_encode_len, 32);
+  private_nh_.param("ga/pop_num", ga_pop_num, 200);
+  private_nh_.param("ga/generation", ga_generation, 200);
+  private_nh_.param("ga/search_radius", ga_search_radius, 10.0);
+  private_nh_.param("ga/angle_error_para", ga_angle_error_para, 1.0);
+//  private_nh_.param("ga/x_encode_len", ga_x_encode_len, 25);
+//  private_nh_.param("ga/y_encode_len", ga_y_encode_len, 25);
+//  private_nh_.param("ga/angle_encode_len", ga_angle_encode_len, 25);
   private_nh_.param("ga/covrate", ga_covrate, 0.95);
-  private_nh_.param("ga/mutrate", ga_mutrate, 0.05);
+  private_nh_.param("ga/mutrate", ga_mutrate, 0.5);
   private_nh_.param("ga/outputting_precision", ga_outputting_precision, 6);
   private_nh_.param("ga/select_method", ga_select_method, std::string("SUS"));
   private_nh_.param("ga/cross_method", ga_cross_method, std::string("P1XO"));
@@ -676,10 +800,31 @@ void AmclNode::reconfigureCB(AMCL_OPTIMIZEConfig &config, uint32_t level)
                  alpha_slow_, alpha_fast_,
                  (pf_init_model_fn_t)AmclNode::uniformPoseGenerator,
                  (void *)map_);
+  ///chq
+  pf_->limit_random_pose_fn = (pf_limit_sample_fn_t)AmclNode::limitUniformPoseGenerator;
+
   pf_err_ = config.kld_err; 
   pf_z_ = config.kld_z; 
   pf_->pop_err = pf_err_;
   pf_->pop_z = pf_z_;
+
+  ///ga
+  ga_pop_num = config.pop_num;
+  ga_generation = config.generation;
+  ga_covrate = config.covrate;
+  ga_mutrate = config.mutrate;
+
+//  ga_x_encode_len = config.x_encode_len;
+//  ga_y_encode_len = config.y_encode_len;
+//  ga_angle_encode_len = config.angle_encode_len;
+
+  ga_angle_error_para = config.angle_error_para;
+  ga_search_radius = config.search_radius;
+  ga_outputting_precision = config.outputting_precision;
+  ga_cross_method = config.cross_method;
+  ga_mutation_method =config.mutation_method;
+  ga_select_method = config.select_method;
+
 
   ///for init or global loc
 
@@ -690,6 +835,7 @@ void AmclNode::reconfigureCB(AMCL_OPTIMIZEConfig &config, uint32_t level)
   pf_global_loc->pop_err = pf_err_;
   pf_global_loc->pop_z = pf_z_;
 
+  pf_global_loc->limit_random_pose_fn = (pf_limit_sample_fn_t)AmclNode::limitUniformPoseGenerator;
   // Initialize the filter
   pf_vector_t pf_init_pose_mean = pf_vector_zero();
   pf_init_pose_mean.v[0] = last_published_pose.pose.pose.position.x;
@@ -980,9 +1126,9 @@ AmclNode::handleMapMessage(const nav_msgs::OccupancyGrid& msg)
                  (void *)map_);//chq create pf
   pf_->pop_err = pf_err_;
   pf_->pop_z = pf_z_;
-
+  pf_->limit_random_pose_fn = (pf_limit_sample_fn_t)AmclNode::limitUniformPoseGenerator;
   //the max count is fit map size actively
-  //this pf is used for init orr global  loc
+  //this pf is used for init orr global loc
 
   pf_global_loc = pf_alloc(min_particles_, max_particles_,
                  alpha_slow_, alpha_fast_,
@@ -990,7 +1136,7 @@ AmclNode::handleMapMessage(const nav_msgs::OccupancyGrid& msg)
                  (void *)map_);//chq create pf
   pf_global_loc->pop_err = pf_err_;
   pf_global_loc->pop_z = pf_z_;
-
+  pf_global_loc->limit_random_pose_fn = (pf_limit_sample_fn_t)AmclNode::limitUniformPoseGenerator;
 
 
   // Initialize the filter
@@ -1172,7 +1318,155 @@ AmclNode::uniformPoseGenerator(void* arg)
 #endif
   return p;
 }
-void AmclNode::LocalLocBySplitMap(double search_w,double search_h,double init_x,double init_y){
+///chq generator a random pos in a limit area
+
+pf_vector_t AmclNode::limitUniformPoseGenerator(void* pf,void* arg)
+{
+  pf_t* pf_ = (pf_t*)pf;
+  map_t* map = (map_t*)arg;
+  pf_vector_t bestpos,gen_pos;
+  double x,y,angle;
+  int q,p;
+
+  double search_width_radius  = resample_search_radius_;
+  int try_num = 2;
+  double best_w;
+  double max_weight = 0.0;
+  int max_weight_hyp = -1;
+
+  pf_sample_set_t* set;
+  pf_sample_t *sample;
+  set = pf_->sets + pf_->current_set;
+
+  ///
+  double best_weight = 0.0;
+  ///
+  for(int count = 0;count < set->sample_count;count++)
+  {
+    double weight;
+    pf_vector_t pose_mean;
+    pf_matrix_t pose_cov;
+    sample = set->samples + count;
+    weight = sample->weight;
+    pose_mean = sample->pose;
+    pose_cov = pf_matrix_zero();
+    if( weight > max_weight)
+    {
+      bestpos = pose_mean;
+      max_weight = weight;
+    }
+  }
+  if(max_weight <= 0.0)
+  {
+     return pf_vector_zero();
+  }
+
+  double mid_x = bestpos.v[0];
+  double mid_y = bestpos.v[1];
+  while(try_num--){
+    //如果搜索长宽都等与０　代表此坐标已经check过了，默认有效
+      x = mid_x + drand48()*2*search_width_radius - search_width_radius;
+      y = mid_y + drand48()*2*search_width_radius - search_width_radius;
+      // Check that it's a free cell
+      q = MAP_GXWX(map,x);
+      p = MAP_GYWY(map,y);
+      //if pos is valid and is free ,suc
+      if(MAP_VALID(map,q,p) && (map->cells[MAP_INDEX(map,q,p)].occ_state == -1)){
+        break;
+      }
+  }
+  if(try_num < 0)
+    return bestpos;
+
+  angle = drand48()*2*M_PI - M_PI;//
+  angle = normalize(angle);
+  gen_pos.v[0] = x;
+  gen_pos.v[1] = y;
+  gen_pos.v[2] = angle;
+
+  return gen_pos;
+}
+
+void
+AmclNode::LocalLocByGaAlogrithm(double search_radius, pf_vector_t init_pos){
+  pf_vector_t mean_result;
+  ROS_INFO("LocalLocByGaAlogrithm.start...");
+  ///TODO 种群规模太大会出现问题　待解决
+  /// 初始值很重要
+  //模板参数都是在编译期间就确定下来的，你用一个变量来做参数怎么能编译通过呢
+  galgo::Parameter<double,32> para1({init_pos.v[0]-search_radius, init_pos.v[0]+search_radius,init_pos.v[0]});//min max init_value
+  galgo::Parameter<double,32> para2({init_pos.v[1]-search_radius, init_pos.v[1]+search_radius,init_pos.v[1]});
+  galgo::Parameter<double,10> para3({ -M_PI,M_PI,init_pos.v[2]});
+
+  ///激光数据必须先修正
+  if(!cur_laser_scan ||
+     frame_to_laser_.find(cur_laser_scan->header.frame_id) == frame_to_laser_.end()){
+    ROS_ERROR("!!!AmclNode::LocalLocByGaAlogrithm.cur_laser_scan is not valid.return");
+    return;
+  }
+
+  const sensor_msgs::LaserScan::ConstPtr tmp_laser = cur_laser_scan;
+  //insert the laser msg into laser vector
+  //and update laser sensor pos in base frame
+  int laser_index = -1;
+  laser_index = updateLaserVector(tmp_laser);
+  if( laser_index < 0){
+    ROS_ERROR("AmclNode::LocalLocByGaAlogrithm.updateLaserVector. laser_index < 0 return!!!");
+    return ;
+  }
+
+  AMCLLaser* lasers = lasers_[laser_index];
+  AMCLLaserData ldata;
+  int tail_result = tailoringScan(tmp_laser,lasers,ldata);
+  if( tail_result < 0 ){
+    ROS_ERROR("AmclNode::LocalLocByGaAlogrithm.tailoringScan failed return!!!");
+    return;
+  }
+
+  InitLocObjective<double> t;
+  #if 0
+  t.data = ldata;
+  pf_vector_t temp_pos;
+  lasers->GetLaserPose(temp_pos);
+  t.laser_pose = temp_pos;
+  t.max_beams = max_beams_;
+  t.map = map_;
+#endif
+  t.data = &ldata;
+  t.laser = (AMCLLaser*) ldata.sensor;
+
+  //GeneticAlgorithm(Func<T> objective, int popsize, int nbgen, bool output, const Parameter<T,N>&...args)
+  galgo::GeneticAlgorithm<double> ga( InitLocObjective<double>::Objective,ga_pop_num,ga_generation,true,para1,para2,para3);
+ // ga.tolerance= 0.0001;
+  ///TODO switch case to change
+  ga.Selection = SUS; // stochastic universal sampling (SUS)//sus 随机遍历采样
+  ga.CrossOver = P2XO;// uniform cross-over (UXO)//
+  ga.Mutation = UNM; // uniform mutation
+
+  ga.covrate = ga_covrate;
+  ga.mutrate = ga_mutrate;
+  ga.precision = ga_outputting_precision;////number of decimals for <outputting> results
+  #if 0
+    // setting constraints
+    ga.Constraint = MyObj<double>::MyConstraint;
+    ga.tolerance = -0.05*0.05;//terminal condition to stop the algorithm
+    ga.precision = 2;
+  #endif
+  ga.run();
+
+  galgo::CHR<double> result(ga.result()) ;
+  std::vector<double> para = result.get()->getParam();
+  std::vector<double> err = result.get()->getResult();
+
+  mean_result.v[0] = para[0];
+  mean_result.v[1] = para[1];
+  mean_result.v[2] = para[2];
+  pf_init(pf_, mean_result,pf_matrix_zero());
+  pf_init_ = false;
+}
+
+void
+AmclNode::LocalLocBySplitMap(double search_w,double search_h,double init_x,double init_y){
   int result = -1;
   ROS_INFO("LocalLocBySplitMap.start...");
 
@@ -1207,6 +1501,7 @@ void AmclNode::LocalLocBySplitMap(double search_w,double search_h,double init_x,
   std::vector<std::pair<double,double> >  mid_pos_set;
 
   pf_vector_t bestPos;
+  double best_w;
   pf_global_loc->max_samples = max_particles_;
 
   //uniformly split the map , get every mid pos
@@ -1226,40 +1521,41 @@ void AmclNode::LocalLocBySplitMap(double search_w,double search_h,double init_x,
   //每个栅格，在角度上是-180-180度，共计360，如果每10度一个随机数据，则每块粒子最大数目是36*20=720个
   int split_sample_size = 80;
   for(int i = 0; i < mid_pos_num; i++){
-        x = mid_pos_set[i].first;
-        y = mid_pos_set[i].second;
-        mid_pos = std::make_pair(x,y);
-      //in every sub map ,generate random pos samples
-      //ROS_INFO("AmclNode::LocalLocBySplitMap.bef generateRandomPfSet.loop_index:%d.",loop_index++);
-      int set_size = generateRandomPfSet(v_submap_pos,split_sample_size,mid_pos,search_width,search_height);
-      if(!set_size)continue;
-      if(i%20 == 0){
-        double pec = (double)i/(double)mid_pos_num;
-        pec*=100;
-        ROS_INFO("AmclNode::LocalLocBySplitMap.search percent:%d%%",(int)pec);
-      }
-      //reset th pf weight
-      //ROS_INFO("AmclNode::LocalLocBySplitMap.bef resetAndClustingPfSet.");
-      resetAndClustingPfSet(pf_global_loc,set_size,v_submap_pos,false);
-      //ROS_INFO("AmclNode::LocalLocBySplitMap.aft resetAndClustingPfSet.");
-      //score every sample
-      //ROS_INFO("AmclNode::LocalLocBySplitMap.bef evaluatePfByLaser.");
-      evaluatePfByLaser(pf_global_loc,lasers,ldata);
-      //ROS_INFO("AmclNode::LocalLocBySplitMap.after evaluatePfByLaser.");
+    x = mid_pos_set[i].first;
+    y = mid_pos_set[i].second;
+    mid_pos = std::make_pair(x,y);
+    //in every sub map ,generate random pos samples
+    //ROS_INFO("AmclNode::LocalLocBySplitMap.bef generateRandomPfSet.loop_index:%d.",loop_index++);
+    int set_size = generateRandomPfSet(v_submap_pos,split_sample_size,mid_pos,search_width,search_height);
+    if(!set_size)continue;
+    if(i%20 == 0){
+      double pec = (double)i/(double)mid_pos_num;
+      pec*=100;
+      ROS_INFO("AmclNode::LocalLocBySplitMap.search percent:%d%%",(int)pec);
+    }
+    //reset th pf weight
+    //ROS_INFO("AmclNode::LocalLocBySplitMap.bef resetAndClustingPfSet.");
+    resetAndClustingPfSet(pf_global_loc,set_size,v_submap_pos,false);
+    //ROS_INFO("AmclNode::LocalLocBySplitMap.aft resetAndClustingPfSet.");
+    //score every sample
+    //ROS_INFO("AmclNode::LocalLocBySplitMap.bef evaluatePfByLaser.");
+    evaluatePfByLaser(pf_global_loc,lasers,ldata);
+    //ROS_INFO("AmclNode::LocalLocBySplitMap.after evaluatePfByLaser.");
 
-      //cluster the evaluted pf
-      //then we can get a comprehensive loc result in every sub map
-      //ROS_INFO("AmclNode::LocalLocBySplitMap.bef clustingPfSet.");
-      ///clustingPfSet(pf_global_loc,false);
-      //ROS_INFO("AmclNode::LocalLocBySplitMap.aft clustingPfSet.");
-      //get best clustered sample pos in sub map
-      // ROS_INFO("AmclNode::LocalLocBySplitMap.bef getBestSample.");
-      result = getBestSample(pf_global_loc,bestPos);
-       //ROS_INFO("AmclNode::LocalLocBySplitMap.after getBestSample.");
-      if(result >= 0 ){
-        //store every cluster pos for evaluting in complete map
-        v_map_pos[count++]=bestPos;
-      }
+    //cluster the evaluted pf
+    //then we can get a comprehensive loc result in every sub map
+    //ROS_INFO("AmclNode::LocalLocBySplitMap.bef clustingPfSet.");
+    ///clustingPfSet(pf_global_loc,false);
+    //ROS_INFO("AmclNode::LocalLocBySplitMap.aft clustingPfSet.");
+    //get best clustered sample pos in sub map
+    // ROS_INFO("AmclNode::LocalLocBySplitMap.bef getBestSample.");
+    double
+    result = getBestSample(pf_global_loc,bestPos,best_w);
+     //ROS_INFO("AmclNode::LocalLocBySplitMap.after getBestSample.");
+    if(result >= 0 ){
+      //store every cluster pos for evaluting in complete map
+      v_map_pos[count++]=bestPos;
+    }
     }
 
   //ROS_INFO("AmclNode::LocalLocBySplitMap.global sample set size:%d,now do global clusting...:",count);
@@ -1270,33 +1566,21 @@ void AmclNode::LocalLocBySplitMap(double search_w,double search_h,double init_x,
   // clustering the pf to get comprehensive loc result but do not set uniform weight
   // so we can get a max best clustered result
   clustingPfSet(pf_global_loc,false);
-  result = getBestSample(pf_global_loc,bestPos);
+  result = getBestSample(pf_global_loc,bestPos,best_w);
   if(result < 0) {
     ROS_ERROR("globalposeinit.get last best pos failed!return");
     return;
   }
-  // after get a best result ,we need to  set the paticle cloud  be around the best pose
-  // Otherwise, the particles will be distributed over a wide area when re evaluted,
-  // which may lead to subsequent particle divergence.
-  pf_vector_t* new_map_pos = new pf_vector_t[pf_->min_samples];
-  //ROS_INFO("locallocbysplitmap.pf_minsample : %d",pf_->min_samples);
-  for(int i = 0;i < pf_->min_samples;i++){
-    new_map_pos[i].v[0] = bestPos.v[0]+0.2*(drand48()*2-1);
-    new_map_pos[i].v[1] = bestPos.v[1]+0.2*(drand48()*2-1);
-    new_map_pos[i].v[2] = bestPos.v[2]+10.0/180.0*M_PI*(drand48()*2-1);
-  }
-  resetAndClustingPfSet(pf_,pf_->min_samples,new_map_pos,false);
-  delete []new_map_pos;
-  //applyInitialPose(lasers,ldata,bestPos);
-   //result = getBestSample(bestPos);
-//  if(result >= 0)
-//    pubPoseAndTF(cur_laser_scan,bestPos);
-   pf_update_resample(pf_);
-  ROS_INFO("AmclNode::LocalLocBySplitMap.Done");
+
+  pf_matrix_t cov =pf_matrix_zero();
+  pf_init(pf_, bestPos,cov);
   pf_init_ = false;
+  ROS_INFO("AmclNode::LocalLocBySplitMap.Done");
+
 }
 
-void AmclNode::globalLocBySplitMap(void){
+void
+AmclNode::globalLocBySplitMap(void){
   int result = -1;
   ROS_INFO("globalLocBySplitMap.start...");
 
@@ -1330,6 +1614,7 @@ void AmclNode::globalLocBySplitMap(void){
   std::vector<std::pair<double,double> >  mid_pos_set;
 
   pf_vector_t bestPos;
+  double best_w;
   pf_global_loc->max_samples = max_particles_;
   //uniformly split the map , get every mid pos
   //and the sub map's width and height in sub map
@@ -1344,7 +1629,7 @@ void AmclNode::globalLocBySplitMap(void){
   int count = 0;
   pf_vector_t v_submap_pos[pf_global_loc->max_samples];
   pf_vector_t v_map_pos[mid_pos_num];
-  //假设搜索长宽是200,4e4m2,分成最大粒子数块，如2e3块，则每块是长宽20m2,长宽大致是4.47约为5m
+  /// 假设搜索长宽是200,4e4m2,分成最大粒子数块，如2e3块，则每块是长宽20m2,长宽大致是4.47约为5m
   int grid_size_x = map_->size_x;
   int grid_size_y = map_->size_y;
   double scale = map_->scale;
@@ -1357,7 +1642,7 @@ void AmclNode::globalLocBySplitMap(void){
   int split_area_num = one_split_area * one_area_num;
 
   int split_sample_size = split_area_num < max_sam ? split_area_num:max_sam;
-  //粗定位
+  /// 粗定位 每一块大致选出最好的结果
   for(int i = 0; i < mid_pos_num; i++){
         x = mid_pos_set[i].first;
         y = mid_pos_set[i].second;
@@ -1388,7 +1673,7 @@ void AmclNode::globalLocBySplitMap(void){
       //ROS_INFO("globalLocBySplitMap.aft clustingPfSet.");
       //get best clustered sample pos in sub map
       // ROS_INFO("globalLocBySplitMap.bef getBestSample.");
-      result = getBestSample(pf_global_loc,bestPos);
+      result = getBestSample(pf_global_loc,bestPos,best_w);
        //ROS_INFO("globalLocBySplitMap.after getBestSample.");
       if(result >= 0 ){
         //store every cluster pos for evaluting in complete map
@@ -1404,36 +1689,24 @@ void AmclNode::globalLocBySplitMap(void){
     // clustering the pf to get comprehensive loc result but do not set uniform weight
     // so we can get a max best clustered result
     clustingPfSet(pf_global_loc,false);
-    result = getBestSample(pf_global_loc,bestPos);
+    result = getBestSample(pf_global_loc,bestPos,best_w);
     if(result < 0) {
       ROS_ERROR("globalposeinit.get last best pos failed!return");
       return;
+    }else{
+      ROS_INFO("globalposeinit.get Init global best pos!pos:(%.3f,%.3f,%.3f),weight:%.3f",
+               bestPos.v[0],bestPos.v[1],bestPos.v[2],best_w);
     }
-    double w = sqrt(grid_size_x * grid_size_y /max_sam);
+    double w = sqrt(one_split_area);
     double h = w;
-    //局部区域精确定位
-    LocalLocBySplitMap(w,h,bestPos.v[0],bestPos.v[1]);
-//  // after get a best result ,we need to  set the paticle cloud  be around the best pose
-//  // Otherwise, the particles will be distributed over a wide area when re evaluted,
-//  // which may lead to subsequent particle divergence.
-
-//  pf_vector_t* new_map_pos = new pf_vector_t[pf_->min_samples];
-//  for(int i = 0;i < pf_->min_samples;i++){
-//    new_map_pos[i].v[0] = bestPos.v[0]+0.2*(drand48()*2-1);
-//    new_map_pos[i].v[1] = bestPos.v[1]+0.2*(drand48()*2-1);
-//    new_map_pos[i].v[2] = bestPos.v[2]+10.0/180.0*M_PI*(drand48()*2-1);
-//  }
-//  resetAndClustingPfSet(pf_,pf_->min_samples,new_map_pos,false);
-//  delete []new_map_pos;
-//  //applyInitialPose(lasers,ldata,bestPos);
-//   //result = getBestSample(bestPos);
-////  if(result>=0)
-////    pubPoseAndTF(cur_laser_scan,bestPos);
-//  pf_update_resample(pf_);
-//  pf_init_ = false;
+    /// 在近似最好的那一块精确定位
+    ///LocalLocBySplitMap(w,h,bestPos.v[0],bestPos.v[1]);
+    LocalLocByGaAlogrithm(w,bestPos);
+    //pf_init_ = false;
     ROS_INFO("globalLocBySplitMap.done...");
 }
-//split a sub map
+
+//split a sub map uniformly
 void
 AmclNode::uniformSplitSubMap(pf_t *pf,std::vector<std::pair<double,double> > & mid_pos_set,
                 double &search_width,double &search_height, double init_x, double init_y){
@@ -1551,7 +1824,8 @@ AmclNode::uniformSplitMap(pf_t *pf,std::vector<std::pair<double,double> > & mid_
 }
 
 
-int AmclNode::generateRandomPfSet(pf_vector_t* out_pf_set,int gennum,std::pair<double,double> mid_pos,double search_width, double search_height){
+int
+AmclNode::generateRandomPfSet(pf_vector_t* out_pf_set,int gennum,std::pair<double,double> mid_pos,double search_width, double search_height){
  double mid_x = mid_pos.first;
  double mid_y = mid_pos.second;
  //pf_matrix_t cov = initial_pose_hyp_->pf_pose_cov;
@@ -1648,7 +1922,10 @@ int AmclNode::generateRandomPfSet(pf_vector_t* out_pf_set,int gennum,std::pair<d
  //ROS_INFO("AmclNode::generateRandomPfSet.cnt set:%d",cnt);
  return cnt;
 }
-int AmclNode::generatePfBySampleDensity(pf_vector_t* out_pf_set,map_t* map,int den,std::pair<double,double> mid_pos){
+
+#if 0
+int
+AmclNode::generatePfBySampleDensity(pf_vector_t* out_pf_set,map_t* map,int den,std::pair<double,double> mid_pos){
  double mid_x = mid_pos.first;
  double mid_y = mid_pos.second;
  //pf_matrix_t cov = initial_pose_hyp_->pf_pose_cov;
@@ -1685,8 +1962,9 @@ int AmclNode::generatePfBySampleDensity(pf_vector_t* out_pf_set,map_t* map,int d
  //ROS_INFO("AmclNode::generateRandomPfSet.cnt set:%d",cnt);
  return cnt;
 }
-
-void AmclNode::evaluatePfByLaser(pf_t *pf,AMCLLaser* laser,AMCLLaserData& ldata){
+#endif
+void
+AmclNode::evaluatePfByLaser(pf_t *pf,AMCLLaser* laser,AMCLLaserData& ldata){
 
   pf_sample_set_t* set;
   pf_sample_t *sample;
@@ -1701,6 +1979,7 @@ void AmclNode::evaluatePfByLaser(pf_t *pf,AMCLLaser* laser,AMCLLaserData& ldata)
     sample = set->samples+i;
     pf_vector_t pos =sample->pose;
     p = -laser->evaluateOnePose(&ldata,pos);
+    //printf("evaluatePfByLaser.evaluateOnePose pos:(%.2f,%.2f,%.2f) err dist:%.3f\n",pos.v[0],pos.v[1],pos.v[2],p);
     if(p <= 0 )p = 1e-4;
     sample->weight = 1.0/(double)p;
     sum_w+=sample->weight;
@@ -1712,10 +1991,14 @@ void AmclNode::evaluatePfByLaser(pf_t *pf,AMCLLaser* laser,AMCLLaserData& ldata)
   }
 
  }
-void AmclNode::updatePfByLaser(AMCLLaser* laser,AMCLLaserData& ldata ){
+
+void
+AmclNode::updatePfByLaser(AMCLLaser* laser,AMCLLaserData& ldata ){
   laser->UpdateSensor(pf_, (AMCLSensorData*)&ldata);
 }
-int AmclNode::getBestSample(pf_t *pf,pf_vector_t& best_pose){
+
+int
+AmclNode::getBestSample(pf_t *pf,pf_vector_t& best_pose,double &best_weight){
   int result = -1;
   double max_weight = 0.0;
   int max_weight_hyp = -1;
@@ -1724,6 +2007,9 @@ int AmclNode::getBestSample(pf_t *pf,pf_vector_t& best_pose){
   pf_sample_t *sample;
   set = pf->sets + pf->current_set;
   hyps.resize(set->sample_count);
+  ///
+  best_weight = 0.0;
+  ///
   for(int hyp_count = 0;
       hyp_count < set->sample_count; hyp_count++)
   {
@@ -1755,13 +2041,15 @@ int AmclNode::getBestSample(pf_t *pf,pf_vector_t& best_pose){
               best_pose.v[1],
               best_pose.v[2]);
     result = 0;
+    best_weight = max_weight;
     return result;
   }
   else
     return result;
 }
 
-int AmclNode::getBestClusterSample(pf_t *pf, pf_vector_t& best_pose){
+int
+AmclNode::getBestClusterSample(pf_t *pf, pf_vector_t& best_pose){
   int result = -1;
   double max_weight = 0.0;
   int max_weight_hyp = -1;
@@ -1806,9 +2094,6 @@ int AmclNode::getBestClusterSample(pf_t *pf, pf_vector_t& best_pose){
     return result;
 }
 
-
-
-
 bool
 AmclNode::globalLocalizationCallback(std_srvs::Empty::Request& req,
                                      std_srvs::Empty::Response& res)
@@ -1846,8 +2131,9 @@ AmclNode::setMapCallback(nav_msgs::SetMap::Request& req,
   res.success = true;
   return true;
 }
-
-int AmclNode::tailoringScan(const sensor_msgs::LaserScanConstPtr& laser_scan,AMCLSensor *sensor,AMCLLaserData& ldata){
+///按照给定的激光最大最小范围参数裁剪激光，不符合范围的置为无效数据
+int AmclNode::tailoringScan(const sensor_msgs::LaserScanConstPtr& laser_scan,
+                            AMCLSensor *sensor,AMCLLaserData& ldata){
 int result  = -1;
 ldata.sensor = sensor;
 ldata.range_count = laser_scan->ranges.size();
@@ -2362,8 +2648,8 @@ AmclNode::handleInitialPoseMessage(const geometry_msgs::PoseWithCovarianceStampe
   initial_pose_hyp_ = new amcl_hyp_t();
   initial_pose_hyp_->pf_pose_mean = pf_init_pose_mean;
   initial_pose_hyp_->pf_pose_cov = pf_init_pose_cov;
- set = pf_->sets + pf_->current_set;
- ROS_INFO("handleInitialPoseMessage.pf samplecount:%d,cluster_count:%d",set->sample_count,set->cluster_count);
+  set = pf_->sets + pf_->current_set;
+  ROS_INFO("handleInitialPoseMessage.pf samplecount:%d,cluster_count:%d",set->sample_count,set->cluster_count);
   applyInitialPose();
 }
 void AmclNode::applyInitialPose(AMCLLaser* lasers_amcl, AMCLLaserData& ldata,pf_vector_t pos){
@@ -2411,159 +2697,18 @@ AmclNode::applyInitialPose()
        pf_matrix_t cov = initial_pose_hyp_->pf_pose_cov;
        ROS_INFO("applyInitialPose.LocalLocBySplitMap");
        LocalLocBySplitMap(2*search_radius,2*search_radius,mean.v[0],mean.v[1]);
-#if 0
-       pf_vector_t mean_search;
-       int max_sample = pf_->max_samples;
-       pf_vector_t v_mean[max_sample];
-
-       mean_search.v[2] = mean.v[2];
-
-
-       int pf_size;
-       for (i = 0; i < max_sample; i++)
-       {
-         double x,y,angle;
-         int q,p;
-         int try_num = 10;
-         while(try_num--)
-         {
-           x = mean.v[0] + drand48()*2*search_radius - search_radius;
-           y = mean.v[1] + drand48()*2*search_radius - search_radius;
-           angle = mean.v[2] + angle_error_para *(drand48()*2*M_PI - M_PI);//
-           angle = normalize(angle);
-           // Check that it's a free cell
-           q = MAP_GXWX(map_,x);
-           p = MAP_GYWY(map_,y);
-           if(MAP_VALID(map_,q,p) && (map_->cells[MAP_INDEX(map_,q,p)].occ_state == -1))
-             break;
-         }
-         if(try_num <= 0) continue;
-         //std::cout << "AmclNode::applyInitialPose.search (x,y): (" << x << y <<") \n";
-         mean_search.v[0] = x;
-         mean_search.v[1] = y;
-         mean_search.v[2] = angle;
-         //结合了之前init算法的优势，建立高斯密度函数，在随机点处高斯采样
-         pose = pf_get_one_guassian_sample(pf_,mean_search, cov);
-         //std::cout << "AmclNode::applyInitialPose.pf_get_one_guassian_sample.pose(x,y): (" << pose.v[0] << pose.v[1] <<") \n";
-         v_mean[pf_size++] = pose;
-       }
-
-       if(!cur_laser_scan || frame_to_laser_.find(cur_laser_scan->header.frame_id) == frame_to_laser_.end()){
-         ROS_ERROR("!!!AmclNode::applyInitialPose.cur_laser_scan is not valid.return");
-         return;
-       }
-
-       const sensor_msgs::LaserScan::ConstPtr tmp_laser = cur_laser_scan;
-       //insert the laser msg into laser vector and update laser sensor pos in base frame
-       int laser_index = -1;
-       laser_index = updateLaserVector(tmp_laser);
-       if( laser_index < 0){
-          ROS_ERROR("!!!AmclNode::applyInitialPose.updateLaserVector failed.return");
-         return ;
-       }
-
-       AMCLLaser* lasers_tmp = lasers_[laser_index];
-       AMCLLaserData ldata;
-       int result = -1;
-       result = tailoringScan(tmp_laser,lasers_tmp,ldata);
-       if(result < 0 ){
-         ROS_ERROR("!!!AmclNode::applyInitialPose.tailoringScan failed.return");
-         return;
-       }
-
-       //std::pair<double,double> mid_pos = std::make_pair(mean.v[0],mean.v[1]);
-       if(!pf_size){
-         ROS_ERROR("!!!AmclNode::applyInitialPose.generateRandomPfSet failed.return");
-         return;
-       }
-       resetAndClustingPfSet(pf_,pf_size,v_mean,false);
-       evaluatePfByLaser(pf_,lasers_tmp,ldata);
-
-       clustingPfSet(pf_,false);
-       result = getBestClusterSample(pf_,bestPos);
-       if(result < 0) {
-         ROS_ERROR("globalposeinit.get last best pos failed!return");
-         return;
-       }
-       // after get a best result ,we need to  set the paticle cloud  be around the best pose
-       // Otherwise, the particles will be distributed over a wide area when re evaluted,
-       // which may lead to subsequent particle divergence.
-       for(int i = 0;i < pf_size;i++){
-         v_mean[i].v[0] = bestPos.v[0]+0.5*(drand48()*2-1);
-         v_mean[i].v[1] = bestPos.v[1]+0.5*(drand48()*2-1);
-         v_mean[i].v[2] = bestPos.v[2]+5.0/180.0*M_PI*(drand48()*2-1);
-       }
-       resetAndClustingPfSet(pf_,pf_size,v_mean,false);
-       pf_init_ = false;
-
-#endif
        delete initial_pose_hyp_;
        initial_pose_hyp_ = NULL;
     }
     //#endif
   }
 
-
-
   else if (init_loc_method == "ga"){
     //#if 0
     ///method 0 ga alogrithm
     boost::recursive_mutex::scoped_lock cfl(configuration_mutex_);
     if( initial_pose_hyp_ != NULL && map_ != NULL ) {
-      ///TODO 种群规模太大会出现问题　待解决
-      int pop_num =ga_pop_num;//population()
-      int generation  = ga_generation;//gen num
-      double search_radius = ga_search_radius;//距离搜索范围，值越大，搜索范围越大，可能导致的匹配误差越大
-      double angle_error_para = ga_angle_error_para;//角度搜索范围系数[0-1]，比例越大，全局性越好，但是匹配误差也会越大
-      pf_vector_t mean_result;
-      pf_vector_t mean = initial_pose_hyp_->pf_pose_mean;
-      // an initial value can be added inside the initializer list after the upper bound
-      // both parameter will be encoded using 16 bits (default value)
-      // this value can be modified but has to remain between 1 and 64
-      // example using 20 and 32 bits and initial values of 0.5 and 1.0:
-      // galgo::Parameter<double,20> par1({0.0,1.0,0.5});
-      // galgo::Parameter<double,32> par2({0.0,13.0,1.0});
-      /// 初始值很重要
-      galgo::Parameter<double,32> para1({mean.v[0]-search_radius, mean.v[0]+search_radius,mean.v[0]});//min max init_value
-      galgo::Parameter<double,32> para2({mean.v[1]-search_radius, mean.v[1]+search_radius,mean.v[1]});
-      galgo::Parameter<double,10> para3({mean.v[2]-angle_error_para*M_PI,mean.v[2]+angle_error_para*M_PI,mean.v[2]});
-      //galgo::Parameter<double,10> para3({-M_PI,M_PI,mean.v[2]});
-      InitLocObjective<double> t;
-      ros::Rate r(10);
-      int cnt = 0;
-      while(glo_ldata.range_count <= 0 && cnt < 50 ){
-        ROS_WARN("AmclNode::applyInitialPose.waitting scan data valid...");
-        r.sleep();
-        cnt++;
-      }
-      if(glo_ldata.range_count <= 0){
-        ROS_ERROR("AmclNode::applyInitialPose.wait scan time out . do nothing return...");
-        return;
-      }
-      t.data = &glo_ldata;
-      //GeneticAlgorithm(Func<T> objective, int popsize, int nbgen, bool output, const Parameter<T,N>&...args)
-      galgo::GeneticAlgorithm<double> ga( InitLocObjective<double>::Objective,pop_num,generation,true,para1,para2,para3);
-     // ga.tolerance= 0.0001;
-      ga.Selection =SUS; // stochastic universal sampling (SUS)//sus 随机遍历采样
-      ga.CrossOver =P2XO;// uniform cross-over (UXO)//
-      ga.Mutation = UNM; // uniform mutation
-
-      ga.covrate = ga_covrate;
-      ga.mutrate = ga_mutrate;
-      ga.precision = ga_outputting_precision;////number of decimals for <outputting> results
-      // setting constraints
-      //ga.Constraint = MyObj<double>::MyConstraint;
-      //ga.tolerance = -0.05*0.05;//terminal condition to stop the algorithm
-      //ga.precision = 2;
-      ga.run();
-
-      galgo::CHR<double> result(ga.result()) ;
-      std::vector<double> para = result.get()->getParam();
-      std::vector<double> err = result.get()->getResult();
-      mean_result.v[0] = para[0];mean_result.v[1] = para[1];mean_result.v[1] = para[1];
-
-      pf_init(pf_, mean_result, initial_pose_hyp_->pf_pose_cov);
-      pf_init_ = false;
+      LocalLocByGaAlogrithm(ga_search_radius,initial_pose_hyp_->pf_pose_mean);
       delete initial_pose_hyp_;
       initial_pose_hyp_ = NULL;
    }

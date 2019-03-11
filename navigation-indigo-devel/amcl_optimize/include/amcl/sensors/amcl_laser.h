@@ -94,6 +94,10 @@ class AMCLLaser : public AMCLSensor
   public: void SetLaserPose(pf_vector_t& laser_pose) 
           {this->laser_pose = laser_pose;}
 
+  // Chq Get the laser's pose after construction
+  public: void GetLaserPose(pf_vector_t& laser_pose)
+          {laser_pose = this->laser_pose;}
+
   // Determine the probability for the given pose
   private: static double BeamModel(AMCLLaserData *data, 
                                    pf_sample_set_t* set);

@@ -512,9 +512,14 @@ void pf_update_resample(pf_t *pf)
   while(set_b->sample_count < pf->max_samples)
   {
     sample_b = set_b->samples + set_b->sample_count++;
-
-    if(drand48() < w_diff)//生成一个新的位置
-      sample_b->pose = (pf->random_pose_fn)(pf->random_pose_data);
+    /// chq We want the random particle to be distributed around the best particles,
+    ///instead of be spread too far, so we need to rewrite the random position generator.
+    if(drand48() < w_diff){//生成一个新的位置
+      ///sample_b->pose = (pf->random_pose_fn)(pf->random_pose_data);//chq disabled
+       pf_vector_t temp = (pf->limit_random_pose_fn)(pf,pf->random_pose_data);
+      if((temp.v[0] ||temp.v[2] ||temp.v[3]))
+        sample_b->pose =temp;
+    }
     else
     {
       // Can't (easily) combine low-variance sampler with KLD adaptive

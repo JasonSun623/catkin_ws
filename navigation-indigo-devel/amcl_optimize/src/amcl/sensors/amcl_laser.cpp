@@ -213,7 +213,8 @@ double AMCLLaser::BeamModel(AMCLLaserData *data, pf_sample_set_t* set)
 
   return(total_weight);
 }
-double AMCLLaser::evaluateOnePose(AMCLLaserData*  data, pf_vector_t pose){
+double
+AMCLLaser::evaluateOnePose(AMCLLaserData*  data, pf_vector_t pose){
   int i, j, step;
   double obs_range, obs_bearing;
   double p;
@@ -251,6 +252,7 @@ double AMCLLaser::evaluateOnePose(AMCLLaserData*  data, pf_vector_t pose){
   double max_err_bound_thread  = 0.05;
   double min_err_bound_thread  = 0.05;
   int mi, mj;
+  int cnt_beam_used = 0;
   for (i = 0; i < data->range_count; i += step)
   {
     //printf("AMCLLaser::evaluateOnePose.loop start \n");
@@ -264,7 +266,7 @@ double AMCLLaser::evaluateOnePose(AMCLLaserData*  data, pf_vector_t pose){
     // Check for NaN
     if(obs_range != obs_range)
       continue;
-
+    cnt_beam_used++;
     hit.v[0] = pose.v[0] + obs_range * cos(pose.v[2] + obs_bearing);///相对激光点[endpoint]位置转到绝对激光点位置
     hit.v[1] = pose.v[1] + obs_range * sin(pose.v[2] + obs_bearing);
 
@@ -284,11 +286,17 @@ double AMCLLaser::evaluateOnePose(AMCLLaserData*  data, pf_vector_t pose){
     p += -z;
 
   }
-//  if(p >= 0 ){
-//    printf("hyoou!\n");
-//  }
+  if(p >= 0 ){
+    printf("AMCLLaser::evaluateOnePose.hyoou!\n");
+
+  }
+  if(!cnt_beam_used){
+    printf("AMCLLaser::evaluateOnePose.hyoou!!!no beams be used set too bad!\n");
+    p =worst;
+  }
   return p;
 }
+
 double AMCLLaser::LikelihoodFieldModel(AMCLLaserData *data, pf_sample_set_t* set)
 {
   ///使用最近邻搜索，make sure 测量障碍物点的占用概率，作为权重策略

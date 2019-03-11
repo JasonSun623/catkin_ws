@@ -264,14 +264,14 @@ void GeneticAlgorithm<T>::print() const
    if (nogen % genstep == 0) {
       std::cout << " Generation = " << std::setw(std::to_string(nbgen).size()) << nogen << " |";
       for (int i = 0; i < nbparam; ++i) {
-	      std::cout << " X";
+        std::cout << " X";
          if (nbparam > 1) {
             std::cout << std::to_string(i + 1);
          }
          std::cout << " = "  << std::setw(9) << std::fixed << std::setprecision(precision) << bestParam[i] << " |";
-	   }
+     }
       for (unsigned i = 0; i < bestResult.size(); ++i) {
-	      std::cout << " F";
+        std::cout << " F";
          if (bestResult.size() > 1) {
             std::cout << std::to_string(i + 1);
          }
@@ -281,7 +281,7 @@ void GeneticAlgorithm<T>::print() const
          } else {
             std::cout << "\n";
          }
-	   }
+     }
  
    }
 }

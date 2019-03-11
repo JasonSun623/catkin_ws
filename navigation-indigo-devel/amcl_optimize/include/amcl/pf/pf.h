@@ -46,7 +46,7 @@ struct _pf_sample_set_t;
 // Function prototype for the initialization model; generates a sample pose from
 // an appropriate distribution.
 typedef pf_vector_t (*pf_init_model_fn_t) (void *init_data);
-
+typedef pf_vector_t (*pf_limit_sample_fn_t) (void* pf,void *init_data);
 // Function prototype for the action model; generates a sample pose from
 // an appropriate distribution
 typedef void (*pf_action_model_fn_t) (void *action_data, 
@@ -132,6 +132,7 @@ typedef struct _pf_t
 
   // Function used to draw random pose samples
   pf_init_model_fn_t random_pose_fn;
+  pf_limit_sample_fn_t limit_random_pose_fn;
   void *random_pose_data;
 
   double dist_threshold; //distance threshold in each axis over which the pf is considered to not be converged
