@@ -76,6 +76,10 @@
 #include <message_filters/synchronizer.h>
 #include <message_filters/sync_policies/approximate_time.h>
 
+#include <visualization_msgs/Marker.h>
+#include <visualization_msgs/MarkerArray.h>
+#include <sstream>
+
 #define NEW_UNIFORM_SAMPLING 1
  using namespace message_filters;
 using namespace amcl_optimize;
@@ -314,7 +318,7 @@ class AmclNode
 
     int tailoringScan(const sensor_msgs::LaserScanConstPtr& laser_scan,AMCLSensor *sensor,AMCLLaserData& ldata);
     int updateLaserVector(const sensor_msgs::LaserScanConstPtr& laser_scan);
-    void pubPoseAndTF(const sensor_msgs::LaserScanConstPtr& laser_scan,pf_vector_t bestPos);
+    void pubPoseAndTF(const sensor_msgs::LaserScanConstPtr& laser_scan,pf_vector_t bestPos,double best_weight_perc);
     bool judgeUpdateByMove(pf_vector_t pose,pf_vector_t old_pos,pf_vector_t& delta);
 
     void resetAndForceUpdate(pf_vector_t pose);
@@ -349,7 +353,7 @@ class AmclNode
     void updatePfByLaser(AMCLLaser* laser,AMCLLaserData& ldata );
     void evaluatePfByLaser(pf_t *pf,AMCLLaser* laser,AMCLLaserData& ldata);
     int getBestSample(pf_t *pf,pf_vector_t& best_pose,double& best_weight);
-    int getBestClusterSample(pf_t *pf,pf_vector_t& best_pose);
+    int getBestClusterSample(pf_t *pf,pf_vector_t& best_pose,double &best_weight_perc);
 
 
     //parameter for what odom to use
@@ -433,7 +437,7 @@ class AmclNode
 
     ros::NodeHandle nh_;
     ros::NodeHandle private_nh_;
-    ros::Publisher pose_pub_;
+    ros::Publisher pose_pub_,pos_marker_pub;
     ros::Publisher particlecloud_pub_;
     ros::ServiceServer global_loc_srv_;
     ros::ServiceServer nomotion_update_srv_; //to let amcl update samples without requiring motion
@@ -581,6 +585,8 @@ AmclNode::AmclNode() :
   private_nh_.param("beam_skip_threshold", beam_skip_threshold_, 0.3);
   private_nh_.param("beam_skip_error_threshold_", beam_skip_error_threshold_, 0.9);
 
+  ///chq z_hit_+z_short_+z_max_+z_rand_ shoud be 1
+  ///
   private_nh_.param("laser_z_hit", z_hit_, 0.95);
   private_nh_.param("laser_z_short", z_short_, 0.1);
   private_nh_.param("laser_z_max", z_max_, 0.05);
@@ -632,7 +638,7 @@ AmclNode::AmclNode() :
   ///chq慢速平均权重滤波器的指数衰减率，
   //用于决定何时通过添加随机姿态进行恢复操作，0.0表示禁用
   private_nh_.param("resample_search_radius", resample_search_radius_, 2.0);///chq a rand pos gen range
-  private_nh_.param("recovery_alpha_slow", alpha_slow_, 0.001);
+  private_nh_.param("recovery_alpha_slow", alpha_slow_, 0.5/*0.001*/);//chq mod
   private_nh_.param("recovery_alpha_fast", alpha_fast_, 0.1);
 
   private_nh_.param("tf_broadcast", tf_broadcast_, true);
@@ -668,6 +674,8 @@ AmclNode::AmclNode() :
   tf_ = new TransformListenerWrapper();
 
   pose_pub_ = nh_.advertise<geometry_msgs::PoseWithCovarianceStamped>("amcl_pose", 2, true);
+  pos_marker_pub = nh_.advertise<visualization_msgs::Marker>("amcl_pos_marker",1,true);
+
   particlecloud_pub_ = nh_.advertise<geometry_msgs::PoseArray>("particlecloud", 2, true);
   global_loc_srv_ = nh_.advertiseService("global_localization", 
            &AmclNode::globalLocalizationCallback,
@@ -2048,8 +2056,10 @@ AmclNode::getBestSample(pf_t *pf,pf_vector_t& best_pose,double &best_weight){
     return result;
 }
 
+/// the third para: best_weight_perc can be decribled as loc reliablity
+// in real experiment ,if it is below to 0.9 ,the loc reliablity would be thought as low
 int
-AmclNode::getBestClusterSample(pf_t *pf, pf_vector_t& best_pose){
+AmclNode::getBestClusterSample(pf_t *pf, pf_vector_t& best_pose,double &best_weight_perc){
   int result = -1;
   double max_weight = 0.0;
   int max_weight_hyp = -1;
@@ -2082,11 +2092,12 @@ AmclNode::getBestClusterSample(pf_t *pf, pf_vector_t& best_pose){
   if(max_weight > 0.0)
   {
     best_pose =  hyps[max_weight_hyp].pf_pose_mean;
-
+    best_weight_perc = sum_w > 0?max_weight/sum_w : 0;
     ROS_DEBUG("Max weight pose: %.3f %.3f %.3f",
               best_pose.v[0],
               best_pose.v[1],
               best_pose.v[2]);
+
     result = 0;
     return result;
   }
@@ -2247,14 +2258,41 @@ AmclNode::updateLaserVector(const sensor_msgs::LaserScanConstPtr& laser_scan){
   return laser_index;
 }
 
-void AmclNode::pubPoseAndTF(const sensor_msgs::LaserScanConstPtr& laser_scan,pf_vector_t bestPos){
+void AmclNode::pubPoseAndTF(const sensor_msgs::LaserScanConstPtr& laser_scan,pf_vector_t bestPos,double best_weight_perc){
   geometry_msgs::PoseWithCovarianceStamped p;
+  visualization_msgs::Marker text_marker;
+
   // Fill in the header
   p.header.frame_id = global_frame_id_;
   p.header.stamp = laser_scan->header.stamp;
+
+  text_marker.header.frame_id = p.header.frame_id;
+  text_marker.header.stamp = p.header.stamp;
+  text_marker.ns = "amcl_pos_space";
+  text_marker.type = visualization_msgs::Marker::TEXT_VIEW_FACING;
+  text_marker.color.r = 255;
+  text_marker.color.g = 0;
+  text_marker.color.b = 0;
+  text_marker.color.a = 1;
+  text_marker.scale.x = 0.05;
+  text_marker.scale.y = 0.05;
+  text_marker.scale.z = 0.05;
+  text_marker.scale.z = 0.1;
+  text_marker.lifetime = ros::Duration(1000);
+
+  std::stringstream ss ;
+  int int_v = best_weight_perc*100.0;
+  ss << int_v;
+  std::string str;
+  ss >> str;
+  text_marker.text = str ;
+
   // Copy in the pose
   p.pose.pose.position.x = bestPos.v[0];
   p.pose.pose.position.y = bestPos.v[1];
+
+  text_marker.pose = p.pose.pose ;
+
   tf::quaternionTFToMsg(tf::createQuaternionFromYaw(bestPos.v[2]),
                         p.pose.pose.orientation);
   // Copy in the covariance, converting from 3-D to 6-D
@@ -2285,6 +2323,8 @@ void AmclNode::pubPoseAndTF(const sensor_msgs::LaserScanConstPtr& laser_scan,pf_
    */
   ///将位姿、粒子集、协方差矩阵等进行更新、发布
   pose_pub_.publish(p);
+  pos_marker_pub.publish(text_marker);
+
   last_published_pose = p;
   // subtracting base to odom from map to base and send map to odom instead
   tf::Stamped<tf::Pose> odom_to_map;
@@ -2504,9 +2544,10 @@ AmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
     // 其平均位姿就是我们要求的机器人后验位姿，到此一次循环已经所有完成
     // Read out the current hypotheses
        pf_vector_t bestPos;
-      int result = getBestClusterSample(pf_,bestPos);
+       double best_w_perc =0.0;
+      int result = getBestClusterSample(pf_,bestPos,best_w_perc);
       if( result >= 0 ){
-        pubPoseAndTF(laser_scan,bestPos);
+        pubPoseAndTF(laser_scan,bestPos,best_w_perc);
       }
       else
       {

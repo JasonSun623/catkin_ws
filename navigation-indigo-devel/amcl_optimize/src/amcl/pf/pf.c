@@ -493,8 +493,12 @@ void pf_update_resample(pf_t *pf)
   // Draw samples from set a to create set b.
   total = 0;
   set_b->sample_count = 0;
-
-  w_diff = 1.0 - pf->w_fast / pf->w_slow;
+  ///chq
+  /// prob robotics cn.195
+  /// w_fast 短期似然  w_slow 长期似然
+  /// if w_fast is better than w_slow (or equal to) then do not add the random sample prob
+  /// otherwise add the prob by their ratio .
+  w_diff = 1.0 - pf->w_fast / pf->w_slow;///( 0 < alpha_slow < alpha_fast)
   if(w_diff < 0.0)
     w_diff = 0.0;
   //printf("w_diff: %9.6f\n", w_diff);
@@ -513,9 +517,23 @@ void pf_update_resample(pf_t *pf)
   {
     sample_b = set_b->samples + set_b->sample_count++;
     /// chq We want the random particle to be distributed around the best particles,
-    ///instead of be spread too far, so we need to rewrite the random position generator.
+    //  instead of be spread too far, so we need to rewrite the random position generator.
     if(drand48() < w_diff){//生成一个新的位置
       ///sample_b->pose = (pf->random_pose_fn)(pf->random_pose_data);//chq disabled
+
+      /// chq following method has a disadvantage
+      // that once upon the loc err bet real pos and loc pos is beyond the limit search radius
+      // there would never be a chance to recovery to real pos
+      ///(so it can not resolve the kidnapped problem )
+      // because we only generate random recovery particles in limit area
+      ///But the advantage are :
+      //1:the loc reliability will be strong becaused it never will fly to other way in limit speed
+      //(speed <= search_radius / loop_peirod)
+      //2:if the pos is lost in limit fast speed,it can be recovery by resampling --
+      //--only if it don't be move too far by  hanging in the air
+      //(once upon the loc reliability  below to thread,the w_diff para will be increased,
+      //then the random num particles will be increased )
+      //it will be benifit be reloc
        pf_vector_t temp = (pf->limit_random_pose_fn)(pf,pf->random_pose_data);
       if((temp.v[0] ||temp.v[2] ||temp.v[3]))
         sample_b->pose =temp;
