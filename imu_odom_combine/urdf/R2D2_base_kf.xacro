@@ -35,7 +35,7 @@
 <xacro:property name="car_body_length" value="1" />
 <xacro:property name="car_body_width" value="0.8" />
 <xacro:property name="car_body_height" value="0.1" />
-
+  <!--  1deg = 0.017rad -->
   <xacro:property name="imu_stdev" value="0.00017" />
 
 
@@ -46,8 +46,8 @@
     </inertial>
   </xacro:macro>
 
-<!--link name="base_footprint">
-</link-->
+<link name="base_footprint">
+</link>
   
 <link name="base_link">
     <visual>
@@ -139,12 +139,12 @@
 
   <!-- published int launch file -->
   <!-- if published in here the tf time will too fast than other link ,it will display error in rviz-->
-  <!--joint name="base_footprint_to_base_link" type="fixed">
+  <joint name="base_footprint_to_base_link" type="fixed">
     <parent link="base_footprint"/>
     <child link="base_link"/>
     <origin xyz="0 0 0.5" rpy="0 0 0"/>
     <axis xyz="0 1 0"/>
-  </joint-->
+  </joint>
 
   <joint name="left_front_wheel_joint" type="continuous">
     <parent link="base_link"/>
@@ -182,7 +182,7 @@
   </xacro:hokuyolaser>
  <!--                     !!!imu!!!                                  -->
   <xacro:include filename="$(find ${package_name})/urdf/imu.gazebo.urdf.xacro" />
-  <xacro:imu_gazebo parent_link="base_link" link="imu_link" imu_topic="imu_data" update_rate="50.0" stdev="${imu_stdev}" > 
+  <xacro:imu_gazebo parent_link="base_link" link="imu_link" imu_topic="imu_data" update_rate="50.0" stdev="${imu_stdev}" >
     <origin xyz="0 0 0" rpy="0 0 0" />
   </xacro:imu_gazebo>
 

@@ -48,8 +48,8 @@
     </inertial>
   </xacro:macro>
 
-<!--link name="base_footprint">
-</link-->
+<link name="base_footprint">
+</link>
   
 <link name="base_link">
     <visual>
@@ -141,12 +141,12 @@
 
   <!-- published int launch file -->
   <!-- if published in here the tf time will too fast than other link ,it will display error in rviz-->
-  <!--joint name="base_footprint_to_base_link" type="fixed">
+  <joint name="base_footprint_to_base_link" type="fixed">
     <parent link="base_footprint"/>
     <child link="base_link"/>
     <origin xyz="0 0 0.5" rpy="0 0 0"/>
     <axis xyz="0 1 0"/>
-  </joint-->
+  </joint>
 
   <joint name="left_front_wheel_joint" type="continuous">
     <parent link="base_link"/>

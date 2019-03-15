@@ -1,0 +1,75 @@
+<?xml version="1.0" ?>
+<launch>
+  <arg name="gui" default="true" />
+  <arg name="robot_x"   default="0.0" />
+  <arg name="robot_y"   default="0.0" />
+  <arg name="robot_yaw" default="0.0" />
+  <!--
+   arg name="world_name" default="worlds/empty.world"/
+   -->
+  <arg name="world_name" default="$(find imu_odom_combine)/worlds/coveragespace.world"/>
+  <!-- Note: the world_name is with respect to GAZEBO_RESOURCE_PATH environmental variable, but can also be an absolute path -->
+  <group>
+    <remap from="joint_states"                   to="mir/joint_states" />
+    <remap from="mobile_base_controller/cmd_vel" to="cmd_vel" />
+    <remap from="mobile_base_controller/odom"    to="odom_comb" />
+
+    <include file="$(find gazebo_ros)/launch/empty_world.launch">
+      <arg name="world_name" value="$(arg world_name)"/>
+      <arg name="paused" value="true" />
+      <arg name="gui" value="$(arg gui)" />
+    </include>
+  </group>
+
+  <!-- Add passive + mimic joints to joint_states topic -->
+  <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher">
+    <rosparam param="source_list">[mir/joint_states]</rosparam>
+    <param name="rate" value="200.0" />
+  </node>
+
+  <!-- spawn robot and bring up controllers etc. -->
+  <param name="robot_description" command="$(find xacro)/xacro --inorder $(find imu_odom_combine)/urdf/mir_robot/mir.urdf.xacro" />
+
+ <!-- Spawn the robot into Gazebo -->
+  <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model" args="-param robot_description -urdf -model mir
+    -x $(arg robot_x) -y $(arg robot_y) -Y $(arg robot_yaw) -unpause" />
+
+  <!-- Load ros_control controller configurations -->
+  <rosparam file="$(find imu_odom_combine)/urdf/mir_robot/config/joint_state_controller.yaml" command="load" />
+  <rosparam file="$(find imu_odom_combine)/urdf/mir_robot/config/diff_drive_controller.yaml" command="load" />
+
+  <!-- Start the controllers -->
+  <node name="controller_spawner" pkg="controller_manager" type="spawner" output="screen"
+    args="joint_state_controller mobile_base_controller --shutdown-timeout 1"/>
+
+  <!-- EKF -->
+  <!--___________________________________________________________________________________________________ -->
+  <!--include file="$(find imu_odom_combine)/urdf/mir_robot/config/ekf.launch.xml"/-->
+
+  <!-- Robot state publisher -->
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" output="screen" />
+
+  <!-- Load teleop -->
+  <node name="rqt_robot_steering" pkg="rqt_robot_steering" type="rqt_robot_steering">
+    <param name="default_topic" value="cmd_vel"/>
+    <param name="default_vx_max" value="1.0" />
+    <param name="default_vx_min" value="-1.0" />
+    <param name="default_vw_max" value="1.5" />
+    <param name="default_vw_min" value="-1.5" />
+  </node>
+
+  <!-- create combined scan topic (like on real MiR) -->
+  <node pkg="topic_tools" type="relay" name="b_scan_relay" args="b_scan scan"/>
+  <node pkg="topic_tools" type="relay" name="f_scan_relay" args="f_scan scan"/>
+
+  <node name="b_rep117_laser_filter" pkg="mir_driver" type="rep117_filter.py" output="screen">
+    <remap from="scan" to="b_scan" />
+    <remap from="scan_filtered" to="b_scan_rep117" />
+  </node>
+
+  <node name="f_rep117_laser_filter" pkg="mir_driver" type="rep117_filter.py" output="screen">
+    <remap from="scan" to="f_scan" />
+    <remap from="scan_filtered" to="f_scan_rep117" />
+  </node>
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find imu_odom_combine)/rviz/move_fuse.rviz" />
+</launch>

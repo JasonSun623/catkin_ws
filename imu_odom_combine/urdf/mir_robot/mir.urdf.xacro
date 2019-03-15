@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro" name="mir_100" >
+
+  <!-- MiR100 base -->
+ <xacro:include filename="$(find imu_odom_combine)/urdf/mir_robot/mir_100_v1.urdf.xacro" />
+ 
+ <xacro:mir_100 prefix=""/>
+ 
+ 
+ 
+
+</robot>
+

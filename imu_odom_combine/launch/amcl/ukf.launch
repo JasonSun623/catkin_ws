@@ -1,0 +1,11 @@
+<launch>
+<!--fireup ukf -->
+ <node pkg="robot_localization" type="ukf_localization_node" name="ukf_se" clear_params="true">
+    <rosparam command="load" file="$(find imu_odom_combine)/launch/ukf.yaml" />
+    
+    <!--  Placeholder for output topic remapping
+    <remap from="odometry/filtered" to=""/>
+    <remap from="accel/filtered" to=""/>
+    -->
+  </node>
+</launch>

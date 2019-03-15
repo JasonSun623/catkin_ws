@@ -1,0 +1,16 @@
+test: 1
+ga:
+  pop_num: 1000
+  generation: 500
+  search_radius: 7.5
+  angle_error_para: 0.5
+  x_encode_len: 32
+  y_encode_len: 32
+  angle_encode_len: 10
+  covrate: 0.9
+  mutrate: 0.1
+  outputting_precision: 3
+  select_method: SUS
+  cross_method: P2XO
+  mutation_method: UNM
+

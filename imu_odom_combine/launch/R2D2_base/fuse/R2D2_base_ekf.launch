@@ -9,7 +9,7 @@
   <arg name="headless" default="false"/>
   <arg name="debug" default="false"/>
   <!-- nofootprint.xacro remove the base_footprint link -->
-  <arg name="model" default="$(find imu_odom_combine)/urdf/R2D2_base.xacro" />
+  <arg name="model" default="$(find imu_odom_combine)/urdf/R2D2_base_kf.xacro" />
    <include file="$(find gazebo_ros)/launch/empty_world.launch"> 
     <arg name="world_name" value="$(find imu_odom_combine)/worlds/coveragespace.world"/>
     <!-- !!!!
@@ -31,7 +31,7 @@
   <!-- joint controller in rviz -->
   <param name="use_gui" value="$(arg gui)"/>
   <!-- robot controller conf file in gazebo  -->
-  <rosparam command="load" file="$(find imu_odom_combine)/urdf/R2D2conf_base_ekf.yaml"/>
+  <rosparam command="load" file="$(find imu_odom_combine)/urdf/R2D2conf_base_kf.yaml"/>
   <node name="R2D2Controller" pkg="controller_manager" type="spawner" output="screen" args="wheel_diff_controller" >   
   </node>
  
