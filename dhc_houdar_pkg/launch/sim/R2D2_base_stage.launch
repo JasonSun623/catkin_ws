@@ -1,0 +1,57 @@
+<?xml version="1.0"?>
+<launch>
+<!-- these are the arguments you can pass this launch file, for example paused:=true -->
+  <param name="use_sim_time" value="true"/>
+  <arg name="paused" default="true"/>
+  <arg name="use_sim_time" default="true"/>
+  <arg name="gui" default="true"/>
+  <arg name="headless" default="false"/>
+  <arg name="debug" default="false"/>
+  <!-- nofootprint.xacro remove the base_footprint link -->
+  <arg name="model" default="$(find dhc_houdar_pkg)/urdf/R2D2_base.xacro" />
+  <arg name="map_file"       default="$(find dhc_houdar_pkg)/maps/rfs_map.yaml"/> <!-- robopark_plan -->
+  <arg name="world_file"     default="$(find dhc_houdar_pkg)/stage/maze.world"/>
+<!--  ******************** Stage ********************  -->
+  <!-- 
+        Publishes transforms:
+          /base_link -> /base_laser
+          /base_footprint -> /base_link (identity)
+          /odom -> base_footprint
+        Publishes topics:
+          /odom : odometry data from the simulated odometry
+          /base_scan : laser data from the simulated laser
+          /base_pose_ground_truth : the ground truth pose
+        Parameters:
+          base_watchdog_timeout : time (s) after receiving the last command on cmd_vel before stopping the robot
+        Args:
+          -g : run in headless mode.
+  --> 
+  <node pkg="stage_ros" type="stageros" name="stageros" args="$(arg world_file)">
+    <param name="base_watchdog_timeout" value="0.5"/>
+    <remap from="odom" to="odom"/>
+    <remap from="base_pose_ground_truth" to="base_pose_ground_truth"/>
+    <remap from="cmd_vel" to="mobile_base/commands/velocity"/>
+    <remap from="base_scan" to="scan"/>
+  </node>
+!-- Load the URDF into the ROS Parameter Server -->
+  <param name="robot_description" command="$(find xacro)/xacro --inorder '$(arg model)'" />
+  <!-- joint controller in rviz -->
+  <param name="use_gui" value="$(arg gui)"/>
+  <!-- robot controller conf file in gazebo  -->
+  <rosparam command="load" file="$(find dhc_houdar_pkg)/urdf/R2D2conf_base.yaml"/>
+  <node name="R2D2Controller" pkg="controller_manager" type="spawner" output="screen" args="wheel_diff_controller" > 
+  </node>
+ 
+  <!-- robot link / joint  TF publisher  -->
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" >
+    <param name="publish_frequency" value="50"/>
+  </node>
+
+  <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" >
+    <param name="rate" value="50" />
+  </node>
+   <!-- diff wheel controller in gazebo -->
+   <node name="rqt_robot_steering" pkg="rqt_robot_steering" type="rqt_robot_steering">
+    <param name="default_topic" value="cmd_vel"/>
+   </node>
+</launch>
