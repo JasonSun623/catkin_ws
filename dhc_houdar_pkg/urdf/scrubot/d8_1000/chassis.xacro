@@ -1,0 +1,68 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+ <xacro:property name="M_PI" default="3.14159"/>
+  <!-- Base Properties -->
+  <xacro:property name="mass_base" value="100.0" />
+
+  <xacro:property name="base_x_size" value="0.6" />
+  <xacro:property name="base_y_size" value="0.57" />
+  <xacro:property name="base_z_size" value="0.68" />
+
+  <xacro:property name="driving_wheel2base_rear_dist" value="0.075" />
+  <xacro:property name="driving_wheel2ground_dist" value="0.188" />
+
+<xacro:property name="base_down2ground" value="0.156" />
+
+  <!-- the vertical offset dist bet the car and the ground -->
+  <xacro:property name="offset_x" value="-0.32362" />
+  <xacro:property name="offset_y" value="-0.443" />
+  <xacro:property name="offset_z" value="-0.045" />
+
+ <xacro:macro name="default_inertial" params="mass">
+    <inertial>
+      <mass value="${mass}" />
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0" />
+    </inertial>
+  </xacro:macro>
+
+  <xacro:macro name="chassis" params="name parent_link meshes">
+
+    <link name="${name}">
+
+       <visual>
+        <origin xyz="${offset_x} ${offset_y} ${offset_z}" rpy="0 0 0" />
+         <!--origin xyz="${base_x_size/2.0-driving_wheel2base_rear_dist} 0 ${base_z_size/2.0+base_down2ground}" rpy="0 0 0" /-->
+        <geometry>
+          <mesh filename="${meshes}"/>
+          <!--box size="${base_x_size} ${base_y_size} ${base_z_size}" /-->
+        </geometry>
+        <material name="grey">
+          <color rgba="0.6 0.6 0.6 1"/>
+        </material>
+      </visual>
+
+      <collision>
+       <!--origin xyz="${offset_x} ${offset_y} ${offset_z}" rpy="0 0 0" /-->
+       <origin xyz="${base_x_size/2.0-driving_wheel2base_rear_dist} 0 ${base_z_size/2.0+base_down2ground}" rpy="0 0 0" />
+        <geometry>
+          <!--mesh filename="${meshes}"/-->
+          <box size="${base_x_size} ${base_y_size} ${base_z_size}" />
+        </geometry>
+      </collision>
+      <xacro:default_inertial mass="${mass_base}"/>
+      <!--xacro:box_inertial x="${base_x_size}" y="${base_y_size}"  z="${base_z_size}" mass="${mass_base}" /-->
+    </link>
+
+    <joint name="${parent_link}_${name}_joint" type="fixed">
+      <parent link="${parent_link}"/>
+      <child link="${name}"/>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+    </joint>
+
+    <gazebo reference="${name}">
+      <material>Gazebo/Grey</material>
+    </gazebo>
+
+
+  </xacro:macro>
+</robot>

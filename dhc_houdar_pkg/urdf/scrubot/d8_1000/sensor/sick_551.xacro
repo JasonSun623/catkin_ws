@@ -1,0 +1,95 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+<!-- chq define the laser glass cylinbe center is the laser cord center -->
+ <xacro:property name="M_PI" default="3.14159"/>
+ <xacro:property name="laser_rect_x" value="0.059" />
+
+  <xacro:property name="laser_glass_radius" value="0.051" />
+  <xacro:property name="laser_glass_thick" value="0.017" />
+
+  <xacro:property name="laser_x" value="${laser_rect_x+laser_glass_radius}" />
+  <xacro:property name="laser_y" value="0.102" />
+  <xacro:property name="laser_z" value="0.187" />
+
+
+
+  <xacro:property name="laser_base_x" value="0.586" />
+  <xacro:property name="laser_base_y" value="0.0" />
+  <xacro:property name="laser_base_z" value="0.3138" />
+
+  <xacro:macro name="laser" params="name parent_link mesh" >
+    <!-- Hokuyo Laser -->
+    <link name="${name}_link">
+
+      <collision>
+        <origin xyz="${-laser_rect_x} ${-laser_glass_radius} ${laser_glass_thick/2.0-laser_z}" rpy="0 0 0"/>
+        <geometry>
+          <box size="${laser_x} ${laser_y} ${laser_z}"/>
+        </geometry>
+      </collision>
+
+      <visual>
+      <origin xyz="${-laser_rect_x} ${-laser_glass_radius} ${laser_glass_thick/2.0-laser_z}" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="${mesh}"/>
+        </geometry>
+      </visual>
+
+      <inertial>
+        <mass value="2" />
+       <origin xyz="${-laser_rect_x} ${-laser_glass_radius} ${laser_glass_thick/2.0-laser_z}" rpy="0 0 0"/>
+        <inertia ixx="1e-6" ixy="0" ixz="0" iyy="1e-6" iyz="0" izz="1e-6" />
+      </inertial>
+    </link>
+
+  <!-- laser -->
+    <gazebo reference="${name}_link">
+      <material>Gazebo/Black</material>
+      <sensor type="gpu_ray" name="head_laser_sensor">
+    <!--sensor type="ray" name="head_hokuyo_sensor"-->
+        <pose>0 0 0 0 0 0</pose>
+        <!--visualize the scan  ray line chq -->
+        <visualize>true</visualize>
+        <update_rate>25</update_rate>
+        <ray>
+          <scan>
+            <horizontal>
+              <samples>720</samples>
+              <resolution>0.5</resolution>
+              <min_angle>-1.5707963</min_angle>
+              <max_angle>1.5707963</max_angle>
+            </horizontal>
+          </scan>
+          <range>
+            <min>0.01</min>
+            <max>30.0</max>
+            <resolution>0.01</resolution>
+          </range>
+          <noise>
+            <type>gaussian</type>
+            <mean>0.0</mean>
+            <stddev>0.01</stddev>
+          </noise>
+        </ray>
+        <plugin name="gazebo_ros_head_hokuyo_controller" filename="libgazebo_ros_gpu_laser.so">
+    <!--plugin name="gazebo_ros_head_hokuyo_controller" filename="libgazebo_ros_laser.so"-->
+          <!-- specify the publishing scan topic name  -->
+          <!--robotNamespace>/</robotNamespace-->
+          <topicName>${name}/scan</topicName>
+          <frameName>${name}_link</frameName>
+        </plugin>
+      </sensor>
+    </gazebo>
+
+    <joint name="lase_joint" type="fixed">
+      <parent link="${parent_link}" />
+      <child link="${name}_link" />
+      <!-- attention -->
+      <axis xyz="1 0 0"  rpy="0 0 0"/>
+      <!-- origin cord spcified  outsidely -->
+      <origin xyz="${laser_base_x} ${laser_base_y} ${laser_base_z}" rpy="${-M_PI} 0 0" />
+    </joint>
+
+  </xacro:macro>
+
+</robot>

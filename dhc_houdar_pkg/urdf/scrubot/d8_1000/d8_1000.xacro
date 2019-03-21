@@ -1,0 +1,56 @@
+<?xml version="1.0"?>
+<robot name="d8_1000" xmlns:xacro="http://ros.org/wiki/xacro">
+
+<xacro:property name="pkg" value="$(find dhc_houdar_pkg)/urdf/scrubot/d8_1000" />
+<xacro:property name="mesh_dir" value="package://dhc_houdar_pkg/urdf/scrubot/d8_1000/mesh"/>
+
+<xacro:include filename="${pkg}/materials.xacro" />
+
+<xacro:include filename="${pkg}/inertial.xacro" />
+
+<xacro:include filename="${pkg}/chassis.xacro" />
+
+<xacro:include filename="${pkg}/driving_wheel.xacro" />
+
+<xacro:include filename="${pkg}/caster_wheel.xacro" />
+
+<xacro:include filename="${pkg}/sensor/sick_551.xacro" />
+
+<xacro:include filename="${pkg}/sensor/sonar_ks106.xacro" />
+
+<xacro:include filename="${pkg}/sensor/imu.xacro" />
+
+<xacro:include filename="${pkg}/gazebo.xacro" />
+
+<!-- base_footprint -->
+<xacro:property name="base_name" value="base_footprint"/>
+<link name="${base_name}">
+</link>
+
+<xacro:property name="base_link_name" value="base_link"/>
+
+
+<!-- body -->
+<xacro:chassis  name="${base_link_name}" parent_link="${base_name}" meshes="${mesh_dir}/chassis.stl"  >
+</xacro:chassis>
+
+<!-- driving wheel -->
+<xacro:driving_wheel wheel_prefix="left" parent_link="${base_link_name}" left_right="1" mesh="${mesh_dir}/driving_wheel.stl" >
+ </xacro:driving_wheel>
+
+<xacro:driving_wheel wheel_prefix="right" parent_link="${base_link_name}" left_right="-1" mesh="${mesh_dir}/driving_wheel.stl" >
+ </xacro:driving_wheel>
+
+<!-- caster wheel -->
+<xacro:caster_wheel wheel_prefix="front" parent_link="${base_link_name}" left_right="1" mesh="${mesh_dir}" >
+ </xacro:caster_wheel>
+
+<!-- laser -->
+<xacro:laser name="sick_laser_551" parent_link="${base_link_name}"  mesh="${mesh_dir}/sick_551.stl" >
+ </xacro:laser>
+
+<!-- sonar -->
+<xacro:sonar name="s106_sonar" parent_link="${base_link_name}" mesh="${mesh_dir}/sonar.stl" >
+</xacro:sonar>
+
+</robot>

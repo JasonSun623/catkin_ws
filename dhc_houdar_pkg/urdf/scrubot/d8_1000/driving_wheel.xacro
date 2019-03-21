@@ -1,0 +1,90 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:property name="M_PI" default="3.14159"/>
+  <!-- Wheel Properties -->
+  <xacro:property name="wheel_separation" value="0.64" />
+  <xacro:property name="wheel_radius" value="0.08" />
+
+
+  <xacro:property name="driving_wheel_width" value="0.065" />
+  <xacro:property name="driving_wheel_radius" value="${wheel_radius}" />
+  <xacro:property name="mass_driving_wheel" value="0.5" />
+  <xacro:property name="mechanicalReductionRatio" value ="21.0" />
+
+  <xacro:property name="driving_wheel_base_dx" value="0.0" />
+  <xacro:property name="driving_wheel_base_dy" value="${wheel_separation/2.0}" />
+  <xacro:property name="driving_wheel_base_dz" value="${driving_wheel_radius}" />
+
+  <xacro:macro name="driving_wheel" params="wheel_prefix parent_link left_right mesh">
+
+    <link name="${wheel_prefix}_driving_wheel_link">
+
+      <xacro:cylinder_inertial mass="${mass_driving_wheel}" radius="${driving_wheel_radius}" length="${driving_wheel_width}">
+      </xacro:cylinder_inertial>
+      <!--
+        firstly to rotate secondly to trnasform
+        only  knowing the initial wheel  cord center by solidworks software ,then can we rotate and trans it ,
+        so that the cord center will be moved to wheel center
+        left =1 right =-1
+       -->
+      <visual>
+        <origin xyz="${-driving_wheel_radius} ${left_right*driving_wheel_width/2.0} ${-left_right*driving_wheel_radius}" rpy="${left_right*M_PI/2.0} 0 0" />
+        <!--origin xyz="0 0 0" rpy="${ left_right * M_PI/2 } 0 0"/-->
+        <geometry>
+          <mesh filename="${mesh}" />
+         <!-- cylinder length="${driving_wheel_width}" radius="${driving_wheel_radius}"/ -->
+        </geometry>
+        <xacro:insert_block name="material_dark_grey" />
+      </visual>
+
+      <collision>
+      <!--origin xyz="${-driving_wheel_radius} ${left_right*driving_wheel_width/2.0} ${-left_right*driving_wheel_radius}" rpy="${left_right*M_PI/2.0} 0 0" /-->
+      <origin xyz="0 0 0" rpy="${ left_right * M_PI/2 } 0 0"/>
+         <geometry>
+          <cylinder length="${driving_wheel_width}" radius="${driving_wheel_radius}" />
+         </geometry>
+      </collision>
+
+    </link>
+
+    <!-- gazebo color-->
+    <gazebo reference="${wheel_prefix}_driving_wheel_link">
+      <material>Gazebo/Yellow</material>
+    </gazebo>
+
+    <!-- gazebo dynamics-->
+    <!--gazebo reference="${wheel_prefix}_driving_wheel_link">
+      <mu1 value="1.0"/>
+      <mu2 value="1.0"/>
+      <kp value="10000000.0" />
+      <kd value="1.0" />
+      <fdir1 value="1 0 0"/>
+  </gazebo-->
+
+     <!-- joint -->
+    <joint name="${wheel_prefix}_driving_wheel_joint" type="continuous">
+      <origin xyz="${driving_wheel_base_dx} ${left_right*driving_wheel_base_dy} ${driving_wheel_base_dz}" rpy="0 0 0" />
+      <parent link="${parent_link}"/>
+      <child link="${wheel_prefix}_driving_wheel_link"/>
+      <axis xyz="0 1 0" rpy="0 0 0" />
+       <!--limit effort="100" velocity="20.0" /-->
+    </joint>
+
+    <!-- transmission -->
+    <transmission name="${wheel_prefix}_driving_wheel_trans" type="SimpleTransmission">
+
+       <type>transmission_interface/SimpleTransmission</type>
+
+      <actuator name="${wheel_prefix}_driving_wheel_motor">
+        <mechanicalReduction>${mechanicalReductionRatio}</mechanicalReduction>
+      </actuator>
+
+      <joint name="${wheel_prefix}_driving_wheel_joint">
+        <hardwareInterface>VelocityJointInterface</hardwareInterface>
+      </joint>
+
+    </transmission>
+
+  </xacro:macro>
+</robot>

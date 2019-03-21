@@ -1,0 +1,49 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+  <xacro:property name="sonar_base_x" value="0.361" />
+  <xacro:property name="sonar_base_y" value="0.0" />
+  <xacro:property name="sonar_base_z" value="0.2073" />
+
+
+  <xacro:macro name="sonar" params="name parent_link mesh">
+
+  <!-- Front Sonar -->
+
+  <link name="${name}">
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0 0 0"/>
+      </geometry>
+    </collision>
+
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="${mesh}"/>
+      </geometry>
+      <xacro:insert_block name="material_sonar" />
+    </visual>
+
+    <inertial>
+      <mass value="0.0001"/>
+      <origin xyz="0 0 0"/>
+      <inertia ixx="1" ixy="0" ixz="0" iyy="1" iyz="0" izz="1"/>
+    </inertial>
+
+  </link>
+
+  <gazebo reference="${name}">
+    <material value="Gazebo/Yellow"/>
+  </gazebo>
+
+  <joint name="${parent_link}_${name}_joint" type="fixed">
+     <origin xyz="${sonar_base_x} ${sonar_base_y} ${sonar_base_z}" rpy="0 0 0"/>
+    <parent link="${parent_link}"/>
+    <child link="${name}"/>
+  </joint>
+
+
+  </xacro:macro>
+
+</robot>

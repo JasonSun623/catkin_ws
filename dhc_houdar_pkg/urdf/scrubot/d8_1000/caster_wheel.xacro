@@ -1,0 +1,107 @@
+<?xml version="1.0" ?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+<!--
+  caster wheel and joints defined
+-->
+  <xacro:property name="M_PI" default="3.14159"/>
+
+
+<xacro:property name="caster_wheel_mass" value="1.0" />
+<xacro:property name="caster_wheel_radius" value="0.05" />
+<xacro:property name="caster_wheel_width" value="0.037" />
+<!-- the dist bet rotate axis and rotation object center in x dir-->
+<xacro:property name="caster_wheel_dx" value="0.038" />
+<!-- the dist bet rotate axis and rotation object center in y dir-->
+<xacro:property name="caster_wheel_dy" value="0.0" />
+<!-- the dist bet rotate axis and rotation object <top> in z dir-->
+<xacro:property name="caster_wheel_dz" value="-0.0625" />
+
+<!-- the dist bet caster rotation object center and base in x dir-->
+<xacro:property name="caster_wheel_base_dx" value="0.524" />
+<!-- the dist bet caster rotation object center and base in y dir-->
+<xacro:property name="caster_wheel_base_dy" value="0.0" />
+<!-- the dist bet caster rotation object top and base in z dir-->
+<xacro:property name="caster_wheel_base_dz" value="${caster_wheel_radius-caster_wheel_dz}" />
+
+<xacro:property name="mass_caster_wheel" value="5" />
+
+<xacro:property name="caster_wheel_rotation_radius" value="0.03" />
+<xacro:property name="caster_wheel_rotation_center2end" value="0.07275" />
+
+<xacro:macro name="caster_wheel" params="wheel_prefix parent_link left_right mesh">
+
+  <link name="${wheel_prefix}_caster_rotation_link">
+
+    <inertial>
+      <mass value="${mass_caster_wheel}"/>
+      <origin xyz="0 0 0"/>
+      <inertia ixx="0.012411765597" ixy="-0.000711733678" ixz="0.00050272983" iyy="0.015218160428" iyz="-0.000004273467" izz="0.011763977943"/>
+    </inertial>
+
+    <visual>
+      <origin xyz="${-caster_wheel_rotation_radius} ${-caster_wheel_rotation_radius} ${-caster_wheel_rotation_center2end}" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="${mesh}/caster_wheel_rotation.stl" />
+      </geometry>
+      <xacro:insert_block name="material_silver" />
+    </visual>
+
+    <collision>
+    <origin xyz="${-caster_wheel_rotation_radius} ${-caster_wheel_rotation_radius} ${-caster_wheel_rotation_center2end}" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="${mesh}/caster_wheel_rotation.stl" />
+      </geometry>
+    </collision>
+
+  </link>
+  <!-- rotation color-->
+  <gazebo reference="${wheel_prefix}_caster_rotation_link">
+    <material>Gazebo/Grey</material>
+  </gazebo>
+
+  <link name="${wheel_prefix}_caster_wheel_link">
+    <collision>
+      <!--
+       to konw the rotate and trans detail, please see drivel_wheel.xacro
+      -->
+      <origin xyz="${-caster_wheel_radius} ${left_right*caster_wheel_width/2.0} ${-left_right*caster_wheel_radius}" rpy="${left_right*M_PI/2.0} 0 0" />
+      <geometry>
+        <mesh filename="${mesh}/caster_wheel.stl" />
+      </geometry>
+    </collision>
+
+    <xacro:cylinder_inertial mass="${caster_wheel_mass}" radius="${caster_wheel_radius}" length="${caster_wheel_width}">
+    </xacro:cylinder_inertial>
+
+    <visual>
+    <origin xyz="${-caster_wheel_radius} ${left_right*caster_wheel_width/2.0} ${-left_right*caster_wheel_radius}" rpy="${left_right*M_PI/2.0} 0 0" />
+      <geometry>
+        <mesh filename="${mesh}/caster_wheel.stl" />
+      </geometry>
+      <xacro:insert_block name="material_dark_grey" />
+    </visual>
+
+  </link>
+    <!-- caster_wheel color-->
+  <gazebo reference="${wheel_prefix}_caster_wheel_link">
+    <material>Gazebo/DarkGrey</material>
+  </gazebo>
+
+  <!-- caster rotation to base joint-->
+  <joint name="${wheel_prefix}_caster_rotation_joint" type="continuous">
+    <origin xyz="${caster_wheel_base_dx} ${-caster_wheel_base_dy * left_right} ${caster_wheel_base_dz}" rpy="0 0 0" />
+    <parent link="${parent_link}" />
+    <child link="${wheel_prefix}_caster_rotation_link" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="0.01" friction="0.0"/>
+  </joint>
+ <!-- caster wheel to catster rotation joint-->
+  <joint name="${wheel_prefix}_caster_wheel_joint" type="continuous">
+    <origin xyz="${caster_wheel_dx} ${-caster_wheel_dy * left_right} ${caster_wheel_dz}" rpy="0 0 0" />
+    <parent link="${wheel_prefix}_caster_rotation_link" />
+    <child link="${wheel_prefix}_caster_wheel_link" />
+    <axis xyz="0 1 0" />
+  </joint>
+
+</xacro:macro>
+</robot>

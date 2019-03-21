@@ -1,0 +1,66 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="driven_wheel">
+
+  <!--<xacro:property name="M_PI" default="3.14159"/>-->
+  <!-- Wheel Properties -->
+  <xacro:property name="driven_wheel_length" value="0.1" />
+  <xacro:property name="driven_wheel_radius" value="0.025" />
+  <xacro:property name="mass_driven_wheel" value="0.5" />
+
+  <xacro:macro name="driven_wheel" params="wheel_prefix parent_link left_right *joint_origin">
+    <gazebo reference="${wheel_prefix}_driven_wheel_link">
+      <material>Gazebo/Black</material>
+    </gazebo>
+    <link name="${wheel_prefix}_driven_wheel_link">
+    <inertial>
+          <mass value="${mass_driven_wheel}" />
+          <!-- if it is left wheel we rotate M_PI/2 otherwise we rotate -M_PI/2-->
+          <origin xyz="0 0 0" rpy="${left_right * M_PI/2}  0 0" />
+          <inertia  ixx="${mass_driven_wheel/4.0*(driven_wheel_radius*driven_wheel_radius+driven_wheel_length*driven_wheel_length/3.0)}" ixy="0" ixz="0"
+                    iyy="${mass_driven_wheel*driven_wheel_radius*driven_wheel_radius/2.0}" iyz="0"
+                    izz="${mass_driven_wheel/4.0*(driven_wheel_radius*driven_wheel_radius+driven_wheel_length*driven_wheel_length/3.0)}" />
+        </inertial>
+    <visual>
+          <origin xyz="0 0 0" rpy="${left_right * M_PI/2}  0 0" />
+      <geometry>
+            <cylinder length="${driven_wheel_length}" radius="${driven_wheel_radius}"/>
+      </geometry>
+          <material name="black">
+            <color rgba="0 0 0 1"/>
+          </material>
+    </visual>
+    <collision>
+       <origin xyz="0 0 0" rpy="${left_right * M_PI/2}  0 0" />
+       <geometry>
+        <cylinder length="${driven_wheel_length}" radius="${driven_wheel_radius}" />
+       </geometry>
+    </collision>
+    </link>
+
+    <gazebo reference="${wheel_prefix}_driven_wheel_link">
+      <mu1 value="1.0"/>
+      <mu2 value="1.0"/>
+      <kp value="10000000.0" />
+      <kd value="1.0" />
+      <fdir1 value="1 0 0"/>
+  </gazebo>
+
+    <joint name="${wheel_prefix}_driven_wheel" type="continuous">
+      <parent link="${parent_link}"/>
+      <child link="${wheel_prefix}_driven_wheel_link"/>
+      <xacro:insert_block name="joint_origin"/>
+      <axis xyz="0 1 0" rpy="0 0 0" />
+    </joint>
+
+    <transmission name="${wheel_prefix}_driven_wheel_trans" type="SimpleTransmission">
+      <type>transmission_interface/SimpleTransmission</type>
+      <actuator name="${wheel_prefix}_driven_wheel_motor">
+        <mechanicalReduction>1</mechanicalReduction>
+      </actuator>
+      <joint name="${wheel_prefix}_driven_wheel">
+        <hardwareInterface>VelocityJointInterface</hardwareInterface>
+      </joint>
+    </transmission>
+
+  </xacro:macro>
+</robot>
