@@ -30,8 +30,8 @@
 //#include <gsl/gsl_eigen.h>
 //#include <gsl/gsl_linalg.h>
 
-#include "amcl/pf/pf_vector.h"
-#include "amcl/pf/eig3.h"
+#include "amcl_optimize/pf/pf_vector.h"
+#include "amcl_optimize/pf/eig3.h"
 
 
 // Return a zero vector

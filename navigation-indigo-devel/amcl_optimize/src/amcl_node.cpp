@@ -31,10 +31,10 @@
 // Signal handling
 #include <signal.h>
 
-#include "amcl/map/map.h"
-#include "amcl/pf/pf.h"
-#include "amcl/sensors/amcl_odom.h"
-#include "amcl/sensors/amcl_laser.h"
+#include "amcl_optimize/map/map.h"
+#include "amcl_optimize/pf/pf.h"
+#include "amcl_optimize/sensors/amcl_odom.h"
+#include "amcl_optimize/sensors/amcl_laser.h"
 
 #include "ros/assert.h"
 
@@ -460,6 +460,7 @@ class AmclNode
     double alpha1_, alpha2_, alpha3_, alpha4_, alpha5_;
     double alpha_slow_, alpha_fast_;
     ///chq add for gen a limit random pos
+    bool resampled_in_limit_area_;
     static double resample_search_radius_;
 
     double z_hit_, z_short_, z_max_, z_rand_, sigma_hit_, lambda_short_;
@@ -565,7 +566,9 @@ AmclNode::AmclNode() :
 
   private_nh_.param("laser_min_range", laser_min_range_, -1.0);
   private_nh_.param("laser_max_range", laser_max_range_, -1.0);
-  private_nh_.param("laser_max_beams", max_beams_,720);
+  //chq 激光匹配点束用数目，如果是360全向激光，720意味着没度使用两个激光束，减少这个数目可以有效提高定位计算速度
+  // in a 100*10) m2 map , if =720 the waster 5 second to global loc if = 360 it only need 2 second
+  private_nh_.param("laser_max_beams", max_beams_,720);//
   private_nh_.param("min_particles", min_particles_, 500);
   private_nh_.param("max_particles", max_particles_, 2000);
 
@@ -637,6 +640,8 @@ AmclNode::AmclNode() :
   private_nh_.param("transform_tolerance", tmp_tol, 0.1);
   ///chq慢速平均权重滤波器的指数衰减率，
   //用于决定何时通过添加随机姿态进行恢复操作，0.0表示禁用
+
+  private_nh_.param("resampled_in_limit_area", resampled_in_limit_area_, true);///chq a rand pos gen range
   private_nh_.param("resample_search_radius", resample_search_radius_, 2.0);///chq a rand pos gen range
   private_nh_.param("recovery_alpha_slow", alpha_slow_, 0.5/*0.001*/);//chq mod
   private_nh_.param("recovery_alpha_fast", alpha_fast_, 0.1);
@@ -720,6 +725,9 @@ AmclNode::AmclNode() :
   laser_check_interval_ = ros::Duration(15.0);
   check_laser_timer_ = nh_.createTimer(laser_check_interval_, 
                                        boost::bind(&AmclNode::checkLaserReceived, this, _1));
+  ///added by chq for global loc from starting loc
+  //ros::Duration(0.5).sleep();
+ // globalLocBySplitMap();
 }
 
 void AmclNode::reconfigureCB(AMCL_OPTIMIZEConfig &config, uint32_t level)
@@ -808,8 +816,11 @@ void AmclNode::reconfigureCB(AMCL_OPTIMIZEConfig &config, uint32_t level)
                  alpha_slow_, alpha_fast_,
                  (pf_init_model_fn_t)AmclNode::uniformPoseGenerator,
                  (void *)map_);
+
   ///chq
   pf_->limit_random_pose_fn = (pf_limit_sample_fn_t)AmclNode::limitUniformPoseGenerator;
+  resampled_in_limit_area_ = config.resampled_in_limit_area;
+  resample_search_radius_ = config.resample_search_radius;
 
   pf_err_ = config.kld_err; 
   pf_z_ = config.kld_z; 
@@ -1191,7 +1202,9 @@ AmclNode::handleMapMessage(const nav_msgs::OccupancyGrid& msg)
 
   // In case the initial pose message arrived before the first map,
   // try to apply the initial pose now that the map has arrived.
+  ///chq disabled if we change map then now we can init loc by optimized global loc method
   applyInitialPose();
+  ///globalLocBySplitMap();
 
 }
 
@@ -1407,8 +1420,8 @@ AmclNode::LocalLocByGaAlogrithm(double search_radius, pf_vector_t init_pos){
   galgo::Parameter<double,10> para3({ -M_PI,M_PI,init_pos.v[2]});
 
   ///激光数据必须先修正
-  if(!cur_laser_scan ||
-     frame_to_laser_.find(cur_laser_scan->header.frame_id) == frame_to_laser_.end()){
+  if(!cur_laser_scan /*||
+     frame_to_laser_.find(cur_laser_scan->header.frame_id) == frame_to_laser_.end()*/){
     ROS_ERROR("!!!AmclNode::LocalLocByGaAlogrithm.cur_laser_scan is not valid.return");
     return;
   }
@@ -1590,11 +1603,11 @@ AmclNode::LocalLocBySplitMap(double search_w,double search_h,double init_x,doubl
 void
 AmclNode::globalLocBySplitMap(void){
   int result = -1;
-  ROS_INFO("globalLocBySplitMap.start...");
+  ROS_INFO("----------------globalLocBySplitMap.Start-----------------");
 
-  if(!cur_laser_scan ||
-     frame_to_laser_.find(cur_laser_scan->header.frame_id) == frame_to_laser_.end()){
-    ROS_ERROR("!!!AmclNode::globalLocBySplitMap.cur_laser_scan is not valid.return");
+  if(!cur_laser_scan /*||
+     frame_to_laser_.find(cur_laser_scan->header.frame_id) == frame_to_laser_.end()*/){
+    ROS_ERROR("!!!Error!AmclNode::globalLocBySplitMap.cur_laser_scan is not valid.return");
     return;
   }
 
@@ -1711,7 +1724,7 @@ AmclNode::globalLocBySplitMap(void){
     ///LocalLocBySplitMap(w,h,bestPos.v[0],bestPos.v[1]);
     LocalLocByGaAlogrithm(w,bestPos);
     //pf_init_ = false;
-    ROS_INFO("globalLocBySplitMap.done...");
+   ROS_INFO("----------------globalLocBySplitMap.Done-----------------");
 }
 
 //split a sub map uniformly
@@ -2063,9 +2076,9 @@ AmclNode::getBestClusterSample(pf_t *pf, pf_vector_t& best_pose,double &best_wei
   int result = -1;
   double max_weight = 0.0;
   int max_weight_hyp = -1;
-  std::vector<amcl_hyp_t> hyps;
+  // std::vector<amcl_hyp_t> hyps;
   double sum_w=0.0;
-  hyps.resize(pf->sets[pf->current_set].cluster_count);
+  //hyps.resize(pf->sets[pf->current_set].cluster_count);
   for(int hyp_count = 0;
       hyp_count < pf->sets[pf->current_set].cluster_count; hyp_count++)
   {
@@ -2078,22 +2091,28 @@ AmclNode::getBestClusterSample(pf_t *pf, pf_vector_t& best_pose,double &best_wei
       break;
     }
     sum_w+=weight;
-    hyps[hyp_count].weight = weight;
-    hyps[hyp_count].pf_pose_mean = pose_mean;
-    hyps[hyp_count].pf_pose_cov = pose_cov;
+    //hyps[hyp_count].weight = weight;
+   // hyps[hyp_count].pf_pose_mean = pose_mean;
+    //hyps[hyp_count].pf_pose_cov = pose_cov;
 
-    if(hyps[hyp_count].weight > max_weight)
+    if(weight > max_weight)
     {
-      max_weight = hyps[hyp_count].weight;
+      max_weight = weight;
       max_weight_hyp = hyp_count;
+      best_pose = pose_mean;
     }
+  }
+
+  if( std::isnan(best_pose.v[0]) || std::isnan(best_pose.v[1]) || std::isnan(best_pose.v[2])){
+    ROS_ERROR("getBestClusterSample.Max weight pose is nan ");
+    return result;
   }
 
   if(max_weight > 0.0)
   {
-    best_pose =  hyps[max_weight_hyp].pf_pose_mean;
+
     best_weight_perc = sum_w > 0?max_weight/sum_w : 0;
-    ROS_DEBUG("Max weight pose: %.3f %.3f %.3f",
+    ROS_ERROR("Max weight pose: %.3f %.3f %.3f",
               best_pose.v[0],
               best_pose.v[1],
               best_pose.v[2]);
@@ -2113,12 +2132,12 @@ AmclNode::globalLocalizationCallback(std_srvs::Empty::Request& req,
     return true;
   }
   boost::recursive_mutex::scoped_lock gl(configuration_mutex_);
-  ROS_INFO("Initializing with uniform distribution");
+  ROS_INFO("globalLocalizationCallback.Initializing with uniform distribution");
   //传入uniformPoseGenerator函数，在采样个数限定下,每次调用生成一个地图内的随机位置
   //pf_init_model(pf_, (pf_init_model_fn_t)AmclNode::uniformPoseGenerator,
   //                (void *)map_);
   globalLocBySplitMap();
-  ROS_INFO("Global initialisation done!");
+  ROS_INFO("globalLocalizationCallback.Global initialisation done!");
   pf_init_ = false;
   return true;
 }
@@ -2330,10 +2349,14 @@ void AmclNode::pubPoseAndTF(const sensor_msgs::LaserScanConstPtr& laser_scan,pf_
   tf::Stamped<tf::Pose> odom_to_map;
   try
   {
+    //ROS_INFO("pubposandtf.bestpos info.x:%.4f",bestPos.v[0]);
+
     tf::Transform tmp_tf(tf::createQuaternionFromYaw(bestPos.v[2]),
                          tf::Vector3(bestPos.v[0],
                                      bestPos.v[1],
                                      0.0));
+
+    //ROS_INFO("pubposandtf.map2base info.x:%.4f",tmp_tf.getOrigin().x());
 
     tf::Stamped<tf::Pose> tmp_tf_stamped (tmp_tf.inverse(),
                                           laser_scan->header.stamp,
@@ -2347,20 +2370,26 @@ void AmclNode::pubPoseAndTF(const sensor_msgs::LaserScanConstPtr& laser_scan,pf_
    //chq odom2map =odom2pos * pos2map = odom2pos * inv(map2pos)
     //transformPose所作的事　是　将base_link下的数据(pos2map)　转换到　目标　odom上去
     // 即　获得　odom 到base_link的转换　乘以 　base_link下的数据
+    //ROS_INFO("pubposandtf.transformPose...");
+    //ROS_INFO("pubposandtf.base2map info.x:%.4f",tmp_tf_stamped.getOrigin().x());
+
     this->tf_->transformPose(odom_frame_id_,
                              tmp_tf_stamped,
                              odom_to_map);
+    //ROS_INFO("pubposandtf.odom2map info.x:%.4f",odom_to_map.getOrigin().x());
+
   }
   catch(tf::TransformException)
   {
-    ROS_DEBUG("Failed to subtract base to odom transform");
+    ROS_WARN("Failed to subtract base to odom transform");
     return;
   }
+  //ROS_INFO("pubposandtf.odom_to_map info.x:%.4f",odom_to_map.getOrigin().x());
 
   latest_tf_ = tf::Transform(tf::Quaternion(odom_to_map.getRotation()),
                              tf::Point(odom_to_map.getOrigin()));
   latest_tf_valid_ = true;
-
+  //ROS_INFO("pubposandtf.latest_tf_ info.x:%.4f",latest_tf_.getOrigin().x());
   if (tf_broadcast_ == true)
   {
     // We want to send a transform that is good up until a
@@ -2371,6 +2400,8 @@ void AmclNode::pubPoseAndTF(const sensor_msgs::LaserScanConstPtr& laser_scan,pf_
     tf::StampedTransform tmp_tf_stamped(latest_tf_.inverse(),
                                         transform_expiration,
                                         global_frame_id_, odom_frame_id_);
+    //ROS_INFO("pubposandtf.sendTransform...");
+
     this->tfb_->sendTransform(tmp_tf_stamped);
     sent_first_transform_ = true;
   }
@@ -2447,7 +2478,7 @@ AmclNode::pubPfCloud(void){
 void
 AmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
 {
-  // ROS_INFO("laserReceived.start");
+  ROS_INFO("laserReceived.start");
   last_laser_received_ts_ = ros::Time::now();
   if( map_ == NULL ) {
     ROS_ERROR("AmclNode::laserReceived.map is null return!");//CHQ 20190128
@@ -2457,12 +2488,14 @@ AmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
   boost::recursive_mutex::scoped_lock lr(configuration_mutex_);
   int laser_index = -1;
   laser_index = updateLaserVector(laser_scan);
+  ROS_INFO("laserReceived.suc update laser frame");
   if(laser_index < 0)return;
 
   cur_laser_scan = laser_scan;
 
   // Where was the robot when this scan was taken?
   pf_vector_t pose;
+   ROS_INFO("laserReceived.getOdomPose...");
   if(!getOdomPose(latest_odom_pose_, pose.v[0], pose.v[1], pose.v[2],
                   laser_scan->header.stamp, base_frame_id_))
   {
@@ -2472,9 +2505,9 @@ AmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
 
 
   pf_vector_t delta = pf_vector_zero();
-
   if(pf_init_)
   {
+    ROS_INFO("laserReceived.judgeUpdateByMove...");
 
     bool update = judgeUpdateByMove(pose,pf_odom_pose_,delta);
     // Set the laser update flags
@@ -2498,6 +2531,8 @@ AmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
 
   ///for  init loc by ga
   AMCLLaserData ldata;
+  ROS_INFO("laserReceived.tailoringScan...");
+
   int result = tailoringScan(laser_scan,lasers_[laser_index],ldata);
   if(result < 0 ) return;
   glo_ldata = ldata;
@@ -2511,7 +2546,6 @@ AmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
     if(result < 0 ) return;
     #endif
     ROS_INFO("AmclNode::laserReceived.UpdateSensor...");
-
     updatePfByLaser(lasers_[laser_index],ldata);
     //evaluatePfByLaser(lasers_[laser_index],ldata);
 
@@ -2523,7 +2557,11 @@ AmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
     if(!(++resample_count_ % resample_interval_))
     {
       //chq comment: force to resample pf.the pf_current set will be change
-      pf_update_resample(pf_);
+      ROS_INFO("laserReceived.pf_update_resample...");
+      if(resampled_in_limit_area_)
+        pf_update_resample_in_local_area(pf_);
+      else
+        pf_update_resample(pf_);
       //chq comment:force to pub pose tf
       resampled = true;
     }
@@ -2547,11 +2585,12 @@ AmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
        double best_w_perc =0.0;
       int result = getBestClusterSample(pf_,bestPos,best_w_perc);
       if( result >= 0 ){
+        ROS_INFO("laserReceived.pubPoseAndTF...");
         pubPoseAndTF(laser_scan,bestPos,best_w_perc);
       }
       else
       {
-        ROS_ERROR("No pose!");
+        ROS_ERROR("laserReceived.getBestClusterSample.No pose!");
       }
   }
   else if(latest_tf_valid_)
@@ -2565,6 +2604,8 @@ AmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
       tf::StampedTransform tmp_tf_stamped(latest_tf_.inverse(),
                                           transform_expiration,
                                           global_frame_id_, odom_frame_id_);
+      ROS_INFO("laserReceived.sendTransform...");
+
       this->tfb_->sendTransform(tmp_tf_stamped);
     }
 
@@ -2594,10 +2635,8 @@ AmclNode::globalPoseReceived(const std_msgs::Int16ConstPtr & msg){
     return ;
   }
   boost::recursive_mutex::scoped_lock prl(configuration_mutex_);
-
-
-  boost::recursive_mutex::scoped_lock gl(configuration_mutex_);
-  ROS_INFO("Initializing with global uniform distribution");
+  //boost::recursive_mutex::scoped_lock gl(configuration_mutex_);
+  ROS_INFO("globalPoseReceived.Initializing with global uniform distribution");
   //传入uniformPoseGenerator函数，在采样个数限定下,每次调用生成一个地图内的随机位置
  // pf_init_model(pf_, (pf_init_model_fn_t)AmclNode::uniformPoseGenerator,
   //              (void *)map_);

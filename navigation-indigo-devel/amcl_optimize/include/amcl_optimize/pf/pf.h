@@ -175,7 +175,8 @@ void pf_update_sensor(pf_t *pf, pf_sensor_model_fn_t sensor_fn, void *sensor_dat
 
 // Resample the distribution
 void pf_update_resample(pf_t *pf);
-
+//chq resample in local area .that means we only resampled a rand pos nearby the bestpos
+void pf_update_resample_in_local_area(pf_t *pf);
 // Compute the CEP statistics (mean and variance).
 void pf_get_cep_stats(pf_t *pf, pf_vector_t *mean, double *var);
 

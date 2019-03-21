@@ -31,7 +31,7 @@
 #include <string.h>
 #include <stdio.h>
 
-#include "amcl/map/map.h"
+#include "amcl_optimize/map/map.h"
 
 
 // Create a new map

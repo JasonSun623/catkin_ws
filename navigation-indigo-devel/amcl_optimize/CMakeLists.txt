@@ -35,24 +35,24 @@ include_directories(include)
 include_directories(${catkin_INCLUDE_DIRS} ${Boost_INCLUDE_DIRS})
 
 add_library(amcl_optimize_pf
-                    src/amcl/pf/pf.c
-                    src/amcl/pf/pf_kdtree.c
-                    src/amcl/pf/pf_pdf.c
-                    src/amcl/pf/pf_vector.c
-                    src/amcl/pf/eig3.c
-                    src/amcl/pf/pf_draw.c)
+                    src/amcl_optimize/pf/pf.c
+                    src/amcl_optimize/pf/pf_kdtree.c
+                    src/amcl_optimize/pf/pf_pdf.c
+                    src/amcl_optimize/pf/pf_vector.c
+                    src/amcl_optimize/pf/eig3.c
+                    src/amcl_optimize/pf/pf_draw.c)
 
 add_library(amcl_optimize_map
-                    src/amcl/map/map.c
-                    src/amcl/map/map_cspace.cpp
-                    src/amcl/map/map_range.c
-                    src/amcl/map/map_store.c
-                    src/amcl/map/map_draw.c)
+                    src/amcl_optimize/map/map.c
+                    src/amcl_optimize/map/map_cspace.cpp
+                    src/amcl_optimize/map/map_range.c
+                    src/amcl_optimize/map/map_store.c
+                    src/amcl_optimize/map/map_draw.c)
 
 add_library(amcl_optimize_sensors
-                    src/amcl/sensors/amcl_sensor.cpp
-                    src/amcl/sensors/amcl_odom.cpp
-                    src/amcl/sensors/amcl_laser.cpp)
+                    src/amcl_optimize/sensors/amcl_sensor.cpp
+                    src/amcl_optimize/sensors/amcl_odom.cpp
+                    src/amcl_optimize/sensors/amcl_laser.cpp)
 target_link_libraries(amcl_optimize_sensors amcl_optimize_map amcl_optimize_pf)
 
 
@@ -78,7 +78,7 @@ install( TARGETS
     RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
-install(DIRECTORY include/amcl/
+install(DIRECTORY include/amcl_optimize/
   DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
 )
 

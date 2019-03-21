@@ -32,8 +32,8 @@
 #include <string.h>
 
 
-#include "amcl/pf/pf_vector.h"
-#include "amcl/pf/pf_kdtree.h"
+#include "amcl_optimize/pf/pf_vector.h"
+#include "amcl_optimize/pf/pf_kdtree.h"
 
 
 // Compare keys to see if they are equal

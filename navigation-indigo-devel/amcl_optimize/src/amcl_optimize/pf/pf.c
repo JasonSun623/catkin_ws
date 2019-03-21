@@ -30,9 +30,9 @@
 #include <stdlib.h>
 #include <time.h>
 
-#include "amcl/pf/pf.h"
-#include "amcl/pf/pf_pdf.h"
-#include "amcl/pf/pf_kdtree.h"
+#include "amcl_optimize/pf/pf.h"
+#include "amcl_optimize/pf/pf_pdf.h"
+#include "amcl_optimize/pf/pf_kdtree.h"
 
 
 // Compute the required number of samples, given that there are k bins
@@ -519,7 +519,7 @@ void pf_update_resample(pf_t *pf)
     /// chq We want the random particle to be distributed around the best particles,
     //  instead of be spread too far, so we need to rewrite the random position generator.
     if(drand48() < w_diff){//生成一个新的位置
-      ///sample_b->pose = (pf->random_pose_fn)(pf->random_pose_data);//chq disabled
+     sample_b->pose = (pf->random_pose_fn)(pf->random_pose_data);//chq disabled
 
       /// chq following method has a disadvantage
       // that once upon the loc err bet real pos and loc pos is beyond the limit search radius
@@ -534,9 +534,10 @@ void pf_update_resample(pf_t *pf)
       //(once upon the loc reliability  below to thread,the w_diff para will be increased,
       //then the random num particles will be increased )
       //it will be benifit be reloc
-       pf_vector_t temp = (pf->limit_random_pose_fn)(pf,pf->random_pose_data);
-      if((temp.v[0] ||temp.v[2] ||temp.v[3]))
-        sample_b->pose =temp;
+      /// 有防止跑飞和具备行人遮挡的重定位功能
+//       pf_vector_t temp = (pf->limit_random_pose_fn)(pf,pf->random_pose_data);
+//      if((temp.v[0] ||temp.v[2] ||temp.v[3]))
+//        sample_b->pose =temp;
     }
     else
     {
@@ -606,6 +607,163 @@ void pf_update_resample(pf_t *pf)
     sample_b->weight /= total;
   }
   
+  // Re-compute cluster statistics
+  pf_cluster_stats(pf, set_b);
+
+  // Use the newly created sample set
+  pf->current_set = (pf->current_set + 1) % 2;// after resampled ,更新为 set: set_b
+
+  pf_update_converged(pf);
+
+  free(c);
+  return;
+}
+
+void pf_update_resample_in_local_area(pf_t *pf)
+{
+  int i;
+  double total;
+  pf_sample_set_t *set_a, *set_b;
+  pf_sample_t *sample_a, *sample_b;
+
+  //double r,c,U;
+  //int m;
+  //double count_inv;
+  double* c;
+
+  double w_diff;
+
+  set_a = pf->sets + pf->current_set;
+  set_b = pf->sets + (pf->current_set + 1) % 2;
+
+  // Build up cumulative probability table for resampling.
+  // TODO: Replace this with a more efficient procedure
+  // (e.g., http://www.network-theory.co.uk/docs/gslref/GeneralDiscreteDistributions.html)
+  c = (double*)malloc(sizeof(double)*(set_a->sample_count+1));
+  c[0] = 0.0;
+  for(i=0;i<set_a->sample_count;i++)
+    c[i+1] = c[i]+set_a->samples[i].weight;
+
+  // Create the kd tree for adaptive sampling
+  pf_kdtree_clear(set_b->kdtree);
+
+  // Draw samples from set a to create set b.
+  total = 0;
+  set_b->sample_count = 0;
+  ///chq
+  /// prob robotics cn.195
+  /// w_fast 短期似然  w_slow 长期似然
+  /// if w_fast is better than w_slow (or equal to) then do not add the random sample prob
+  /// otherwise add the prob by their ratio .
+  w_diff = 1.0 - pf->w_fast / pf->w_slow;///( 0 < alpha_slow < alpha_fast)
+  if(w_diff < 0.0)
+    w_diff = 0.0;
+  //printf("w_diff: %9.6f\n", w_diff);
+
+  // Can't (easily) combine low-variance sampler with KLD adaptive
+  // sampling, so we'll take the more traditional route.
+  /*
+  // Low-variance resampler, taken from Probabilistic Robotics, p110
+  count_inv = 1.0/set_a->sample_count;
+  r = drand48() * count_inv;
+  c = set_a->samples[0].weight;
+  i = 0;
+  m = 0;
+  */
+  while(set_b->sample_count < pf->max_samples)
+  {
+    sample_b = set_b->samples + set_b->sample_count++;
+    /// chq We want the random particle to be distributed around the best particles,
+    //  instead of be spread too far, so we need to rewrite the random position generator.
+    if(drand48() < w_diff){//生成一个新的位置
+     /// sample_b->pose = (pf->random_pose_fn)(pf->random_pose_data);//chq disabled
+
+      /// chq following method has a disadvantage
+      // that once upon the loc err bet real pos and loc pos is beyond the limit search radius
+      // there would never be a chance to recovery to real pos
+      ///(so it can not resolve the kidnapped problem )
+      // because we only generate random recovery particles in limit area
+      ///But the advantage are :
+      //1:the loc reliability will be strong becaused it never will fly to other way in limit speed
+      //(speed <= search_radius / loop_peirod)
+      //2:if the pos is lost in limit fast speed,it can be recovery by resampling --
+      //--only if it don't be move too far by  hanging in the air
+      //(once upon the loc reliability  below to thread,the w_diff para will be increased,
+      //then the random num particles will be increased )
+      //it will be benifit be reloc
+      /// 有防止跑飞和具备行人遮挡的重定位功能
+       pf_vector_t temp = (pf->limit_random_pose_fn)(pf,pf->random_pose_data);
+      if((temp.v[0] ||temp.v[2] ||temp.v[3]))
+        sample_b->pose =temp;
+    }
+    else
+    {
+      // Can't (easily) combine low-variance sampler with KLD adaptive
+      // sampling, so we'll take the more traditional route.
+      /*
+      // Low-variance resampler, taken from Probabilistic Robotics, p110
+      U = r + m * count_inv;
+      while(U>c)
+      {
+        i++;
+        // Handle wrap-around by resetting counters and picking a new random
+        // number
+        if(i >= set_a->sample_count)
+        {
+          r = drand48() * count_inv;
+          c = set_a->samples[0].weight;
+          i = 0;
+          m = 0;
+          U = r + m * count_inv;
+          continue;
+        }
+        c += set_a->samples[i].weight;
+      }
+      m++;
+      */
+
+      // Naive discrete event sampler
+      double r;
+      r = drand48();
+      for(i=0;i<set_a->sample_count;i++)
+      {
+        if((c[i] <= r) && (r < c[i+1]))
+          break;
+      }
+      assert(i<set_a->sample_count);
+
+      sample_a = set_a->samples + i;//轮盘赌方式选择一个老数据
+
+      assert(sample_a->weight > 0);
+
+      // Add sample to list
+      sample_b->pose = sample_a->pose;
+    }
+
+    sample_b->weight = 1.0;
+    total += sample_b->weight;
+
+    // Add sample to histogram
+    pf_kdtree_insert(set_b->kdtree, sample_b->pose, sample_b->weight);
+
+    // See if we have enough samples yet
+    if (set_b->sample_count > pf_resample_limit(pf, set_b->kdtree->leaf_count))
+      break;
+  }
+
+  // Reset averages, to avoid spiraling off into complete randomness.
+  if(w_diff > 0.0)
+    pf->w_slow = pf->w_fast = 0.0;
+
+  //fprintf(stderr, "\n\n");
+
+  // Normalize weights
+  for (i = 0; i < set_b->sample_count; i++)
+  {
+    sample_b = set_b->samples + i;
+    sample_b->weight /= total;
+  }
+
   // Re-compute cluster statistics
   pf_cluster_stats(pf, set_b);
 

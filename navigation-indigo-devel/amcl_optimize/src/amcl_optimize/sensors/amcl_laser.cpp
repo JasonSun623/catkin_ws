@@ -33,7 +33,7 @@
 #include <assert.h>
 #include <unistd.h>
 
-#include "amcl/sensors/amcl_laser.h"
+#include "amcl_optimize/sensors/amcl_laser.h"
 
 using namespace amcl_optimize;
 
