@@ -828,6 +828,7 @@ void AmclNode::reconfigureCB(AMCL_OPTIMIZEConfig &config, uint32_t level)
   pf_->pop_z = pf_z_;
 
   ///ga
+  init_loc_method = config.init_loc_method;
   ga_pop_num = config.pop_num;
   ga_generation = config.generation;
   ga_covrate = config.covrate;
