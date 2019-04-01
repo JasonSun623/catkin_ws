@@ -1,0 +1,59 @@
+<launch>
+<!-- Arguments -->
+  <arg name="scan_topic"     default="scan"/>
+  <arg name="initial_pose_x" default="0.0"/>
+  <arg name="initial_pose_y" default="0.0"/>
+  <arg name="initial_pose_a" default="0.0"/>
+<!-- Map Arguments -->
+ <arg name="map_file" default="$(find path_tracking_planner)/maps/coverage_space2.map"/>
+<!--Map Server -->
+ <node name="map_server" type="map_server_map3" pkg="map_server_map3" args="$(arg map_file)" />
+
+  <arg name="one_deg" value="0.017453" />
+  <!-- AMCL -->
+  <node pkg="amcl" type="amcl" name="amcl" respawn="true" output="screen">
+    <!--overal para -->
+    <param name="min_particles"             value="500"/>
+    <param name="max_particles"             value="2000"/>
+    <param name="kld_err"                   value="0.02"/>
+    <!-- dist change 5cm -->
+    <param name="update_min_d"              value="0.05"/>
+    <!-- angle change 6 deg(1 deg = 0.017 rad) -->
+    <param name="update_min_a"              value="0.05"/>
+    <param name="resample_interval"         value="1"/>
+    <param name="transform_tolerance"       value="0.5"/>
+    <param name="recovery_alpha_slow"       value="0.001"/>
+    <param name="recovery_alpha_fast"       value="0.1"/>
+    <!--param name="initial_pose_x"            value="$(arg initial_pose_x)"/-->
+    <!--param name="initial_pose_y"            value="$(arg initial_pose_y)"/-->
+    <!--param name="initial_pose_a"            value="$(arg initial_pose_a)"/-->
+    <param name="gui_publish_rate"          value="50.0"/>
+    <!-- scan para -->
+    <remap from="scan"                      to="$(arg scan_topic)"/>
+    <param name="laser_min_range"           value="0.1"/>
+    <param name="laser_max_range"           value="49"/>
+     <!-- correspond to hokuyo laser set para -->
+    <param name="laser_max_beams"           value="100"/>
+    <!--  -->
+    <param name="laser_z_hit"               value="0.5"/>
+    <param name="laser_z_rand"              value="0.5"/>
+    <param name="laser_z_short"             value="0.05"/>
+    <param name="laser_z_max"               value="0.05"/>
+    <param name="laser_sigma_hit"           value="0.2"/>
+    <param name="laser_lambda_short"        value="0.1"/>
+    <param name="laser_likelihood_max_dist" value="2.0"/>
+    <param name="laser_model_type"          value="likelihood_field_prob"/>
+    <!-- odom para --> 
+    <!--  !!wheel control type!!  -->
+    <param name="odom_model_type"           value="omni"/>
+    <param name="odom_alpha1"               value="0.1"/>
+    <param name="odom_alpha2"               value="0.1"/>
+    <param name="odom_alpha3"               value="0.1"/>
+    <param name="odom_alpha4"               value="0.1"/>
+    <param name="odom_frame_id"             value="odom"/>
+    <param name="base_frame_id"             value="base_link"/>
+
+  </node>
+  <!--node name="rviz" pkg="rviz" type="rviz" args="-d $(find dhc_houdar_pkg)/rviz/R2D2_amcl.rviz" /-->
+
+</launch>

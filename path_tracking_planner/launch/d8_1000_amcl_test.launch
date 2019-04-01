@@ -1,0 +1,95 @@
+<launch>
+<!-- Arguments -->
+  <arg name="scan_topic"     default="scan"/>
+  <arg name="initial_pose_x" default="0.0"/>
+  <arg name="initial_pose_y" default="0.0"/>
+  <arg name="initial_pose_a" default="0.0"/>
+  <arg name="M_PI" default="3.1415926"/>
+<!-- Map Arguments -->
+ <arg name="map_file" default="$(find dhc_houdar_pkg)/maps/coverage_space2.map"/>
+<!-- Map Server -->
+ <node name="map_server" type="map_server" pkg="map_server" args="$(arg map_file)" />
+ <!--fire up virtual amcl -->
+ <!-- AMCL -->
+   <node pkg="amcl_optimize" type="amcl_optimize" name="amcl_optimize" respawn="true" output="screen">
+     <!--overal para -->
+     <param name="min_particles"             value="500"/>
+     <param name="max_particles"             value="2000"/>
+     <param name="kld_err"                   value="0.05"/>
+     <!-- dist change 5cm -->
+     <param name="update_min_d"              value="0.2"/>
+     <!-- angle change 6 deg(1 deg = 0.017 rad) -->
+     <param name="update_min_a"              value="0.02"/>
+     <param name="resample_interval"         value="1"/>
+     <param name="transform_tolerance"       value="0.5"/>
+     <!--
+     for folowing two para.
+     The larger the value, the greater the impact of the latest measurement value
+     meanwhile the larger the a_fast ,the bigger the resample prob
+     the larger the a_slow ,the lower the resample prob
+     .-->
+     <param name="recovery_alpha_slow"       value="0.01"/>
+     <param name="recovery_alpha_fast"       value="0.3"/>
+     <!--param name="initial_pose_x"            value="$(arg initial_pose_x)"/-->
+     <!--param name="initial_pose_y"            value="$(arg initial_pose_y)"/-->
+     <!--param name="initial_pose_a"            value="$(arg initial_pose_a)"/-->
+     <param name="gui_publish_rate"          value="50.0"/>
+     <!-- scan para -->
+     <remap from="scan"                      to="$(arg scan_topic)"/>
+     <param name="laser_min_range"           value="-1.0"/>
+     <param name="laser_max_range"           value="-1.0"/>
+      <!-- correspond to hokuyo laser set para -->
+      <!-- 180 for 180 deg laser scan range-->
+     <param name="laser_max_beams"           value="180"/>
+     <!--  -->
+     <param name="laser_z_hit"               value="0.6"/>
+     <param name="laser_z_rand"              value="0.1"/>
+     <param name="laser_z_short"             value="0.05"/>
+     <param name="laser_z_max"               value="0.05"/>
+     <param name="laser_sigma_hit"           value="0.2"/>
+     <param name="laser_lambda_short"        value="0.1"/>
+     <param name="laser_likelihood_max_dist" value="3.0"/>
+     <param name="laser_model_type"          value="likelihood_field"/>
+     <!-- odom para -->
+     <!--  !!wheel control type!!  -->
+     <param name="odom_model_type"           value="diff"/>
+     <param name="odom_alpha1"               value="0.1"/>
+     <param name="odom_alpha2"               value="0.1"/>
+     <param name="odom_alpha3"               value="0.1"/>
+     <param name="odom_alpha4"               value="0.1"/>
+     <param name="beam_skip_distance"         value="0.5"/>
+     <param name="beam_skip_threshold"        value="0.3"/>
+     <param name="beam_skip_error_threshold_" value="0.9"/>
+     <!-- ga for init or global loc -->
+     <param name="init_loc_method" value="ga"/>
+     <param name="ga/pop_num" value="200"/>
+     <param name="ga/generation" value="200"/>
+     <param name="ga/search_radius" value="10.0"/>
+     <param name="ga/angle_error_para" value="1.0"/>
+     <param name="ga/covrate" value="0.95"/>
+     <param name="ga/mutrate" value="0.5"/>
+     <param name="ga/outputting_precision" value="6"/>
+     <param name="ga/select_method" value="SUS"/>
+     <param name="ga/cross_method" value="P1XO"/>
+     <param name="ga/mutation_method" value="SPM"/>
+
+
+     <!-- resample control -->
+     <param name="resampled_in_limit_area" value="true"/>
+     <!-- velocity max = 1 change = 1-0 loop period max =0.5 so angle_radius = 1*0.5-->
+     <param name="resample_dist_radius" value="0.5"/>
+     <!-- angle max = 0.5 change = 0.5-(-0.5) =1, loop period max = 0.5 so angle_radius = 1*0.5-->
+      <param name="resample_angle_radius" value="0.5"/>
+    <!-- frame -->
+     <param name="global_frame_id"           value="map"/>
+     <param name="odom_frame_id"             value="odom"/>
+     <param name="base_frame_id"             value="base_footprint"/>
+
+   </node>
+
+<!--fireup ekf -->
+<!--node
+pkg="robot_localization" type="ekf_localization_node" name="ekf_localization_node" clear_params="true" output="screen">
+  <rosparam command="load" file="$(find imu_odom_combine)/launch/ekf.yaml" />
+</node-->
+</launch>

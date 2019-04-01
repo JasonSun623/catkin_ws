@@ -1,0 +1,60 @@
+
+front_wheel_controller: 
+  type: "velocity_controllers/JointVelocityController"
+  joint: front_wheel_joint
+rear_wheel_controller: 
+  type: "velocity_controllers/JointVelocityController"
+  joint: rear_wheel_joint
+
+wheel_diff_controller: 
+  type: "diff_drive_controller/DiffDriveController"
+  publish_rate: 50
+  #须指定符号'，否则gazebo无法正确仿真
+  left_wheel: 'left_front_wheel_joint'
+  right_wheel: 'right_front_wheel_joint'
+  
+  # Odometry covariances for the encoder output of the robot. These values should
+  # be tuned to your robot's sample odometry data, but these values are a good place
+  # to start
+  #pose_covariance_diagonal: [0.001, 0.001, 0.001, 0.001, 0.001, 0.03]
+  #twist_covariance_diagonal: [0.001, 0.001, 0.001, 0.001, 0.001, 0.03]
+  ###chq modify 20181229 ref mir robot
+  pose_covariance_diagonal : [0.00001, 0.00001, 1000000.0, 1000000.0, 1000000.0, 1000.0]
+  twist_covariance_diagonal: [0.1, 0.1, 1000000.0, 1000000.0, 1000000.0, 1000.0]
+
+  # Top level frame (link) of the robot description
+  base_frame_id: base_link
+  odom_frame_id: odom      # default: odom
+# Velocity and acceleration limits for the robot
+# chq.we must set bigger than normal because we do not want the outside setting is bigger than this like in dwa setting
+  linear:
+    x:
+      has_velocity_limits    : true
+      max_velocity           : 2.0   # m/s
+      has_acceleration_limits: true
+      max_acceleration       : 2.0   # m/s^2
+  angular:
+    z:
+      has_velocity_limits    : true
+      max_velocity           : 3.14   # rad/s
+      has_acceleration_limits: true
+      max_acceleration       : 6.0   # rad/s^2
+robotnik_elevator_controller:
+  type: "robotnik_elevator_controller/RobotnikElevatorController"
+  joint:
+    elevator_joint:
+      name: rb2_a_elevator_platform_joint
+  elevator_position_up: 0.05
+  elevator_position_down: 0.0
+  # delay time to perform the elevation
+  elevation_action_time: 1.0
+  # params for the pickup avoiding Gazebo physics (see elevator_fake_pickup_gazebo)
+  gazebo:
+    # if true, the carts will be raised avoiding contact
+    disable_gazebo_physics_for_pickup: true
+    pickup_service: "/elevator_fake_pickup_gazebo/simple_pick"
+    place_service: "/elevator_fake_pickup_gazebo/simple_place"
+    # model id used in Gazebo
+    robot_model: "rb2_a"
+    # distance in z to move the picked cart
+    elevation_offset_z: 0.07
