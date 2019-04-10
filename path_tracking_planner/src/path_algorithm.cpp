@@ -811,7 +811,6 @@ ReturnValue Path::OptimizeByBSpline(double distance)
             //似乎是简单的线性插值
             aux.dX = Bx + K * ba.dX;  // x = x' + K*Vx
             aux.dY = By + K * ba.dY;  // y = y' + K*Vy  //(Vx, Vy) vector director
-
             aux.dSpeed = vPoints[b].dSpeed;
             //--------------------------------------------------------------------------
             std::cout << "mod_ab - 1 > dMinDist.vPoints[b].dSpeed < 0.0.add point.vPoints[b].dSpeed:" << vPoints[b].dSpeed << ", i:" << i <<" \n";
