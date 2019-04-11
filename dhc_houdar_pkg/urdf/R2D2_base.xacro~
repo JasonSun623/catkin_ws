@@ -174,7 +174,7 @@
 
   <xacro:include filename="$(find dhc_houdar_pkg)/urdf/hokuyolaser_base.xacro" />
   <xacro:hokuyolaser parent_link="base_link">
-    <origin xyz="${offset_laser} 0 ${up_z+up_laser}" rpy="0 0 0" />
+    <origin xyz="0 0 ${up_z+up_laser}" rpy="0 0 0" />
   </xacro:hokuyolaser>
 
 <transmission name="left_front_wheel_trans">

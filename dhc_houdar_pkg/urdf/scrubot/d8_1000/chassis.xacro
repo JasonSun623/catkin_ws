@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
- <xacro:property name="M_PI" default="3.14159"/>
+ <!--xacro:property name="M_PI" value="3.14159"/-->
   <!-- Base Properties -->
   <xacro:property name="mass_base" value="100.0" />
 
@@ -10,13 +10,21 @@
 
   <xacro:property name="driving_wheel2base_rear_dist" value="0.075" />
   <xacro:property name="driving_wheel2ground_dist" value="0.188" />
+  <xacro:property name="crash_resistant_edge_length" value="0.76625" />
+  <xacro:property name="crash_resistant_edge_down2ground" value="0.0554" />
 
 <xacro:property name="base_down2ground" value="0.156" />
 
-  <!-- the vertical offset dist bet the car and the ground -->
+  <!--
+  the vertical offset dist bet the car and the ground
   <xacro:property name="offset_x" value="-0.32362" />
   <xacro:property name="offset_y" value="-0.443" />
   <xacro:property name="offset_z" value="-0.045" />
+  -->
+  <!-- conf for chassis_simple.stl -->
+<xacro:property name="offset_x" value="${-driving_wheel2base_rear_dist}" />
+<xacro:property name="offset_y" value="${-crash_resistant_edge_length/2}" />
+<xacro:property name="offset_z" value="${crash_resistant_edge_down2ground}" />
 
  <xacro:macro name="default_inertial" params="mass">
     <inertial>
@@ -36,9 +44,7 @@
           <mesh filename="${meshes}"/>
           <!--box size="${base_x_size} ${base_y_size} ${base_z_size}" /-->
         </geometry>
-        <material name="grey">
-          <color rgba="0.6 0.6 0.6 1"/>
-        </material>
+        <xacro:insert_block name="material_Azure2" />
       </visual>
 
       <collision>
@@ -60,7 +66,7 @@
     </joint>
 
     <gazebo reference="${name}">
-      <material>Gazebo/Grey</material>
+      <material>Gazebo/Blue</material>
     </gazebo>
 
 

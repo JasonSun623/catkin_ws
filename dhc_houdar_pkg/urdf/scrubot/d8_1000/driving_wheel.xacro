@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-  <xacro:property name="M_PI" default="3.14159"/>
+  <!--xacro:property name="M_PI" value="3.14159"/-->
   <!-- Wheel Properties -->
   <xacro:property name="wheel_separation" value="0.64" />
   <xacro:property name="wheel_radius" value="0.08" />
@@ -35,7 +35,7 @@
           <mesh filename="${mesh}" />
          <!-- cylinder length="${driving_wheel_width}" radius="${driving_wheel_radius}"/ -->
         </geometry>
-        <xacro:insert_block name="material_dark_grey" />
+        <xacro:insert_block name="material_yellow" />
       </visual>
 
       <collision>
@@ -52,6 +52,9 @@
     <gazebo reference="${wheel_prefix}_driving_wheel_link">
       <material>Gazebo/Yellow</material>
     </gazebo>
+
+
+
 
     <!-- gazebo dynamics-->
     <!--gazebo reference="${wheel_prefix}_driving_wheel_link">
@@ -70,6 +73,8 @@
       <axis xyz="0 1 0" rpy="0 0 0" />
        <!--limit effort="100" velocity="20.0" /-->
     </joint>
+
+
 
     <!-- transmission -->
     <transmission name="${wheel_prefix}_driving_wheel_trans" type="SimpleTransmission">

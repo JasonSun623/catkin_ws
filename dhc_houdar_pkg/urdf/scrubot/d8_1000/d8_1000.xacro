@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
-<robot name="d8_1000" xmlns:xacro="http://ros.org/wiki/xacro">
-
+<robot name="d8_1000" xmlns:xacro="http://www.ros.org/wiki/xacro">
+<xacro:property name="M_PI" value="3.1415926"/>
 <xacro:property name="pkg" value="$(find dhc_houdar_pkg)/urdf/scrubot/d8_1000" />
 <xacro:property name="mesh_dir" value="package://dhc_houdar_pkg/urdf/scrubot/d8_1000/mesh"/>
 
@@ -31,14 +31,14 @@
 
 
 <!-- body -->
-<xacro:chassis  name="${base_link_name}" parent_link="${base_name}" meshes="${mesh_dir}/chassis.stl"  >
+<xacro:chassis  name="${base_link_name}" parent_link="${base_name}" meshes="${mesh_dir}/chassis_simple.stl"  >
 </xacro:chassis>
 
 <!-- driving wheel -->
-<xacro:driving_wheel wheel_prefix="left" parent_link="${base_link_name}" left_right="1" mesh="${mesh_dir}/driving_wheel.stl" >
+<xacro:driving_wheel wheel_prefix="left" parent_link="${base_link_name}" left_right="1" mesh="${mesh_dir}/driving_wheel_surface.stl" >
  </xacro:driving_wheel>
 
-<xacro:driving_wheel wheel_prefix="right" parent_link="${base_link_name}" left_right="-1" mesh="${mesh_dir}/driving_wheel.stl" >
+<xacro:driving_wheel wheel_prefix="right" parent_link="${base_link_name}" left_right="-1" mesh="${mesh_dir}/driving_wheel_surface.stl" >
  </xacro:driving_wheel>
 
 <!-- caster wheel -->

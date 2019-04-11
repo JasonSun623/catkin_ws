@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 <!-- chq define the laser glass cylinbe center is the laser cord center -->
- <xacro:property name="M_PI" default="3.14159"/>
+
  <xacro:property name="laser_rect_x" value="0.059" />
 
   <xacro:property name="laser_glass_radius" value="0.051" />
@@ -33,10 +33,11 @@
         <geometry>
           <mesh filename="${mesh}"/>
         </geometry>
+        <xacro:insert_block name="material_light_grey" />
       </visual>
 
       <inertial>
-        <mass value="2" />
+        <mass value="0.1" />
        <origin xyz="${-laser_rect_x} ${-laser_glass_radius} ${laser_glass_thick/2.0-laser_z}" rpy="0 0 0"/>
         <inertia ixx="1e-6" ixy="0" ixz="0" iyy="1e-6" iyz="0" izz="1e-6" />
       </inertial>
@@ -44,7 +45,7 @@
 
   <!-- laser -->
     <gazebo reference="${name}_link">
-      <material>Gazebo/Black</material>
+      <material>Gazebo/Grey</material>
       <sensor type="gpu_ray" name="head_laser_sensor">
     <!--sensor type="ray" name="head_hokuyo_sensor"-->
         <pose>0 0 0 0 0 0</pose>
@@ -56,8 +57,8 @@
             <horizontal>
               <samples>720</samples>
               <resolution>0.5</resolution>
-              <min_angle>-1.5707963</min_angle>
-              <max_angle>1.5707963</max_angle>
+              <min_angle>${-M_PI/2}</min_angle>
+              <max_angle>${M_PI/2}</max_angle>
             </horizontal>
           </scan>
           <range>

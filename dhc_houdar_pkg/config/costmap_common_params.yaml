@@ -42,7 +42,7 @@ obstacle_layer:
   observation_sources: hokuyo_scan
   #expected_update_rate :How often to expect a reading from a sensor in seconds
   #clearing:Whether or not this observation should be used to clear out freespace.
-  hokuyo_scan: { topic: /hokuyo/scan, sensor_frame: hokuyo_link, data_type: LaserScan, marking: true ,clearing: true, expected_update_rate: 1 } 
+  hokuyo_scan: { topic: scan, sensor_frame: hokuyo_link, data_type: LaserScan, marking: true ,clearing: true, expected_update_rate: 1 }
 #cost_scaling_factor and inflation_radius were now moved to the inflation_layer ns
 inflation_layer:
   cost_scaling_factor:  5.0  # exponential rate at which the obstacle cost drops off (default: 10)

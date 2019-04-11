@@ -2,7 +2,7 @@
 <!--
   Various useful properties such as constants and materials
  -->
-<robot name="d8_1000_properties" xmlns:xacro="http://ros.org/wiki/xacro">
+<robot name="d8_1000_properties" xmlns:xacro="http://www.ros.org/wiki/xacro">
   <!-- #################### RViz materials #################### -->
   <xacro:property name="material_white">
     <material name="white">
@@ -11,7 +11,7 @@
   </xacro:property>
   <xacro:property name="material_yellow">
     <material name="yellow">
-      <color rgba="${255/255} ${226/255} ${0/255} 1"/>
+      <color rgba="1 0.886 0 1"/>
     </material>
   </xacro:property>
   <xacro:property name="material_almost_white">
@@ -55,5 +55,17 @@
       <color rgba="0.715 0.583 0.210 1.0" />
     </material>
   </xacro:property>
+
+<xacro:property name="material_blue">
+  <material name="ChassisBlue">
+    <color rgba="0 0 1 0.5" />
+  </material>
+</xacro:property>
+
+<xacro:property name="material_Azure2">
+  <material name="ChassisAzure2">
+    <color rgba="0.003921 0.933 0.933 0.7" />
+  </material>
+</xacro:property>
 
 </robot>

@@ -8,11 +8,11 @@ project(dhc_houdar_pkg)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED
-  roscpp
-  std_msgs
-  nav_msgs
-  geometry_msgs
-  tf
+  #roscpp
+  #std_msgs
+  #nav_msgs
+  #geometry_msgs
+  #tf
 )
 
 ## System dependencies are found with CMake's conventions
@@ -119,8 +119,8 @@ catkin_package(
 ## Your package locations should be listed before other locations
 include_directories(
 # include
- ${catkin_INCLUDE_DIRS}
-${Boost_INCLUDE_DIRS}
+ #${catkin_INCLUDE_DIRS}
+#${Boost_INCLUDE_DIRS}
 )
 
 ## Declare a C++ library
@@ -136,7 +136,7 @@ ${Boost_INCLUDE_DIRS}
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
- add_executable(pubodom_node src/pubodom.cpp)
+ #add_executable(pubodom_node src/pubodom.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -149,10 +149,10 @@ ${Boost_INCLUDE_DIRS}
 # add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Specify libraries to link a library or executable target against
- target_link_libraries(pubodom_node
-   ${catkin_LIBRARIES}
-   ${Boost_LIBRARIES}
- )
+ ##target_link_libraries(pubodom_node
+   #${catkin_LIBRARIES}
+  # ${Boost_LIBRARIES}
+ ##)
 
 #############
 ## Install ##

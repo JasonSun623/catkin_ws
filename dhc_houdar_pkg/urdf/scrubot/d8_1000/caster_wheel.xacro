@@ -1,12 +1,12 @@
 <?xml version="1.0" ?>
-<robot xmlns:xacro="http://ros.org/wiki/xacro">
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 <!--
   caster wheel and joints defined
 -->
-  <xacro:property name="M_PI" default="3.14159"/>
+  <!--xacro:property name="M_PI" default="3.14159"/-->
 
 
-<xacro:property name="caster_wheel_mass" value="1.0" />
+<xacro:property name="caster_wheel_mass" value="200" />
 <xacro:property name="caster_wheel_radius" value="0.05" />
 <xacro:property name="caster_wheel_width" value="0.037" />
 <!-- the dist bet rotate axis and rotation object center in x dir-->
