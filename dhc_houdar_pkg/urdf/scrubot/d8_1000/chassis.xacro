@@ -2,7 +2,7 @@
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
  <!--xacro:property name="M_PI" value="3.14159"/-->
   <!-- Base Properties -->
-  <xacro:property name="mass_base" value="100.0" />
+  <xacro:property name="mass_base" value="200.0" />
 
   <xacro:property name="base_x_size" value="0.6" />
   <xacro:property name="base_y_size" value="0.57" />

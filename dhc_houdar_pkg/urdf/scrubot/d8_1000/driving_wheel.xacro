@@ -9,7 +9,7 @@
 
   <xacro:property name="driving_wheel_width" value="0.065" />
   <xacro:property name="driving_wheel_radius" value="${wheel_radius}" />
-  <xacro:property name="mass_driving_wheel" value="0.5" />
+  <xacro:property name="mass_driving_wheel" value="3" />
   <xacro:property name="mechanicalReductionRatio" value ="21.0" />
 
   <xacro:property name="driving_wheel_base_dx" value="0.0" />
@@ -45,7 +45,6 @@
           <cylinder length="${driving_wheel_width}" radius="${driving_wheel_radius}" />
          </geometry>
       </collision>
-
     </link>
 
     <!-- gazebo color-->
@@ -57,13 +56,13 @@
 
 
     <!-- gazebo dynamics-->
-    <!--gazebo reference="${wheel_prefix}_driving_wheel_link">
+    <gazebo reference="${wheel_prefix}_driving_wheel_link">
       <mu1 value="1.0"/>
       <mu2 value="1.0"/>
       <kp value="10000000.0" />
       <kd value="1.0" />
       <fdir1 value="1 0 0"/>
-  </gazebo-->
+  </gazebo>
 
      <!-- joint -->
     <joint name="${wheel_prefix}_driving_wheel_joint" type="continuous">
